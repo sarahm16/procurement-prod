@@ -1,19 +1,21 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import viteLogo from "/vite.svg";
-import PageLayout from "./components/PageLayout";
-/* import './App.css'
- */
+// Routing
+import { Route, Routes } from "react-router-dom";
+
+// Components
+import ProtectedLayout from "./components/ProtectedLayout";
+
+// Routes
+import Sites from "./pages/sites/Sites";
+
 function App() {
   return (
     <>
-      <PageLayout
-        title="Test"
-        onLogout={() => {}}
-        user={{ name: "Sarah" }}
-        currentPath="/"
-        onNavigate={() => {}}
-      ></PageLayout>
+      <Routes>
+        <Route element={<ProtectedLayout />}>
+          <Route path="/" element={<Sites />} />
+          <Route path="/sites" element={<Sites />} />
+        </Route>
+      </Routes>
     </>
   );
 }
