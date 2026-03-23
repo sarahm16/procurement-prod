@@ -13,13 +13,13 @@ import LocationOnIcon from "@mui/icons-material/LocationOn";
 // Define routes
 const routesConfig = [
   {
-    title: "Sites",
+    title: "Site List",
     path: "/",
     element: <Sites />,
     icon: <LocationOnIcon />,
   },
   {
-    title: "Sites",
+    title: "Site List",
     path: "/sites",
     element: <Sites />,
     icon: <LocationOnIcon />,
@@ -30,7 +30,7 @@ function App() {
   return (
     <>
       <Routes>
-        <Route element={<ProtectedLayout />}>
+        <Route element={<ProtectedLayout routesConfig={routesConfig} />}>
           {routesConfig.map(({ path, element }, index) => (
             <Route key={index} path={path} element={element} />
           ))}
