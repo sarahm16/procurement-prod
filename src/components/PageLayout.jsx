@@ -40,7 +40,7 @@ const NAV_ITEMS = [
   { label: "Clients", icon: <BusinessIcon />, path: "/clients" },
   { label: "Sites", icon: <LocationOnIcon />, path: "/sites" },
   { label: "Vendors", icon: <HandymanIcon />, path: "/vendors" },
-  { label: "Work Orders", icon: <AssignmentIcon />, path: "/work-orders" },
+  { label: "Work Orders", icon: <AssignmentIcon />, path: "/workorders" },
   { label: "Employees", icon: <PeopleIcon />, path: "/employees" },
 ];
 
