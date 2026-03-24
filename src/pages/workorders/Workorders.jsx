@@ -1,5 +1,5 @@
 function Workorders() {
-  return <>Workorders page</>;
+  return <>Work Orders page</>;
 }
 
 export default Workorders;

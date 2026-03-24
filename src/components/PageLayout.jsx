@@ -25,24 +25,12 @@ import CloseIcon from "@mui/icons-material/Close";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import LogoutIcon from "@mui/icons-material/Logout";
-import DashboardIcon from "@mui/icons-material/Dashboard";
-import PeopleIcon from "@mui/icons-material/People";
-import LocationOnIcon from "@mui/icons-material/LocationOn";
-import HandymanIcon from "@mui/icons-material/Handyman";
-import AssignmentIcon from "@mui/icons-material/Assignment";
-import BusinessIcon from "@mui/icons-material/Business";
+
+// Nav Items
+import routesConfig from "../routes/routeConfig";
+const NAV_ITEMS = routesConfig.filter((route) => route.showInLayout);
 
 const DRAWER_WIDTH = 240;
-
-// Define your nav items here
-const NAV_ITEMS = [
-  { label: "Dashboard", icon: <DashboardIcon />, path: "/" },
-  { label: "Clients", icon: <BusinessIcon />, path: "/clients" },
-  { label: "Sites", icon: <LocationOnIcon />, path: "/sites" },
-  { label: "Vendors", icon: <HandymanIcon />, path: "/vendors" },
-  { label: "Work Orders", icon: <AssignmentIcon />, path: "/workorders" },
-  { label: "Employees", icon: <PeopleIcon />, path: "/employees" },
-];
 
 export default function PageLayout({
   children,
@@ -104,7 +92,7 @@ export default function PageLayout({
         {NAV_ITEMS.map((item) => {
           const isActive = currentPath === item.path;
           return (
-            <ListItem key={item.label} disablePadding>
+            <ListItem key={item.title} disablePadding>
               <ListItemButton
                 onClick={() => {
                   onNavigate?.(item.path);
@@ -140,7 +128,7 @@ export default function PageLayout({
                   {item.icon}
                 </ListItemIcon>
                 <ListItemText
-                  primary={item.label}
+                  primary={item.title}
                   primaryTypographyProps={{
                     fontSize: "0.875rem",
                     fontWeight: isActive ? 600 : 400,
