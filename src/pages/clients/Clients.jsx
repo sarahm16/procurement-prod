@@ -1,5 +1,12 @@
+// Components
+import ListPageHeader from "../../components/ListPageHeader";
+
 function Clients() {
-  return <>Clients page</>;
+  return (
+    <>
+      <ListPageHeader />
+    </>
+  );
 }
 
 export default Clients;

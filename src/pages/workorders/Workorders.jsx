@@ -1,5 +1,12 @@
+// Components
+import ListPageHeader from "../../components/ListPageHeader";
+
 function Workorders() {
-  return <>Work Orders page</>;
+  return (
+    <>
+      <ListPageHeader />
+    </>
+  );
 }
 
 export default Workorders;

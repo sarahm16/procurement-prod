@@ -1,9 +1,10 @@
-import { Typography } from "@mui/material";
+// Components
+import ListPageHeader from "../../components/ListPageHeader";
 
 function Sites() {
   return (
     <>
-      <Typography>Sites Page</Typography>
+      <ListPageHeader />
     </>
   );
 }

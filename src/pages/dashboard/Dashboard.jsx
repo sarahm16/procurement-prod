@@ -1,5 +1,12 @@
+// Components
+import ListPageHeader from "../../components/ListPageHeader";
+
 function Dashboard() {
-  return <>Dashboard page</>;
+  return (
+    <>
+      <ListPageHeader />
+    </>
+  );
 }
 
 export default Dashboard;

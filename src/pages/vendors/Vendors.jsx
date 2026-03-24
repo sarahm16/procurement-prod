@@ -1,5 +1,12 @@
+// Components
+import ListPageHeader from "../../components/ListPageHeader";
+
 function Vendors() {
-  return <>Vendors page</>;
+  return (
+    <>
+      <ListPageHeader />
+    </>
+  );
 }
 
 export default Vendors;
