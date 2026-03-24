@@ -1,14 +1,28 @@
 import { useParams } from "react-router-dom";
-import { useEffect } from "react";
+import { createContext, useEffect } from "react";
 
 // Components
 import DetailPageHeader from "../../components/DetailPageHeader";
+
+// Context
+const WorkorderDetailContext = createContext({
+  workorder: {},
+  updateWorkorder: () => {},
+});
 
 function WorkorderDetail() {
   // Get the work order ID from the URL parameters
   const { id } = useParams();
 
   // State
+  const [workorder, setWorkorder] = useState({});
+
+  const updateWorkorder = async (updates) => {
+    // Update the work order in the database
+
+    // Update the work order locally
+    setWorkorder((prev) => ({ ...prev, ...updates }));
+  };
 
   // Fetch work order details using the ID (this is just a placeholder, replace with actual data fetching logic)
   useEffect(() => {
@@ -16,7 +30,7 @@ function WorkorderDetail() {
   }, [id]);
 
   return (
-    <>
+    <WorkorderDetailContext.Provider value={{ workorder, updateWorkorder }}>
       <DetailPageHeader
         title={`Work Order #${id}`}
         subtitle={`Details for Work Order #${id}`}
@@ -40,7 +54,7 @@ function WorkorderDetail() {
         onBack={() => console.log("Back button clicked")}
         actions={[]}
       />
-    </>
+    </WorkorderDetailContext.Provider>
   );
 }
 
