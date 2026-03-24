@@ -7,6 +7,12 @@ import Vendors from "../pages/vendors/Vendors";
 import Workorders from "../pages/workorders/Workorders";
 import Dashboard from "../pages/dashboard/Dashboard";
 
+// Detail Pages
+import ClientDetail from "../pages/client-detail/ClientDetail";
+import SiteDetail from "../pages/site-detail/SiteDetail";
+import VendorDetail from "../pages/vendor-detail/VendorDetail";
+import WorkorderDetail from "../pages/workorder-detail/WorkOrderDetail";
+
 // MUI Icons
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import BusinessIcon from "@mui/icons-material/Business";
@@ -39,9 +45,9 @@ const routesConfig = [
     showInLayout: true,
   },
   {
-    title: "Client List",
+    title: "Client Detail",
     path: "/clients/:id",
-    element: <Clients />,
+    element: <ClientDetail />,
     icon: <BusinessIcon />,
     showInLayout: false,
   },
@@ -54,9 +60,9 @@ const routesConfig = [
     showInLayout: true,
   },
   {
-    title: "Site List",
+    title: "Site Detail",
     path: "/sites/:id",
-    element: <Sites />,
+    element: <SiteDetail />,
     icon: <LocationOnIcon />,
     showInLayout: false,
   },
@@ -69,24 +75,24 @@ const routesConfig = [
     showInLayout: true,
   },
   {
-    title: "Vendor List",
+    title: "Vendor Detail",
     path: "/vendors/:id",
-    element: <Vendors />,
+    element: <VendorDetail />,
     icon: <HandymanIcon />,
     showInLayout: false,
   },
   // Work Order routes
   {
-    title: "Work Orders",
+    title: "Work Order List",
     path: "/workorders",
     element: <Workorders />,
     icon: <AssignmentIcon />,
     showInLayout: true,
   },
   {
-    title: "Work Orders",
+    title: "Work Order Detail",
     path: "/workorders/:id",
-    element: <Workorders />,
+    element: <WorkorderDetail />,
     icon: <AssignmentIcon />,
     showInLayout: false,
   },
