@@ -3,6 +3,10 @@ import { createContext, useEffect, useState } from "react";
 
 // Components
 import DetailPageHeader from "../../components/DetailPageHeader";
+import DetailPageLayout from "../../components/DetailPageLayout";
+
+// MUI Components
+import { Typography } from "@mui/material";
 
 // Context
 const ClientDetailContext = createContext({
@@ -31,23 +35,31 @@ function ClientDetail() {
 
   return (
     <ClientDetailContext.Provider value={{ client, updateClient }}>
-      <DetailPageHeader
-        title={`Client #${id}`}
-        subtitle={`Details for Client #${id}`}
-        status="active"
-        statusOptions={["active", "inactive", "suspended", "pending"]}
-        onStatusChange={(newStatus) =>
-          console.log("Status changed to:", newStatus)
+      <DetailPageLayout
+        header={
+          <DetailPageHeader
+            title={`Client #${id}`}
+            subtitle={`Details for Client #${id}`}
+            status="active"
+            statusOptions={["active", "inactive", "suspended", "pending"]}
+            onStatusChange={(newStatus) =>
+              console.log("Status changed to:", newStatus)
+            }
+            breadcrumbs={[
+              { label: "Clients", href: "/clients" },
+              { label: `Client #${id}` },
+            ]}
+            meta={[]}
+            address="123 Main St, Anytown, USA"
+            onBack={() => console.log("Back button clicked")}
+            actions={[]}
+          />
         }
-        breadcrumbs={[
-          { label: "Clients", href: "/clients" },
-          { label: `Client #${id}` },
-        ]}
-        meta={[]}
-        address="123 Main St, Anytown, USA"
-        onBack={() => console.log("Back button clicked")}
-        actions={[]}
-      />
+      >
+        <Typography variant="h6" gutterBottom>
+          Client Details Content Goes Here
+        </Typography>
+      </DetailPageLayout>
     </ClientDetailContext.Provider>
   );
 }

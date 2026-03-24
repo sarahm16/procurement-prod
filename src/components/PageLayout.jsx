@@ -305,14 +305,17 @@ export default function PageLayout({
           </Toolbar>
         </AppBar>
 
-        {/* Scrollable page content */}
+        {/* Page content — no padding here, each page controls its own spacing.
+            List pages: wrap content in a Box with p={{ xs: 2, sm: 3 }}
+            Detail pages: use DetailPageLayout which handles fixed header + scroll */}
         <Box
           component="main"
           sx={{
             flex: 1,
-            overflow: "auto",
-            p: { xs: 2, sm: 3 },
+            overflow: "hidden",
             backgroundColor: "background.default",
+            display: "flex",
+            flexDirection: "column",
           }}
         >
           {children}

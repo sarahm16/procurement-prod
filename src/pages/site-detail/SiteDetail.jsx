@@ -3,6 +3,7 @@ import { createContext, useEffect, useState } from "react";
 
 // Components
 import DetailPageHeader from "../../components/DetailPageHeader";
+import DetailPageLayout from "../../components/DetailPageLayout";
 
 // Context
 const SiteDetailContext = createContext({
@@ -31,23 +32,27 @@ function SiteDetail() {
 
   return (
     <SiteDetailContext.Provider value={{ site, updateSite }}>
-      <DetailPageHeader
-        title={`Site #${id}`}
-        subtitle={`Details for Site #${id}`}
-        status="active"
-        statusOptions={["active", "inactive", "suspended", "pending"]}
-        onStatusChange={(newStatus) =>
-          console.log("Status changed to:", newStatus)
+      <DetailPageLayout
+        header={
+          <DetailPageHeader
+            title={`Site #${id}`}
+            subtitle={`Details for Site #${id}`}
+            status="active"
+            statusOptions={["active", "inactive", "suspended", "pending"]}
+            onStatusChange={(newStatus) =>
+              console.log("Status changed to:", newStatus)
+            }
+            breadcrumbs={[
+              { label: "Sites", href: "/sites" },
+              { label: `Site #${id}` },
+            ]}
+            meta={[]}
+            address="123 Main St, Anytown, USA"
+            onBack={() => console.log("Back button clicked")}
+            actions={[]}
+          />
         }
-        breadcrumbs={[
-          { label: "Sites", href: "/sites" },
-          { label: `Site #${id}` },
-        ]}
-        meta={[]}
-        address="123 Main St, Anytown, USA"
-        onBack={() => console.log("Back button clicked")}
-        actions={[]}
-      />
+      ></DetailPageLayout>
     </SiteDetailContext.Provider>
   );
 }

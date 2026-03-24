@@ -3,6 +3,7 @@ import { createContext, useEffect, useState } from "react";
 
 // Components
 import DetailPageHeader from "../../components/DetailPageHeader";
+import DetailPageLayout from "../../components/DetailPageLayout";
 
 // Context
 const VendorDetailContext = createContext({
@@ -31,23 +32,27 @@ function VendorDetail() {
 
   return (
     <VendorDetailContext.Provider value={{ vendor, updateVendor }}>
-      <DetailPageHeader
-        title={`Vendor #${id}`}
-        subtitle={`Details for Vendor #${id}`}
-        status="active"
-        statusOptions={["active", "inactive", "suspended", "pending"]}
-        onStatusChange={(newStatus) =>
-          console.log("Status changed to:", newStatus)
+      <DetailPageLayout
+        header={
+          <DetailPageHeader
+            title={`Vendor #${id}`}
+            subtitle={`Details for Vendor #${id}`}
+            status="active"
+            statusOptions={["active", "inactive", "suspended", "pending"]}
+            onStatusChange={(newStatus) =>
+              console.log("Status changed to:", newStatus)
+            }
+            breadcrumbs={[
+              { label: "Vendors", href: "/vendors" },
+              { label: `Vendor #${id}` },
+            ]}
+            meta={[]}
+            address="123 Main St, Anytown, USA"
+            onBack={() => console.log("Back button clicked")}
+            actions={[]}
+          />
         }
-        breadcrumbs={[
-          { label: "Vendors", href: "/vendors" },
-          { label: `Vendor #${id}` },
-        ]}
-        meta={[]}
-        address="123 Main St, Anytown, USA"
-        onBack={() => console.log("Back button clicked")}
-        actions={[]}
-      />
+      ></DetailPageLayout>
     </VendorDetailContext.Provider>
   );
 }

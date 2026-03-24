@@ -3,6 +3,7 @@ import { createContext, useEffect } from "react";
 
 // Components
 import DetailPageHeader from "../../components/DetailPageHeader";
+import DetailPageLayout from "../../components/DetailPageLayout";
 
 // Context
 const WorkorderDetailContext = createContext({
@@ -31,29 +32,33 @@ function WorkorderDetail() {
 
   return (
     <WorkorderDetailContext.Provider value={{ workorder, updateWorkorder }}>
-      <DetailPageHeader
-        title={`Work Order #${id}`}
-        subtitle={`Details for Work Order #${id}`}
-        status="open"
-        statusOptions={[
-          "open",
-          "in progress",
-          "completed",
-          "cancelled",
-          "pending",
-        ]}
-        onStatusChange={(newStatus) =>
-          console.log("Status changed to:", newStatus)
+      <DetailPageLayout
+        header={
+          <DetailPageHeader
+            title={`Work Order #${id}`}
+            subtitle={`Details for Work Order #${id}`}
+            status="open"
+            statusOptions={[
+              "open",
+              "in progress",
+              "completed",
+              "cancelled",
+              "pending",
+            ]}
+            onStatusChange={(newStatus) =>
+              console.log("Status changed to:", newStatus)
+            }
+            breadcrumbs={[
+              { label: "Work Orders", href: "/workorders" },
+              { label: `Work Order #${id}` },
+            ]}
+            meta={[]}
+            address="123 Main St, Anytown, USA"
+            onBack={() => console.log("Back button clicked")}
+            actions={[]}
+          />
         }
-        breadcrumbs={[
-          { label: "Work Orders", href: "/workorders" },
-          { label: `Work Order #${id}` },
-        ]}
-        meta={[]}
-        address="123 Main St, Anytown, USA"
-        onBack={() => console.log("Back button clicked")}
-        actions={[]}
-      />
+      ></DetailPageLayout>
     </WorkorderDetailContext.Provider>
   );
 }
