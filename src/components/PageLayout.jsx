@@ -90,7 +90,7 @@ export default function PageLayout({
       {/* Nav Items */}
       <List sx={{ flex: 1, pt: 1 }}>
         {NAV_ITEMS.map((item) => {
-          const isActive = currentPath === item.path;
+          const isActive = currentPath?.includes(item.path) ?? false;
           return (
             <ListItem key={item.title} disablePadding>
               <ListItemButton

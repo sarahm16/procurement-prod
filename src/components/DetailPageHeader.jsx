@@ -14,7 +14,6 @@ import {
   alpha,
 } from "@mui/material";
 import NavigateNextIcon from "@mui/icons-material/NavigateNext";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import PlaceIcon from "@mui/icons-material/Place";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
@@ -295,7 +294,7 @@ export default function DetailPageHeader({
             }}
           >
             {/* Back button */}
-            {onBack && (
+            {/*             {onBack && (
               <Tooltip title="Go back">
                 <IconButton
                   onClick={onBack}
@@ -313,7 +312,7 @@ export default function DetailPageHeader({
                   <ArrowBackIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
-            )}
+            )} */}
 
             {/* Title + subtitle */}
             <Box sx={{ minWidth: 0 }}>
