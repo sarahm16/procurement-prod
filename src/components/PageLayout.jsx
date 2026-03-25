@@ -49,6 +49,11 @@ export default function PageLayout({
 
   const handleDrawerToggle = () => setMobileOpen((prev) => !prev);
 
+  const route = routesConfig.find(
+    (r) => currentPath?.startsWith(r.path) && r.path !== "/",
+  );
+  const icon = route ? route.icon : null;
+
   const drawerContent = (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Logo / App Name */}
@@ -279,6 +284,17 @@ export default function PageLayout({
             </IconButton>
 
             {/* Page title */}
+
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                color: "secondary.main",
+                "& svg": { fontSize: "1.25rem" },
+              }}
+            >
+              {icon}
+            </Box>
             <Typography
               variant="h6"
               sx={{

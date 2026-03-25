@@ -1,10 +1,13 @@
 // Components
-import ListPageHeader from "../../components/ListPageHeader";
+import ListDataGrid from "../../components/ListDataGrid";
+import ListPageLayout from "../../components/ListPageLayout";
 
 function Vendors() {
   return (
     <>
-      <ListPageHeader />
+      <ListPageLayout>
+        <ListDataGrid rows={[]} columns={[]} />
+      </ListPageLayout>
     </>
   );
 }

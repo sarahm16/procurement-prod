@@ -39,11 +39,12 @@ function ListPageHeader({ onRefresh, onCreate }) {
           alignItems: "center",
           justifyContent: "space-between",
           py: 1,
+          px: { xs: 2, sm: 3 },
         }}
       >
         {/* Left: icon + title */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          {icon && (
+          {/*           {icon && (
             <Box
               sx={{
                 display: "flex",
@@ -61,7 +62,7 @@ function ListPageHeader({ onRefresh, onCreate }) {
             sx={{ fontWeight: 700, letterSpacing: "0.01em" }}
           >
             {title}
-          </Typography>
+          </Typography> */}
         </Box>
 
         {/* Right: actions */}

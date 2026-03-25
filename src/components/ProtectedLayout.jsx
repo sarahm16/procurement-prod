@@ -7,7 +7,9 @@ function ProtectedLayout({ routesConfig }) {
   // Location
   const location = useLocation();
   const pathname = location.pathname;
-  const route = routesConfig.find((r) => pathname.startsWith(r.path));
+  const route = routesConfig.find(
+    (r) => pathname.startsWith(r.path) && r.path !== "/",
+  );
   const pageTitle = route ? route.title : "Protected Page";
 
   // Navigation
