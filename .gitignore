@@ -26,4 +26,5 @@ dist-ssr
 # Environment files
 nfc.production.env
 sld.production.env
+.env
 
