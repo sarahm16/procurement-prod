@@ -1,0 +1,26 @@
+{
+  "name": "sarlacc",
+  "version": "1.0.0",
+  "description": "This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sarahm16/procurement-prod.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/sarahm16/procurement-prod/issues"
+  },
+  "homepage": "https://github.com/sarahm16/procurement-prod#readme",
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "concurrently": "^9.2.1"
+  }
+}
