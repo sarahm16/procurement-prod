@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 
 export default function softwaresRouter(prisma) {
   const router = Router();
@@ -9,8 +10,17 @@ export default function softwaresRouter(prisma) {
       const softwares = await prisma.Softwares.findMany();
       res.json(softwares);
     } catch (error) {
-      console.error("Error fetching softwares:", error);
-      res.status(500).json({ error: "Internal Server Error" });
+      if (error instanceof PrismaClientKnownRequestError) {
+        console.error("Prisma error fetching softwares:", error);
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        console.error("Error fetching softwares:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
     }
   });
 

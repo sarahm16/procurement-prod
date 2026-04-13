@@ -9,8 +9,17 @@ export default function employeesRouter(prisma) {
       const employees = await prisma.employees.findMany();
       res.json(employees);
     } catch (error) {
-      console.error("Error fetching employees:", error);
-      res.status(500).json({ error: "Internal Server Error" });
+      if (error instanceof PrismaClientKnownRequestError) {
+        console.error("Prisma error fetching employees:", error);
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        console.error("Error fetching employees:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
     }
   });
 

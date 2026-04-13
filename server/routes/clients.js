@@ -9,8 +9,17 @@ export default function clientsRouter(prisma) {
       const clients = await prisma.clients.findMany();
       res.json(clients);
     } catch (error) {
-      console.error("Error fetching clients:", error);
-      res.status(500).json({ error: "Internal Server Error" });
+      if (error instanceof PrismaClientKnownRequestError) {
+        console.error("Prisma error fetching clients:", error);
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        console.error("Error fetching clients:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
     }
   });
 

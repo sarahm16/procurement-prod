@@ -6,11 +6,20 @@ export default function workordersRouter(prisma) {
   // GET /api/workorders
   router.get("/", async (req, res) => {
     try {
-      const workorders = await prisma.workorders.findMany();
+      const workorders = await prisma.Workorders.findMany();
       res.json(workorders);
     } catch (error) {
-      console.error("Error fetching workorders:", error);
-      res.status(500).json({ error: "Internal Server Error" });
+      if (error instanceof PrismaClientKnownRequestError) {
+        console.error("Prisma error fetching workorders:", error);
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        console.error("Error fetching workorders:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
     }
   });
 
