@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider = "sqlserver"
   url      = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 model ActivityLog {
@@ -46,7 +47,7 @@ model ClientServiceLines {
   client_id       Int
   service_line_id Int
   Clients         Clients       @relation(fields: [client_id], references: [id], onUpdate: NoAction, map: "FK__ClientSer__clien__47A6A41B")
-  Service_Lines   Service_Lines @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, map: "FK__ClientSer__servi__489AC854")
+  ServiceLines   ServiceLines @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, map: "FK__ClientSer__servi__489AC854")
 
   @@id([client_id, service_line_id], map: "PK_ClientServiceLines")
 }
@@ -57,7 +58,7 @@ model ClientServiceLineSOWs {
   pandadoc_content_library_uuid String        @db.VarChar(100)
   description                   String?       @db.VarChar(200)
   Clients                       Clients       @relation(fields: [client_id], references: [id], onUpdate: NoAction, map: "FK__ClientSer__clien__6BE40491")
-  Service_Lines                 Service_Lines @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, map: "FK__ClientSer__servi__6CD828CA")
+  ServiceLines                 ServiceLines @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, map: "FK__ClientSer__servi__6CD828CA")
 
   @@id([client_id, service_line_id], map: "PK_ClientServiceLineSOWs")
 }
@@ -86,21 +87,30 @@ model EntityTypes {
   ActivityLog ActivityLog[]
 }
 
-model Service_Lines {
+model ServiceLines {
   id                          Int                           @id(map: "PK__Service___3213E83F8FFD9AE8") @default(autoincrement())
   name                        String                        @db.VarChar(100)
+  sarlaccId                   Int?                           
   ClientServiceLines          ClientServiceLines[]
   ClientServiceLineSOWs       ClientServiceLineSOWs[]
   ServiceLineExhibitTemplates ServiceLineExhibitTemplates[]
   SiteServiceLines            SiteServiceLines[]
   VendorSiteServiceLines      VendorSiteServiceLines[]
+  ServiceLineServices         ServiceLineServices[]
+}
+
+model ServiceLineServices {
+  id                          Int                           @id @default(autoincrement())
+  name                        String                        @db.VarChar(100)
+  service_line_id             Int
+  ServiceLine                 ServiceLines @relation(fields: [service_line_id], references: [id])                           
 }
 
 model ServiceLineExhibitTemplates {
   id                   Int           @id(map: "PK__ServiceL__3213E83F2716E9C4") @default(autoincrement())
   service_line_id      Int
   pandadoc_template_id String        @db.VarChar(100)
-  Service_Lines        Service_Lines @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, map: "FK__ServiceLi__servi__690797E6")
+  ServiceLines        ServiceLines @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, map: "FK__ServiceLi__servi__690797E6")
 }
 
 model Sites {
@@ -126,7 +136,7 @@ model Sites {
 model SiteServiceLines {
   site_id         Int
   service_line_id Int
-  Service_Lines   Service_Lines @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, map: "FK__SiteServi__servi__4C6B5938")
+  ServiceLines   ServiceLines @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, map: "FK__SiteServi__servi__4C6B5938")
   Sites           Sites         @relation(fields: [site_id], references: [id], onUpdate: NoAction, map: "FK__SiteServi__site___4B7734FF")
 
   @@id([site_id, service_line_id], map: "PK_SiteServiceLines")
@@ -136,6 +146,7 @@ model Trades {
   id           Int            @id(map: "PK__Trades__3213E83FB5206A3D") @default(autoincrement())
   name         String         @db.VarChar(100)
   description  String?        @db.VarChar(200)
+  sarlaccId    Int?
   VendorTrades VendorTrades[]
   WorkOrders   WorkOrders[]
 }
@@ -178,7 +189,7 @@ model VendorSiteServiceLines {
   service_line_id    Int
   is_primary         Boolean            @default(false, map: "DF__VendorSit__is_pr__531856C7")
   status_id          Int
-  Service_Lines      Service_Lines      @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, map: "FK__VendorSit__servi__55F4C372")
+  ServiceLines      ServiceLines      @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, map: "FK__VendorSit__servi__55F4C372")
   Sites              Sites              @relation(fields: [site_id], references: [id], onUpdate: NoAction, map: "FK__VendorSit__site___55009F39")
   VendorSiteStatuses VendorSiteStatuses @relation(fields: [status_id], references: [id], onUpdate: NoAction, map: "FK__VendorSit__statu__56E8E7AB")
   Vendors            Vendors            @relation(fields: [vendor_id], references: [id], onUpdate: NoAction, map: "FK__VendorSit__vendo__540C7B00")
@@ -236,4 +247,9 @@ model WorkOrderServices {
   Employees     Employees? @relation(fields: [pm_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK__WorkOrder__pm_id__662B2B3B")
   Vendors       Vendors?   @relation(fields: [vendor_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK__WorkOrder__vendo__65370702")
   WorkOrders    WorkOrders @relation(fields: [work_order_id], references: [id], onUpdate: NoAction, map: "FK__WorkOrder__work___6442E2C9")
+}
+
+model Softwares {
+  id            Int     @id @default(autoincrement())
+  name          String  @db.VarChar(50)
 }

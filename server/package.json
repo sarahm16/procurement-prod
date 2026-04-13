@@ -8,7 +8,7 @@
     "dev": "nodemon index.js"
   },
   "prisma": {
-    "seed": "node prisma/servicesSeed.js"
+    "seed": "node prisma/seed.js"
   },
   "keywords": [],
   "author": "",

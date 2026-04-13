@@ -9,6 +9,9 @@ import { fileURLToPath } from "url";
 
 // Routes
 import clientsRouter from "./routes/clients.js";
+import serviceLinesRouter from "./routes/serviceLines.js";
+import tradesRouter from "./routes/trades.js";
+import softwaresRouter from "./routes/softwares.js";
 /* import employeeRouter from "./routes/employees";
  */
 // Dynamic import for PrismaClient to avoid issues with top-level await in CommonJS
@@ -33,6 +36,9 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api/clients", clientsRouter(prisma));
+app.use("/api/softwares", softwaresRouter(prisma));
+app.use("/api/serviceLines", serviceLinesRouter(prisma));
+app.use("/api/trades", tradesRouter(prisma));
 
 // Catch-all LAST — hands everything else to React Router
 app.get("/*splat", (req, res) => {

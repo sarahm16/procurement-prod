@@ -6,6 +6,7 @@ import Clients from "../pages/clients/Clients";
 import Vendors from "../pages/vendors/Vendors";
 import Workorders from "../pages/workorders/Workorders";
 import Dashboard from "../pages/dashboard/Dashboard";
+import Admin from "../pages/admin/Admin";
 
 // Detail Pages
 import ClientDetail from "../pages/client-detail/ClientDetail";
@@ -19,6 +20,7 @@ import BusinessIcon from "@mui/icons-material/Business";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import HandymanIcon from "@mui/icons-material/Handyman";
+import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 
 // Define routes
 const routesConfig = [
@@ -95,6 +97,13 @@ const routesConfig = [
     element: <WorkorderDetail />,
     icon: <AssignmentIcon />,
     showInLayout: false,
+  },
+  {
+    title: "Admin",
+    path: "/admin",
+    element: <Admin />,
+    icon: <AdminPanelSettingsIcon />,
+    showInLayout: true,
   },
 ];
 
