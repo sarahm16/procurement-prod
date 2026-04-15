@@ -13,7 +13,6 @@ import Alert from "@mui/material/Alert";
 
 // MUI Icons
 import AddIcon from "@mui/icons-material/Add";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
@@ -44,7 +43,8 @@ function ConstantsTable({
   saving = false,
   onAdd,
   onUpdate,
-  onDelete,
+  /*   onDelete,
+   */
 }) {
   // Which row is being edited (by id)
   const [editingId, setEditingId] = useState(null);
@@ -366,7 +366,7 @@ function ConstantsTable({
                           <EditOutlinedIcon sx={{ fontSize: 16 }} />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Delete">
+                      {/*                       <Tooltip title="Delete">
                         <IconButton
                           size="small"
                           onClick={() => onDelete(item.id)}
@@ -380,7 +380,7 @@ function ConstantsTable({
                         >
                           <DeleteOutlineIcon sx={{ fontSize: 16 }} />
                         </IconButton>
-                      </Tooltip>
+                      </Tooltip> */}
                     </>
                   )}
                 </Box>
