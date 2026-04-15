@@ -15,6 +15,7 @@ import Alert from "@mui/material/Alert";
 import AddIcon from "@mui/icons-material/Add";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 
 /**
@@ -43,8 +44,7 @@ function ConstantsTable({
   saving = false,
   onAdd,
   onUpdate,
-  /*   onDelete,
-   */
+  onDelete,
 }) {
   // Which row is being edited (by id)
   const [editingId, setEditingId] = useState(null);
@@ -351,36 +351,44 @@ function ConstantsTable({
                     </>
                   ) : (
                     <>
-                      <Tooltip title="Edit">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleEditStart(item)}
-                          disabled={saving}
-                          sx={{
-                            color: "transparent",
-                            ".MuiBox-root:hover &": { color: "text.secondary" },
-                            "&:hover": { color: "primary.main !important" },
-                            transition: "color 0.15s",
-                          }}
-                        >
-                          <EditOutlinedIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip>
-                      {/*                       <Tooltip title="Delete">
-                        <IconButton
-                          size="small"
-                          onClick={() => onDelete(item.id)}
-                          disabled={saving}
-                          sx={{
-                            color: "transparent",
-                            ".MuiBox-root:hover &": { color: "text.secondary" },
-                            "&:hover": { color: "error.main !important" },
-                            transition: "color 0.15s",
-                          }}
-                        >
-                          <DeleteOutlineIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </Tooltip> */}
+                      {onUpdate && (
+                        <Tooltip title="Edit">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleEditStart(item)}
+                            disabled={saving}
+                            sx={{
+                              color: "transparent",
+                              ".MuiBox-root:hover &": {
+                                color: "text.secondary",
+                              },
+                              "&:hover": { color: "primary.main !important" },
+                              transition: "color 0.15s",
+                            }}
+                          >
+                            <EditOutlinedIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {onDelete && (
+                        <Tooltip title="Delete">
+                          <IconButton
+                            size="small"
+                            onClick={() => onDelete(item.id)}
+                            disabled={saving}
+                            sx={{
+                              color: "transparent",
+                              ".MuiBox-root:hover &": {
+                                color: "text.secondary",
+                              },
+                              "&:hover": { color: "error.main !important" },
+                              transition: "color 0.15s",
+                            }}
+                          >
+                            <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </>
                   )}
                 </Box>

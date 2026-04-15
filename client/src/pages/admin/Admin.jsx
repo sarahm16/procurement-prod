@@ -19,6 +19,7 @@ import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import GeneralPageLayout from "../../components/GeneralPageLayout";
 import SoftwaresAdmin from "./tables/SoftwaresAdmin";
 import TradesAdmin from "./tables/TradesAdmin";
+import ServiceLinesAdmin from "./tables/ServiceLinesAdmin";
 // import ServicesAdmin from "./tables/ServicesAdmin";  ← add yours here as you build them
 
 // ── Nav config ────────────────────────────────────────────────────────────────
@@ -71,6 +72,7 @@ function ConstantsSection() {
     >
       <SoftwaresAdmin />
       <TradesAdmin />
+      <ServiceLinesAdmin />
       {/* <ServicesAdmin /> */}
       {/* Keep adding tables here */}
     </Box>
