@@ -20,6 +20,7 @@ import GeneralPageLayout from "../../components/GeneralPageLayout";
 import SoftwaresAdmin from "./tables/SoftwaresAdmin";
 import TradesAdmin from "./tables/TradesAdmin";
 import ServiceLinesAdmin from "./tables/ServiceLinesAdmin";
+import VendorStatusesAdmin from "./tables/VendorStatusesAdmin";
 // import ServicesAdmin from "./tables/ServicesAdmin";  ← add yours here as you build them
 
 // ── Nav config ────────────────────────────────────────────────────────────────
@@ -73,6 +74,7 @@ function ConstantsSection() {
       <SoftwaresAdmin />
       <TradesAdmin />
       <ServiceLinesAdmin />
+      <VendorStatusesAdmin />
       {/* <ServicesAdmin /> */}
       {/* Keep adding tables here */}
     </Box>
