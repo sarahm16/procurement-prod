@@ -1,10 +1,10 @@
 import { PrismaClient } from "@prisma/client";
-import seedSoftwares from "./seeds/softwares.js";
+import seedVendorStatuses from "./seeds/vendorStatuses.js";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  await seedSoftwares(prisma);
+  await seedVendorStatuses(prisma);
 }
 
 main()

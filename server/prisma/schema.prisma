@@ -208,9 +208,11 @@ model VendorSiteStatuses {
 model VendorStatuses {
   id          Int       @id(map: "PK__VendorSt__3213E83FAC107989") @default(autoincrement())
   name        String    @db.VarChar(50)
+  color       String    @db.VarChar(50)
   description String?   @db.VarChar(200)
   Vendors     Vendors[]
 }
+
 
 model VendorTrades {
   vendor_id Int
