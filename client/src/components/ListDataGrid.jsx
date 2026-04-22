@@ -39,6 +39,7 @@ export default function ListDataGrid({
         flex: 1, // fills remaining height in parent flex column
         minHeight: 0, // critical — allows flex child to shrink below content size
         display: "flex",
+        height: "100%",
         flexDirection: "column",
         overflow: "hidden",
         "& .MuiDataGrid-root": {

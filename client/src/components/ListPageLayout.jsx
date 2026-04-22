@@ -36,7 +36,8 @@ export default function ListPageLayout({ children }) {
       <Box
         sx={{
           flex: 1,
-          overflow: "auto",
+          minHeight: 0,
+          overflow: "hidden",
           px: { xs: 2, sm: 3 },
           pb: 4,
         }}
