@@ -1,7 +1,3 @@
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
-
 const serviceLines = [
   {
     id: 1,
@@ -44,3 +40,14 @@ const serviceLines = [
     name: "Residential",
   },
 ];
+
+async function seedServiceLines(prisma) {
+  await prisma.ServiceLines.createMany({
+    data: serviceLines.map((line) => ({
+      name: line.name,
+      sarlaccId: line.id,
+    })),
+  });
+}
+
+export default seedServiceLines;

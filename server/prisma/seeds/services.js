@@ -1,7 +1,3 @@
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
-
 const services = {
   Snow: [
     "Lot Snow Removal Rate",
@@ -47,7 +43,7 @@ const services = {
   ],
 };
 
-async function main() {
+async function seedServices(prisma) {
   const serviceLines = await prisma.ServiceLines.findMany();
   console.log("Fetched service lines:", serviceLines);
 
@@ -69,10 +65,4 @@ async function main() {
   }
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+export default seedServices;
