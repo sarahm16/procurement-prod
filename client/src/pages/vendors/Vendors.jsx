@@ -8,6 +8,7 @@ import ListPageLayout from "../../components/ListPageLayout";
 
 // MUI Components
 import Chip from "@mui/material/Chip";
+import { useNavigate } from "react-router-dom";
 
 const vendorColumns = [
   {
@@ -69,6 +70,10 @@ const vendorColumns = [
 ];
 
 function Vendors() {
+  // Hooks
+  const navigate = useNavigate();
+
+  // State
   const [vendors, setVendors] = useState([]);
 
   const fetchVendors = async () => {
@@ -81,10 +86,19 @@ function Vendors() {
     fetchVendors();
   }, []);
 
+  const onRowClick = (row) => {
+    console.log("Row Clicked: ", row);
+    navigate(`/vendors/${row.id}`);
+  };
+
   return (
     <>
       <ListPageLayout>
-        <ListDataGrid rows={vendors} columns={vendorColumns} />
+        <ListDataGrid
+          rows={vendors}
+          columns={vendorColumns}
+          onRowClick={onRowClick}
+        />
       </ListPageLayout>
     </>
   );

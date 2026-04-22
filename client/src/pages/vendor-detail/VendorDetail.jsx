@@ -4,6 +4,7 @@ import { createContext, useEffect, useState } from "react";
 // Components
 import DetailPageHeader from "../../components/DetailPageHeader";
 import DetailPageLayout from "../../components/DetailPageLayout";
+import axios from "axios";
 
 // Context
 const VendorDetailContext = createContext({
@@ -25,9 +26,16 @@ function VendorDetail() {
     setVendor((prev) => ({ ...prev, ...updates }));
   };
 
+  const fetchVendor = async () => {
+    const response = await axios.get(`/api/vendors/${id}`);
+    console.log("Fetched Vendor:", response.data);
+    setVendor(response.data);
+  };
+
   // Fetch vendor details using the ID (this is just a placeholder, replace with actual data fetching logic)
   useEffect(() => {
     console.log("Fetching details for vendor ID:", id);
+    fetchVendor();
   }, [id]);
 
   return (
