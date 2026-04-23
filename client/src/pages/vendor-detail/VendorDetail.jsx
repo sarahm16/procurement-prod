@@ -1,15 +1,31 @@
+// Libraries
 import { useParams } from "react-router-dom";
-import { createContext, useEffect, useState } from "react";
-
-// Components
-import DetailPageHeader from "../../components/DetailPageHeader";
-import DetailPageLayout from "../../components/DetailPageLayout";
+import { createContext, useContext, useEffect, useState } from "react";
 import axios from "axios";
+
+// Local Components
+import DetailPageHeader from "../../components/DetailPageLayout/DetailPageHeader";
+import DetailPageLayout from "../../components/DetailPageLayout/DetailPageLayout";
 
 // Context
 const VendorDetailContext = createContext({
-  vendor: {},
-  updateVendor: () => {},
+  vendorDetails: {},
+});
+
+const VendorDocsContext = createContext({
+  vendorDocs: {},
+});
+
+const VendorSitesContext = createContext({
+  vendorSites: [],
+});
+
+const VendorWorkOrdersContext = createContext({
+  vendorWorkOrders: [],
+});
+
+const VendorActivityContext = createContext({
+  vendorActivity: [],
 });
 
 function VendorDetail() {
@@ -17,34 +33,41 @@ function VendorDetail() {
   const { id } = useParams();
 
   // State
-  const [vendor, setVendor] = useState({});
+  const [vendorDetails, setVendorDetails] = useState({});
+  const [vendorDocs, setVendorDocs] = useState({});
+  const [vendorSites, setVendorSites] = useState([]);
+  const [vendorWorkOrders, setVendorWorkOrders] = useState([]);
+  const [vendorActivity, setVendorActivity] = useState([]);
 
   const updateVendor = async (updates) => {
     // Update the vendor in the database
 
     // Update the vendor locally
-    setVendor((prev) => ({ ...prev, ...updates }));
+    setVendorDetails((prev) => ({ ...prev, ...updates }));
   };
 
   const fetchVendor = async () => {
-    const response = await axios.get(`/api/vendors/${id}`);
+    return axios.get(`/api/vendors/${id}`);
     console.log("Fetched Vendor:", response.data);
-    setVendor(response.data);
   };
 
   // Fetch vendor details using the ID (this is just a placeholder, replace with actual data fetching logic)
   useEffect(() => {
     console.log("Fetching details for vendor ID:", id);
-    fetchVendor();
+    fetchVendor().then((res) => {
+      setVendorDetails({
+        ...res.data,
+      });
+    });
   }, [id]);
 
   return (
-    <VendorDetailContext.Provider value={{ vendor, updateVendor }}>
+    <VendorDetailContext.Provider value={{ vendorDetails }}>
       <DetailPageLayout
         header={
           <DetailPageHeader
-            title={`Vendor #${id}`}
-            subtitle={`Details for Vendor #${id}`}
+            title={vendorDetails.company}
+            subtitle={`Details for Vendor ${vendorDetails.company}`}
             status="active"
             statusOptions={["active", "inactive", "suspended", "pending"]}
             onStatusChange={(newStatus) =>
@@ -60,7 +83,35 @@ function VendorDetail() {
             actions={[]}
           />
         }
-      ></DetailPageLayout>
+        tabs={[
+          {
+            label: "Details",
+            content: <></>,
+          },
+          {
+            label: "Documentation",
+            content: <></>,
+          },
+          {
+            label: "Sites",
+            content: <></>,
+          },
+          {
+            label: "Work Orders",
+            content: <></>,
+          },
+          {
+            label: "Activity",
+            content: <></>,
+          },
+        ]}
+        notes={[]}
+        notesLoading={false}
+        onAddNote={async (content) => {
+          console.log("Adding note:", content);
+        }}
+        currentUser="Sarah Carter"
+      />
     </VendorDetailContext.Provider>
   );
 }
