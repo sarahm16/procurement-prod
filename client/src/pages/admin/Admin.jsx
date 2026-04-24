@@ -21,6 +21,7 @@ import SoftwaresAdmin from "./tables/SoftwaresAdmin";
 import TradesAdmin from "./tables/TradesAdmin";
 import ServiceLinesAdmin from "./tables/ServiceLinesAdmin";
 import VendorStatusesAdmin from "./tables/VendorStatusesAdmin";
+import EmployeesAdmin from "./tables/EmployeesTable";
 // import ServicesAdmin from "./tables/ServicesAdmin";  ← add yours here as you build them
 
 // ── Nav config ────────────────────────────────────────────────────────────────
@@ -41,7 +42,7 @@ const NAV_SECTIONS = [
     id: "users",
     label: "Users",
     icon: <PeopleOutlineIcon fontSize="small" />,
-    disabled: true,
+    disabled: false,
   },
   {
     id: "notifications",
@@ -81,12 +82,34 @@ function ConstantsSection() {
   );
 }
 
+function UsersSection() {
+  return (
+    <Box
+      sx={{
+        // CSS columns give a true masonry layout — tables of different heights
+        // stack naturally without awkward whitespace.
+        columnCount: { xs: 1, md: 2, xl: 3 },
+        columnGap: 3,
+        "& > *": {
+          // Each child breaks out of the column flow on its own terms
+          breakInside: "avoid",
+          marginBottom: 3,
+          display: "block",
+        },
+      }}
+    >
+      <EmployeesAdmin />
+      {/* Keep adding tables here */}
+    </Box>
+  );
+}
+
 // ── Section registry ──────────────────────────────────────────────────────────
 // Maps nav ids to their content components.
 const SECTION_CONTENT = {
   constants: <ConstantsSection />,
   // permissions: <PermissionsSection />,
-  // users: <UsersSection />,
+  users: <UsersSection />,
 };
 
 // ── Admin page ────────────────────────────────────────────────────────────────
