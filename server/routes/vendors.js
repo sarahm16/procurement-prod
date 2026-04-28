@@ -9,9 +9,9 @@ export default function vendorsRouter(prisma) {
     try {
       const vendors = await prisma.vendors.findMany({
         include: {
-          VendorStatuses: true,
+          VendorStatus: true,
           VendorTrades: {
-            include: { Trades: true },
+            include: { Trade: true },
           },
         },
       });
@@ -20,7 +20,7 @@ export default function vendorsRouter(prisma) {
         VendorTrades: undefined,
         VendorStatus: undefined,
         trades: vendor.VendorTrades.map((vt) => vt.Trades),
-        status: vendor.VendorStatuses,
+        status: vendor.VendorStatus,
       }));
       res.json(flatVendors);
     } catch (error) {
@@ -42,11 +42,46 @@ export default function vendorsRouter(prisma) {
   router.get("/:id", async (req, res) => {
     const { id } = req.params;
     try {
-      const vendor = await prisma.vendors.findUnique({
+      /*       const vendor = await prisma.vendors.findUnique({
         where: { id: Number(id) },
-        include: { VendorStatuses: true },
+        include: { VendorStatus: true, Notes: true },
+      }); */
+
+      const [vendor, notes] = await Promise.all([
+        prisma.vendors.findUnique({
+          where: { id: Number(id) },
+          include: {
+            VendorStatus: true,
+            VendorTrades: {
+              include: { Trade: true },
+            },
+          },
+        }),
+        prisma.notes.findMany({
+          where: {
+            entity_type_id: 1,
+            entity_id: Number(id),
+            parent_note_id: null,
+          },
+          include: {
+            Author: true,
+            Replies: {
+              include: { Author: true },
+            },
+            NoteTaggedUsers: {
+              include: { TaggedUser: true },
+            },
+          },
+        }),
+      ]);
+      res.json({
+        ...vendor,
+        notes,
+        status: vendor.VendorStatus,
+        trades: vendor.VendorTrades.map((vt) => vt.Trade),
+        VendorStatus: undefined,
+        VendorTrades: undefined,
       });
-      res.json(vendor);
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         console.error("Prisma error fetching vendor:", error);
