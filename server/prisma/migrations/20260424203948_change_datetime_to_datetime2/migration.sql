@@ -1,0 +1,2 @@
+-- This migration was rolled back and is kept as a placeholder
+-- to satisfy Prisma's migration history requirement.
