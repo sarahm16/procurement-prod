@@ -2,8 +2,8 @@ import { useParams } from "react-router-dom";
 import { createContext, useEffect } from "react";
 
 // Components
-import DetailPageHeader from "../../components/DetailPageHeader";
-import DetailPageLayout from "../../components/DetailPageLayout";
+import DetailPageHeader from "../../components/DetailPageLayout/DetailPageHeader";
+import DetailPageLayout from "../../components/DetailPageLayout/DetailPageLayout";
 
 // Context
 const WorkorderDetailContext = createContext({

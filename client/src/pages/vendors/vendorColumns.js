@@ -38,7 +38,7 @@ export const generateVendorColumns = () => {
       flex: 0.8,
       minWidth: 120,
       renderCell: (params) => {
-        const status = params.row.VendorStatuses;
+        const status = params.row.status;
         if (!status) return "—";
         return (
           <Chip
