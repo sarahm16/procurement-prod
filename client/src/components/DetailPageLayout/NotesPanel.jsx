@@ -26,16 +26,12 @@ const PANEL_WIDTH = 300;
  * detail pages regardless of which tab is active.
  *
  * Props:
- *   entityId    {number|string} — ID of the record these notes belong to
- *   entityType  {string}        — e.g. "vendor", "client", "site"
  *   notes       {Array}         — [{ id, author, content, createdAt }]
  *   loading     {boolean}
  *   onAddNote   {fn}            — (content: string) => Promise<void>
  *   currentUser {string}        — display name for new notes
  */
 export default function NotesPanel({
-  entityId,
-  entityType,
   notes = [],
   loading = false,
   onAddNote,
@@ -342,7 +338,7 @@ export default function NotesPanel({
                       color: "text.primary",
                     }}
                   >
-                    {note.author ?? note.changed_by ?? "Unknown"}
+                    {note.Author?.name ?? note.changed_by ?? "Unknown"}
                   </Typography>
                   <Typography
                     sx={{
@@ -353,7 +349,7 @@ export default function NotesPanel({
                       ml: 1,
                     }}
                   >
-                    {formatDate(note.createdAt ?? note.changed_at)}
+                    {formatDate(note.date ?? note.changed_at)}
                   </Typography>
                 </Box>
 
@@ -368,7 +364,7 @@ export default function NotesPanel({
                     wordBreak: "break-word",
                   }}
                 >
-                  {note.content ?? note.new_value}
+                  {note.body ?? note.new_value}
                 </Typography>
               </Box>
               {i < notes.length - 1 && (
