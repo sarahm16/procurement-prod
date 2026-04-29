@@ -121,5 +121,63 @@ export default function vendorsRouter(prisma) {
     }
   });
 
+  // POST /api/vendors/:id/trades/:tid - associate a trade with a vendor
+  router.post("/:id/trades/:tid", async (req, res) => {
+    const { id, tid } = req.params;
+    console.log(`Adding trade ${tid} to vendor ${id}`);
+    try {
+      const association = await prisma.vendorTrades.create({
+        data: {
+          vendor_id: Number(id),
+          trade_id: Number(tid),
+        },
+      });
+      console.log("Association created:", association);
+      res.status(201).json(association);
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError) {
+        console.error("Prisma error creating association:", error);
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        console.error("Error creating association:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    }
+  });
+
+  // DELETE /api/vendors/:id/trades/:tid - disassociate a trade from a vendor
+  router.delete("/:id/trades/:tid", async (req, res) => {
+    const { id, tid } = req.params;
+    console.log(`Removing trade ${tid} from vendor ${id}`);
+    try {
+      const association = await prisma.vendorTrades.delete({
+        where: {
+          vendor_id_trade_id: {
+            vendor_id: Number(id),
+            trade_id: Number(tid),
+          },
+        },
+      });
+      console.log("Association removed:", association);
+      res.status(200).json(association);
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError) {
+        console.error("Prisma error removing association:", error);
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        console.error("Error removing association:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    }
+  });
+
   return router;
 }
