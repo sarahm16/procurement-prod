@@ -338,7 +338,7 @@ export default function NotesPanel({
                       color: "text.primary",
                     }}
                   >
-                    {note.Author?.name ?? note.changed_by ?? "Unknown"}
+                    {note.author_name ?? note.changed_by ?? "Unknown"}
                   </Typography>
                   <Typography
                     sx={{
@@ -366,7 +366,40 @@ export default function NotesPanel({
                 >
                   {note.body ?? note.new_value}
                 </Typography>
+                {/* Tagged users */}
+                {note.tagged_users?.length > 0 && (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 0.5,
+                      mt: 0.75,
+                    }}
+                  >
+                    {note.tagged_users.map((name) => (
+                      <Typography
+                        key={name}
+                        sx={{
+                          fontFamily: '"Barlow", sans-serif',
+                          fontSize: "0.68rem",
+                          color: "primary.main",
+                          backgroundColor: alpha(
+                            theme.palette.primary.main,
+                            0.08,
+                          ),
+                          borderRadius: "4px",
+                          px: 0.75,
+                          py: 0.25,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        @{name}
+                      </Typography>
+                    ))}
+                  </Box>
+                )}
               </Box>
+
               {i < notes.length - 1 && (
                 <Divider sx={{ borderColor: theme.palette.divider }} />
               )}
