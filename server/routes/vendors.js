@@ -1,6 +1,48 @@
 import { Router } from "express";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 
+const serializeReply = (reply) => {
+  return {
+    id: reply.id,
+    body: reply.body,
+    date: reply.date,
+    author_name: reply.Author ? reply.Author.name : "Unknown",
+  };
+};
+
+const serializeNote = (note) => {
+  return {
+    id: note.id,
+    body: note.body,
+    date: note.date,
+    author_name: note.Author ? note.Author.name : "Unknown",
+    tagged_users: note.NoteTaggedUsers.map((tu) =>
+      tu.TaggedUser ? tu.TaggedUser.name : "Unknown",
+    ),
+    replies: note.Replies.map(serializeReply),
+  };
+};
+
+const serializeVendor = (vendor, notes) => {
+  return {
+    id: vendor.id,
+    company: vendor.company,
+    status: vendor.VendorStatus,
+    contact_name: vendor.contact_name,
+    contact_email: vendor.contact_email,
+    contact_phone: vendor.contact_phone,
+    contact_phone2: vendor.contact_phone2,
+    mailing_address: vendor.mailing_address,
+    mailing_address2: vendor.mailing_address2,
+    mailing_city: vendor.mailing_city,
+    mailing_state: vendor.mailing_state,
+    mailing_zipcode: vendor.mailing_zipcode,
+    notes: notes.map(serializeNote),
+    status: vendor.VendorStatus,
+    trades: vendor.VendorTrades.map((vt) => vt.Trade),
+  };
+};
+
 export default function vendorsRouter(prisma) {
   const router = Router();
 
@@ -15,14 +57,7 @@ export default function vendorsRouter(prisma) {
           },
         },
       });
-      const flatVendors = vendors.map((vendor) => ({
-        ...vendor,
-        VendorTrades: undefined,
-        VendorStatus: undefined,
-        trades: vendor.VendorTrades.map((vt) => vt.Trades),
-        status: vendor.VendorStatus,
-      }));
-      res.json(flatVendors);
+      res.json(vendors.map((vendor) => serializeVendor(vendor, [])));
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         console.error("Prisma error fetching vendors:", error);
@@ -42,11 +77,6 @@ export default function vendorsRouter(prisma) {
   router.get("/:id", async (req, res) => {
     const { id } = req.params;
     try {
-      /*       const vendor = await prisma.vendors.findUnique({
-        where: { id: Number(id) },
-        include: { VendorStatus: true, Notes: true },
-      }); */
-
       const [vendor, notes] = await Promise.all([
         prisma.vendors.findUnique({
           where: { id: Number(id) },
@@ -74,14 +104,7 @@ export default function vendorsRouter(prisma) {
           },
         }),
       ]);
-      res.json({
-        ...vendor,
-        notes,
-        status: vendor.VendorStatus,
-        trades: vendor.VendorTrades.map((vt) => vt.Trade),
-        VendorStatus: undefined,
-        VendorTrades: undefined,
-      });
+      res.json(serializeVendor(vendor, notes));
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         console.error("Prisma error fetching vendor:", error);
