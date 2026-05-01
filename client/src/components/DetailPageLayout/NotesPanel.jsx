@@ -1,4 +1,8 @@
 import { useState, useRef, useEffect } from "react";
+import { useLocation, useParams } from "react-router-dom";
+
+import axios from "axios";
+
 import {
   Box,
   Typography,
@@ -9,6 +13,8 @@ import {
   useTheme,
   alpha,
   CircularProgress,
+  Chip,
+  Autocomplete,
 } from "@mui/material";
 import NoteAltOutlinedIcon from "@mui/icons-material/NoteAltOutlined";
 import AddIcon from "@mui/icons-material/Add";
@@ -17,7 +23,16 @@ import SendIcon from "@mui/icons-material/Send";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 
+// Constants
+import { ENTITY_TYPES } from "../../*/constants/entityTypes";
+
+// Local
+import { generateEmailRecipients } from "../../*/utilities/generateEmailRecipients";
+import { sendEmailFromHTML } from "../../*/api/microsoftApi";
+
 const PANEL_WIDTH = 300;
+
+const PRIORITY_OPTIONS = ["Low", "Medium", "High"];
 
 /**
  * NotesPanel
@@ -37,6 +52,21 @@ export default function NotesPanel({
   onAddNote,
   currentUser = "You",
 }) {
+  const location = useLocation();
+  // Entity ID:
+  const { id } = useParams();
+
+  const urlSegments = location.pathname.split("/").filter(Boolean);
+  const entity_type = urlSegments[0]; // Assuming the first segment indicates the entity type, e.g., "vendors"
+  const entity_type_id = ENTITY_TYPES[entity_type]; // Update this to match the entity in the url, or pass as a prop if NotesPanel is used in multiple places
+
+  console.log(
+    "entity_type_id:",
+    entity_type_id,
+    "from url segment:",
+    urlSegments[0],
+  );
+
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
   const [open, setOpen] = useState(true);
@@ -45,6 +75,26 @@ export default function NotesPanel({
   const [saving, setSaving] = useState(false);
   const scrollRef = useRef(null);
   const textRef = useRef(null);
+
+  const [employees, setEmployees] = useState([]);
+  const [taggedUsers, setTaggedUsers] = useState([]);
+  const [priority, setPriority] = useState("Low");
+
+  console.log("NotesPanel notes:", notes);
+
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        const response = await axios.get("/api/employees");
+        const data = response.data;
+        console.log("Fetched employees:", data);
+        setEmployees(data);
+      } catch (error) {
+        console.error("Error fetching employees:", error);
+      }
+    };
+    fetchEmployees();
+  }, []);
 
   // Scroll to bottom when new notes arrive
   useEffect(() => {
@@ -59,13 +109,47 @@ export default function NotesPanel({
     }
   }, [composing]);
 
+  const sendEmailNotification = async () => {
+    const subject = `${currentUser} tagged you in a note on a ${entity_type.slice(0, -1)}`;
+
+    const recipients = generateEmailRecipients(taggedUsers.map((u) => u.email));
+    const bccRecipients = [];
+
+    const htmlBody = `<p>${currentUser} tagged you in a note for <strong>${entity_type.slice(0, -1)}</strong></p>
+                <p>Note: ${draft.trim()}</p>`;
+
+    try {
+      await sendEmailFromHTML(
+        priority,
+        subject,
+        htmlBody,
+        recipients,
+        bccRecipients,
+      );
+      console.log("Email notification sent successfully");
+    } catch (error) {
+      console.error("Error sending email notification:", error);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!draft.trim() || saving) return;
     setSaving(true);
     try {
-      await onAddNote?.(draft.trim());
+      await onAddNote?.({
+        body: draft.trim(),
+        tagged_user_ids: taggedUsers.map((u) => u.id),
+        priority,
+        author_id: 1,
+        entity_id: Number(id),
+        entity_type_id: entity_type_id, // Update this to match the entity in the url
+      });
+
+      await sendEmailNotification();
       setDraft("");
       setComposing(false);
+      setTaggedUsers([]);
+      setPriority("Low");
     } finally {
       setSaving(false);
     }
@@ -419,6 +503,60 @@ export default function NotesPanel({
               : alpha(theme.palette.primary.main, 0.02),
           }}
         >
+          {/* Tag employees */}
+          <Autocomplete
+            multiple
+            size="small"
+            options={employees}
+            value={taggedUsers}
+            onChange={(_, newValue) => setTaggedUsers(newValue)}
+            getOptionLabel={(option) => option.name}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            disabled={saving}
+            renderTags={(selected, getTagProps) =>
+              selected.map((option, index) => (
+                <Chip
+                  {...getTagProps({ index })}
+                  key={option.id}
+                  label={option.name}
+                  size="small"
+                  sx={{
+                    fontFamily: '"Barlow", sans-serif',
+                    fontSize: "0.68rem",
+                    height: 20,
+                    backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                    color: "primary.main",
+                    "& .MuiChip-deleteIcon": { fontSize: 13 },
+                  }}
+                />
+              ))
+            }
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                placeholder={taggedUsers.length === 0 ? "Tag employees…" : ""}
+                size="small"
+                variant="outlined"
+                sx={{
+                  mb: 1,
+                  "& .MuiInputBase-root": {
+                    fontFamily: '"Barlow", sans-serif',
+                    fontSize: "0.82rem",
+                    backgroundColor: "background.paper",
+                  },
+                  "& .MuiOutlinedInput-notchedOutline": {
+                    borderColor: alpha(theme.palette.secondary.main, 0.3),
+                  },
+                  "&:hover .MuiOutlinedInput-notchedOutline": {
+                    borderColor: alpha(theme.palette.secondary.main, 0.6),
+                  },
+                  "& .Mui-focused .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "secondary.main",
+                  },
+                }}
+              />
+            )}
+          />
           <TextField
             inputRef={textRef}
             multiline
