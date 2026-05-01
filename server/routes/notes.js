@@ -56,7 +56,7 @@ export default function notesRouter(prisma) {
           entity_id,
           author_id: author_id || 1, // Default to user ID 1 if not provided, replace with actual auth logic
           NoteTaggedUsers: {
-            create: tagged_user_ids.map((id) => ({ user_id: id })),
+            create: tagged_user_ids.map((id) => ({ tagged_user_id: id })),
           },
           priority,
         },
