@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation, useParams } from "react-router-dom";
-
 import axios from "axios";
 
 import {
@@ -15,6 +14,8 @@ import {
   CircularProgress,
   Chip,
   Autocomplete,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import NoteAltOutlinedIcon from "@mui/icons-material/NoteAltOutlined";
 import AddIcon from "@mui/icons-material/Add";
@@ -25,14 +26,13 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 
 // Constants
 import { ENTITY_TYPES } from "../../*/constants/entityTypes";
+import { priorityConfig } from "../../*/constants/priorityConfig";
 
-// Local
+// Local functions
 import { generateEmailRecipients } from "../../*/utilities/generateEmailRecipients";
 import { sendEmailFromHTML } from "../../*/api/microsoftApi";
 
 const PANEL_WIDTH = 300;
-
-const PRIORITY_OPTIONS = ["Low", "Medium", "High"];
 
 /**
  * NotesPanel
@@ -51,21 +51,16 @@ export default function NotesPanel({
   loading = false,
   onAddNote,
   currentUser = "You",
+  entityName = "",
 }) {
   const location = useLocation();
   // Entity ID:
   const { id } = useParams();
 
+  const href = window.location.href; // This is for the email body so users can click through to the relevant page from the email notification
   const urlSegments = location.pathname.split("/").filter(Boolean);
   const entity_type = urlSegments[0]; // Assuming the first segment indicates the entity type, e.g., "vendors"
   const entity_type_id = ENTITY_TYPES[entity_type]; // Update this to match the entity in the url, or pass as a prop if NotesPanel is used in multiple places
-
-  console.log(
-    "entity_type_id:",
-    entity_type_id,
-    "from url segment:",
-    urlSegments[0],
-  );
 
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
@@ -110,14 +105,81 @@ export default function NotesPanel({
   }, [composing]);
 
   const sendEmailNotification = async () => {
-    const subject = `${currentUser} tagged you in a note on a ${entity_type.slice(0, -1)}`;
+    const subject = `${currentUser} tagged you in a note in ${entity_type.slice(0, -1)} ${entityName}`;
 
     const recipients = generateEmailRecipients(taggedUsers.map((u) => u.email));
     const bccRecipients = [];
 
-    const htmlBody = `<p>${currentUser} tagged you in a note for <strong>${entity_type.slice(0, -1)}</strong></p>
-                <p>Note: ${draft.trim()}</p>`;
+    const p =
+      priorityConfig.find((p) => p.value === priority) || priorityConfig[0];
+    const entityLabel = entity_type.slice(0, -1);
 
+    const htmlBody = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f5f7;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:#1a1a2e;padding:20px 28px;">
+            <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:1px;color:#9a9ab0;text-transform:uppercase;">${entityLabel}</p>
+            <p style="margin:4px 0 0;font-size:18px;font-weight:700;color:#ffffff;">${entityName}</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:28px;">
+            <p style="margin:0 0 6px;font-size:13px;color:#6b7280;">
+              <strong style="color:#111827;">${currentUser}</strong> tagged you in a note
+            </p>
+
+            <!-- Priority badge -->
+            <p style="margin:0 0 20px;">
+              <span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600;color:${p.color};background:${p.bg};border:1px solid ${alpha ? "" : ""}${p.color}33;">
+                ${p.value} Priority
+              </span>
+            </p>
+
+            <!-- Note content -->
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="background:#f9fafb;border-left:3px solid #d1d5db;border-radius:0 6px 6px 0;padding:14px 16px;">
+                  <p style="margin:0;font-size:13px;line-height:1.6;color:#374151;white-space:pre-wrap;">${draft.trim()}</p>
+                </td>
+              </tr>
+            </table>
+
+            <!-- CTA -->
+            <table cellpadding="0" cellspacing="0" style="margin-top:24px;">
+              <tr>
+                <td style="background:#1976d2;border-radius:6px;">
+                  <a href="${href}" style="display:inline-block;padding:10px 22px;font-size:13px;font-weight:600;color:#ffffff;text-decoration:none;">
+                    View ${entityLabel} →
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="padding:14px 28px;border-top:1px solid #f0f0f0;">
+            <p style="margin:0;font-size:11px;color:#9ca3af;">You received this because you were tagged in a note. Do not reply to this email.</p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+`;
     try {
       await sendEmailFromHTML(
         priority,
@@ -145,7 +207,9 @@ export default function NotesPanel({
         entity_type_id: entity_type_id, // Update this to match the entity in the url
       });
 
-      await sendEmailNotification();
+      if (taggedUsers.length > 0) {
+        await sendEmailNotification();
+      }
       setDraft("");
       setComposing(false);
       setTaggedUsers([]);
@@ -557,6 +621,50 @@ export default function NotesPanel({
               />
             )}
           />
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+            <Typography
+              sx={{
+                fontFamily: '"Barlow", sans-serif',
+                fontSize: "0.72rem",
+                color: "text.disabled",
+                flexShrink: 0,
+              }}
+            >
+              Priority
+            </Typography>
+            <ToggleButtonGroup
+              value={priority}
+              exclusive
+              onChange={(_, val) => val && setPriority(val)}
+              size="small"
+              disabled={saving}
+              sx={{ height: 24 }}
+            >
+              {priorityConfig.map(({ value, color, bg }) => (
+                <ToggleButton
+                  key={value}
+                  value={value}
+                  sx={{
+                    fontFamily: '"Barlow", sans-serif',
+                    fontSize: "0.65rem",
+                    fontWeight: 600,
+                    px: 1.25,
+                    textTransform: "none",
+                    color: "text.disabled",
+                    borderColor: alpha(theme.palette.secondary.main, 0.3),
+                    "&.Mui-selected": {
+                      color,
+                      backgroundColor: alpha(color, 0.1),
+                      borderColor: alpha(color, 0.4),
+                      "&:hover": { backgroundColor: alpha(color, 0.15) },
+                    },
+                  }}
+                >
+                  {value}
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+          </Box>
           <TextField
             inputRef={textRef}
             multiline

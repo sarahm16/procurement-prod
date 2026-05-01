@@ -41,6 +41,7 @@ export default function DetailPageLayout({
   notesLoading = false,
   onAddNote,
   currentUser,
+  entityName = "",
 }) {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
@@ -186,6 +187,7 @@ export default function DetailPageLayout({
           loading={notesLoading}
           onAddNote={onAddNote}
           currentUser={currentUser}
+          entityName={entityName}
         />
       </Box>
     </Box>
