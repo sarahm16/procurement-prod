@@ -110,8 +110,7 @@ export default function NotesPanel({
     const recipients = generateEmailRecipients(taggedUsers.map((u) => u.email));
     const bccRecipients = [];
 
-    const p =
-      priorityConfig.find((p) => p.value === priority) || priorityConfig[0];
+    const p = priorityConfig[priority] || priorityConfig["Low"];
     const entityLabel = entity_type.slice(0, -1);
 
     const htmlBody = `
@@ -235,6 +234,16 @@ export default function NotesPanel({
       " · " +
       d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
     );
+  };
+
+  const getNotePriority = (note) => {
+    if (!note.priority) {
+      return "Low";
+    }
+    if (note.priority === "Medium") {
+      return "Normal";
+    }
+    return note.priority;
   };
 
   // ── Collapsed strip ──────────────────────────────────────────────────────────
@@ -466,93 +475,123 @@ export default function NotesPanel({
         )}
 
         {!loading &&
-          notes.map((note, i) => (
-            <Box key={note.id ?? i}>
-              <Box sx={{ px: 2, py: 1.75 }}>
-                {/* Note header */}
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    mb: 0.75,
-                    alignItems: "baseline",
-                  }}
-                >
-                  <Typography
-                    sx={{
-                      fontFamily: '"Barlow", sans-serif',
-                      fontWeight: 600,
-                      fontSize: "0.72rem",
-                      color: "text.primary",
-                    }}
-                  >
-                    {note.author_name ?? note.changed_by ?? "Unknown"}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      fontFamily: '"Barlow", sans-serif',
-                      fontSize: "0.65rem",
-                      color: "text.disabled",
-                      flexShrink: 0,
-                      ml: 1,
-                    }}
-                  >
-                    {formatDate(note.date ?? note.changed_at)}
-                  </Typography>
-                </Box>
-
-                {/* Note body */}
-                <Typography
-                  sx={{
-                    fontFamily: '"Barlow", sans-serif',
-                    fontSize: "0.82rem",
-                    color: "text.secondary",
-                    lineHeight: 1.55,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {note.body ?? note.new_value}
-                </Typography>
-                {/* Tagged users */}
-                {note.tagged_users?.length > 0 && (
+          notes.map((note, i) => {
+            const notePriority = getNotePriority(note);
+            const priority = priorityConfig[notePriority];
+            const { label, color, bg } = priority;
+            return (
+              <Box key={note.id ?? i}>
+                <Box sx={{ px: 2, py: 1.75 }}>
+                  {/* Note header */}
                   <Box
                     sx={{
                       display: "flex",
-                      flexWrap: "wrap",
-                      gap: 0.5,
-                      mt: 0.75,
+                      justifyContent: "space-between",
+                      mb: 0.75,
+                      alignItems: "baseline",
                     }}
                   >
-                    {note.tagged_users.map((name) => (
+                    <Typography
+                      sx={{
+                        fontFamily: '"Barlow", sans-serif',
+                        fontWeight: 600,
+                        fontSize: "0.72rem",
+                        color: "text.primary",
+                      }}
+                    >
+                      {note.author_name ?? note.changed_by ?? "Unknown"}
+                    </Typography>
+
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                        ml: 1,
+                      }}
+                    >
                       <Typography
-                        key={name}
                         sx={{
                           fontFamily: '"Barlow", sans-serif',
-                          fontSize: "0.68rem",
-                          color: "primary.main",
-                          backgroundColor: alpha(
-                            theme.palette.primary.main,
-                            0.08,
-                          ),
-                          borderRadius: "4px",
-                          px: 0.75,
-                          py: 0.25,
-                          lineHeight: 1.5,
+                          fontSize: "0.62rem",
+                          fontWeight: 600,
+                          color: color,
+                          backgroundColor: alpha(color, 0.1),
+                          border: `1px solid ${alpha(color, 0.25)}`,
+                          borderRadius: "20px",
+                          px: 0.85,
+                          py: 0.15,
+                          lineHeight: 1.6,
                         }}
                       >
-                        @{name}
+                        {label}
                       </Typography>
-                    ))}
+                      <Typography
+                        sx={{
+                          fontFamily: '"Barlow", sans-serif',
+                          fontSize: "0.65rem",
+                          color: "text.disabled",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {formatDate(note.date ?? note.changed_at)}
+                      </Typography>
+                    </Box>
                   </Box>
+
+                  {/* Note body */}
+                  <Typography
+                    sx={{
+                      fontFamily: '"Barlow", sans-serif',
+                      fontSize: "0.82rem",
+                      color: "text.secondary",
+                      lineHeight: 1.55,
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {note.body ?? note.new_value}
+                  </Typography>
+                  {/* Tagged users */}
+                  {note.tagged_users?.length > 0 && (
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 0.5,
+                        mt: 0.75,
+                      }}
+                    >
+                      {note.tagged_users.map((name) => (
+                        <Typography
+                          key={name}
+                          sx={{
+                            fontFamily: '"Barlow", sans-serif',
+                            fontSize: "0.68rem",
+                            color: "primary.main",
+                            backgroundColor: alpha(
+                              theme.palette.primary.main,
+                              0.08,
+                            ),
+                            borderRadius: "4px",
+                            px: 0.75,
+                            py: 0.25,
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          @{name}
+                        </Typography>
+                      ))}
+                    </Box>
+                  )}
+                </Box>
+
+                {i < notes.length - 1 && (
+                  <Divider sx={{ borderColor: theme.palette.divider }} />
                 )}
               </Box>
-
-              {i < notes.length - 1 && (
-                <Divider sx={{ borderColor: theme.palette.divider }} />
-              )}
-            </Box>
-          ))}
+            );
+          })}
       </Box>
 
       {/* Compose area */}
@@ -640,29 +679,32 @@ export default function NotesPanel({
               disabled={saving}
               sx={{ height: 24 }}
             >
-              {priorityConfig.map(({ value, color, bg }) => (
-                <ToggleButton
-                  key={value}
-                  value={value}
-                  sx={{
-                    fontFamily: '"Barlow", sans-serif',
-                    fontSize: "0.65rem",
-                    fontWeight: 600,
-                    px: 1.25,
-                    textTransform: "none",
-                    color: "text.disabled",
-                    borderColor: alpha(theme.palette.secondary.main, 0.3),
-                    "&.Mui-selected": {
-                      color,
-                      backgroundColor: alpha(color, 0.1),
-                      borderColor: alpha(color, 0.4),
-                      "&:hover": { backgroundColor: alpha(color, 0.15) },
-                    },
-                  }}
-                >
-                  {value}
-                </ToggleButton>
-              ))}
+              {Object.keys(priorityConfig).map((key) => {
+                const { label, color, bg } = priorityConfig[key];
+                return (
+                  <ToggleButton
+                    key={key}
+                    value={key}
+                    sx={{
+                      fontFamily: '"Barlow", sans-serif',
+                      fontSize: "0.65rem",
+                      fontWeight: 600,
+                      px: 1.25,
+                      textTransform: "none",
+                      color: "text.disabled",
+                      borderColor: alpha(theme.palette.secondary.main, 0.3),
+                      "&.Mui-selected": {
+                        color,
+                        backgroundColor: alpha(color, 0.1),
+                        borderColor: alpha(color, 0.4),
+                        "&:hover": { backgroundColor: alpha(color, 0.15) },
+                      },
+                    }}
+                  >
+                    {label}
+                  </ToggleButton>
+                );
+              })}
             </ToggleButtonGroup>
           </Box>
           <TextField
