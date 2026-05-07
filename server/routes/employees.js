@@ -24,6 +24,29 @@ export default function employeesRouter(prisma) {
     }
   });
 
+  // GET /api/employees/ms/:id - Fetch employee by Microsoft ID
+  router.get("/ms/:id", async (req, res) => {
+    try {
+      const employee = await prisma.employees.findUnique({
+        where: { ms_user_id: req.params.id },
+      });
+      console.log("Employee fetched by Microsoft ID:", req.params.id);
+      res.json(employee);
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError) {
+        console.error("Prisma error fetching employees:", error);
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        console.error("Error fetching employees:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    }
+  });
+
   // POST /api/employees
   router.post("/", async (req, res) => {
     console.log("Body", req.body);
