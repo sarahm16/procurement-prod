@@ -31,6 +31,11 @@ import { priorityConfig } from "../../*/constants/priorityConfig";
 // Local functions
 import { generateEmailRecipients } from "../../*/utilities/generateEmailRecipients";
 import { sendEmailFromHTML } from "../../*/api/microsoftApi";
+
+// Hooks
+import { useEmployees } from "../../*/hooks/useEmployees";
+
+// Local Components
 import ComposeNote from "./ComposeNote";
 
 const PANEL_WIDTH = 300;
@@ -54,10 +59,14 @@ export default function NotesPanel({
   currentUser = "You",
   entityName = "",
 }) {
-  const location = useLocation();
   // Entity ID:
   const { id } = useParams();
 
+  // Employees for the tagging autocomplete:
+  const { data: employees = [] } = useEmployees();
+
+  // Entity type and ID for email notification context:
+  const location = useLocation();
   const href = window.location.href; // This is for the email body so users can click through to the relevant page from the email notification
   const urlSegments = location.pathname.split("/").filter(Boolean);
   const entity_type = urlSegments[0]; // Assuming the first segment indicates the entity type, e.g., "vendors"
@@ -72,25 +81,10 @@ export default function NotesPanel({
   const scrollRef = useRef(null);
   const textRef = useRef(null);
 
-  const [employees, setEmployees] = useState([]);
   const [taggedUsers, setTaggedUsers] = useState([]);
   const [priority, setPriority] = useState("Low");
 
   console.log("NotesPanel notes:", notes);
-
-  useEffect(() => {
-    const fetchEmployees = async () => {
-      try {
-        const response = await axios.get("/api/employees");
-        const data = response.data;
-        console.log("Fetched employees:", data);
-        setEmployees(data);
-      } catch (error) {
-        console.error("Error fetching employees:", error);
-      }
-    };
-    fetchEmployees();
-  }, []);
 
   // Scroll to bottom when new notes arrive
   useEffect(() => {
