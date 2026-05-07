@@ -1,10 +1,10 @@
 // Routing
 import { Route, Routes } from "react-router-dom";
 
-// Components
+// Local
 import ProtectedLayout from "./components/ProtectedLayout";
-
-// Routes
+import AuthGuard from "./components/AuthGuard";
+import LoginPage from "./pages/LoginPage";
 import routesConfig from "./routes/routeConfig";
 
 // MUI
@@ -22,10 +22,13 @@ function App() {
     <>
       <QueryClientProvider client={queryClient}>
         <Routes>
-          <Route element={<ProtectedLayout routesConfig={routesConfig} />}>
-            {routesConfig.map(({ path, element }, index) => (
-              <Route key={index} path={path} element={element} />
-            ))}
+          <Route path="/login" element={<LoginPage />} />
+          <Route element={<AuthGuard />}>
+            <Route element={<ProtectedLayout routesConfig={routesConfig} />}>
+              {routesConfig.map(({ path, element }, index) => (
+                <Route key={index} path={path} element={element} />
+              ))}
+            </Route>
           </Route>
         </Routes>
       </QueryClientProvider>
