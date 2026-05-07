@@ -4,20 +4,20 @@
   high: { label: "High", color: "#f44336", bg: "#fdf1f0" },
 }; */
 
-export const priorityConfig = [
-  {
-    value: "Low",
+export const priorityConfig = {
+  Low: {
+    label: "Low",
     color: "#4caf50",
     bg: "#f1f8f1",
   },
-  {
-    value: "Normal",
+  Normal: {
+    label: "Normal",
     color: "#ff9800",
     bg: "#fff8f0",
   },
-  {
-    value: "High",
+  High: {
+    label: "High",
     color: "#f44336",
     bg: "#fdf1f0",
   },
-];
+};
