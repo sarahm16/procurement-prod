@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useState, cloneElement } from "react";
 import { useLocation } from "react-router-dom";
 
 // Routes Config
 import routesConfig from "../../routes/routeConfig";
+
+// Local Components
+import SlideOutPanel from "./SlideOutPanel";
 
 // MUI imports
 import Box from "@mui/material/Box";
@@ -13,9 +16,8 @@ import Tooltip from "@mui/material/Tooltip";
 import Divider from "@mui/material/Divider";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import AddIcon from "@mui/icons-material/Add";
-import SlideOutPanel from "./SlideOutPanel";
 
-function ListPageHeader({ onRefresh }) {
+function ListPageHeader({ onRefresh, form }) {
   const location = useLocation();
   const pathname = location.pathname;
 
@@ -37,6 +39,8 @@ function ListPageHeader({ onRefresh }) {
     setTimeout(() => setSpinning(false), 600);
   };
 
+  const formWithClose = form ? cloneElement(form, { onClose }) : null;
+
   return (
     <>
       <SlideOutPanel
@@ -44,7 +48,9 @@ function ListPageHeader({ onRefresh }) {
         open={formOpen}
         onClose={onClose}
         subtitle=""
-      ></SlideOutPanel>
+      >
+        {formWithClose}
+      </SlideOutPanel>
       <Box sx={{ mb: 3 }}>
         <Box
           sx={{

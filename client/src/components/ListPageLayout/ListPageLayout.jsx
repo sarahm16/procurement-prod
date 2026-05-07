@@ -1,5 +1,5 @@
 /**
- * DetailPageLayout
+ * ListPageLayout
  *
  * Fixes the DetailPageHeader in place and makes the content
  * below it scroll vertically. Use this as the root wrapper
@@ -14,10 +14,7 @@
 // MUI Components
 import Box from "@mui/material/Box";
 
-// Components
-import ListPageHeader from "./ListPageHeader";
-
-export default function ListPageLayout({ children }) {
+export default function ListPageLayout({ header, children }) {
   return (
     <Box
       sx={{
@@ -28,9 +25,7 @@ export default function ListPageLayout({ children }) {
       }}
     >
       {/* Fixed header — never scrolls */}
-      <Box sx={{ flexShrink: 0 }}>
-        <ListPageHeader />
-      </Box>
+      <Box sx={{ flexShrink: 0 }}>{header}</Box>
 
       {/* Scrollable content area */}
       <Box

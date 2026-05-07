@@ -1,14 +1,16 @@
 // Libraries
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
 // Local Components
-import ListDataGrid from "../../components/ListDataGrid";
-import ListPageLayout from "../../components/ListPageLayout";
+import ListDataGrid from "../../components/ListPageLayout/ListDataGrid";
+import ListPageLayout from "../../components/ListPageLayout/ListPageLayout";
+import ListPageHeader from "../../components/ListPageLayout/ListPageHeader";
+import CreateVendorForm from "./CreateVendorForm";
 
 // MUI Components
 import Chip from "@mui/material/Chip";
-import { useNavigate } from "react-router-dom";
 
 const vendorColumns = [
   {
@@ -76,6 +78,8 @@ function Vendors() {
   // State
   const [vendors, setVendors] = useState([]);
 
+  const [submitting, setSubmitting] = useState(false);
+
   const fetchVendors = async () => {
     const response = await axios.get("/api/vendors");
     console.log("Vendor Response:", response.data);
@@ -91,9 +95,34 @@ function Vendors() {
     navigate(`/vendors/${row.id}`);
   };
 
+  const onSubmit = async (formData) => {
+    setSubmitting(true);
+    console.log("Form Data:", formData);
+    try {
+      const response = await axios.post("/api/vendors", formData);
+      console.log("Create Vendor Response:", response.data);
+      // Optimistically update the list with the new vendor (requires response to include new vendor data)
+      setVendors((prev) => [response.data, ...prev]);
+    } catch (error) {
+      console.error("Error creating vendor:", error);
+      // Optionally show error feedback to user here
+    }
+
+    setSubmitting(false);
+  };
+
   return (
     <>
-      <ListPageLayout>
+      <ListPageLayout
+        onRefresh={fetchVendors}
+        header={
+          <ListPageHeader
+            form={
+              <CreateVendorForm onSubmit={onSubmit} submitting={submitting} />
+            }
+          />
+        }
+      >
         <ListDataGrid
           rows={vendors}
           columns={vendorColumns}
