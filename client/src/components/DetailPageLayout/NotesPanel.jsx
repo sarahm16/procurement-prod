@@ -37,6 +37,7 @@ import { useEmployees } from "../../*/hooks/useEmployees";
 
 // Local Components
 import ComposeNote from "./ComposeNote";
+import useAuthenticatedUser from "../../*/hooks/useAuthenticatedUser";
 
 const PANEL_WIDTH = 300;
 
@@ -50,20 +51,22 @@ const PANEL_WIDTH = 300;
  *   notes       {Array}         — [{ id, author, content, createdAt }]
  *   loading     {boolean}
  *   onAddNote   {fn}            — (content: string) => Promise<void>
- *   currentUser {string}        — display name for new notes
  */
 export default function NotesPanel({
   notes = [],
   loading = false,
   onAddNote,
-  currentUser = "You",
   entityName = "",
 }) {
   // Entity ID:
   const { id } = useParams();
 
+  const { user, error } = useAuthenticatedUser();
+  console.log("User in notes panel:", user);
+
   // Employees for the tagging autocomplete:
   const { data: employees = [] } = useEmployees();
+  console.log("Employees for tagging:", employees);
 
   // Entity type and ID for email notification context:
   const location = useLocation();
@@ -81,9 +84,6 @@ export default function NotesPanel({
   const scrollRef = useRef(null);
   const textRef = useRef(null);
 
-  const [taggedUsers, setTaggedUsers] = useState([]);
-  const [priority, setPriority] = useState("Low");
-
   console.log("NotesPanel notes:", notes);
 
   // Scroll to bottom when new notes arrive
@@ -99,8 +99,8 @@ export default function NotesPanel({
     }
   }, [composing]);
 
-  const sendEmailNotification = async () => {
-    const subject = `${currentUser} tagged you in a note in ${entity_type.slice(0, -1)} ${entityName}`;
+  const sendEmailNotification = async ({ draft, taggedUsers, priority }) => {
+    const subject = `${user?.name} tagged you in a note in ${entity_type.slice(0, -1)} ${entityName}`;
 
     const recipients = generateEmailRecipients(taggedUsers.map((u) => u.email));
     const bccRecipients = [];
@@ -129,13 +129,13 @@ export default function NotesPanel({
         <tr>
           <td style="padding:28px;">
             <p style="margin:0 0 6px;font-size:13px;color:#6b7280;">
-              <strong style="color:#111827;">${currentUser}</strong> tagged you in a note
+              <strong style="color:#111827;">${user?.name}</strong> tagged you in a note
             </p>
 
             <!-- Priority badge -->
             <p style="margin:0 0 20px;">
               <span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600;color:${p.color};background:${p.bg};border:1px solid ${alpha ? "" : ""}${p.color}33;">
-                ${p.value} Priority
+                ${p.label} Priority
               </span>
             </p>
 
@@ -196,18 +196,15 @@ export default function NotesPanel({
         body: draft.trim(),
         tagged_user_ids: taggedUsers.map((u) => u.id),
         priority,
-        author_id: 1,
+        author_id: user?.id,
         entity_id: Number(id),
         entity_type_id: entity_type_id, // Update this to match the entity in the url
       });
 
       if (taggedUsers.length > 0) {
-        await sendEmailNotification();
+        await sendEmailNotification({ draft, taggedUsers, priority });
       }
-      setDraft("");
       setComposing(false);
-      setTaggedUsers([]);
-      setPriority("Low");
     } finally {
       setSaving(false);
     }
@@ -215,16 +212,6 @@ export default function NotesPanel({
 
   const handleCancel = () => {
     setComposing(false);
-    setDraft("");
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey))
-      handleSubmit({ draft, taggedUsers, priority });
-    if (e.key === "Escape") {
-      setComposing(false);
-      setDraft("");
-    }
   };
 
   const formatDate = (dateStr) => {

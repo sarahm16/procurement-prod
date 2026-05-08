@@ -36,6 +36,10 @@ function ComposeNote({ employees, saving, onSubmit, onCancel, theme, isDark }) {
     if (e.key === "Escape") onCancel();
   };
 
+  useEffect(() => {
+    console.log("Tagged users updated:", taggedUsers);
+  }, [taggedUsers]);
+
   return (
     <>
       <Box
@@ -194,7 +198,7 @@ function ComposeNote({ employees, saving, onSubmit, onCancel, theme, isDark }) {
             <span>
               <IconButton
                 size="small"
-                onClick={onSubmit}
+                onClick={() => onSubmit({ draft, taggedUsers, priority })}
                 disabled={!draft.trim() || saving}
                 sx={{
                   color: draft.trim() ? "secondary.main" : "text.disabled",
