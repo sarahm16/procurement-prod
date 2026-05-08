@@ -6,6 +6,7 @@ const serializeNote = (note) => {
     body: note.body,
     date: note.date,
     author_name: note.Author ? note.Author.name : "Unknown",
+    priority: note.priority,
     tagged_users: note.NoteTaggedUsers.map((tu) =>
       tu.TaggedUser ? tu.TaggedUser.name : "Unknown",
     ),

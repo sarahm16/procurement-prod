@@ -16,6 +16,7 @@ const serializeNote = (note) => {
     body: note.body,
     date: note.date,
     author_name: note.Author ? note.Author.name : "Unknown",
+    priority: note.priority,
     tagged_users: note.NoteTaggedUsers.map((tu) =>
       tu.TaggedUser ? tu.TaggedUser.name : "Unknown",
     ),
@@ -124,11 +125,26 @@ export default function vendorsRouter(prisma) {
   router.post("/", async (req, res) => {
     console.log("Body", req.body);
     try {
-      const vendor = await prisma.vendors.create({
-        data: req.body,
+      const { trade_ids, ...vendorData } = req.body; // Extract trade_ids and vendor data
+      console.log("Vendor Data:", vendorData);
+      console.log("Trade IDs:", trade_ids);
+
+      const createdVendor = await prisma.vendors.create({
+        data: vendorData,
       });
-      console.log("Vendor created:", vendor);
-      res.status(201).json(vendor);
+      console.log("Vendor created:", createdVendor);
+
+      const createdTrades = await prisma.vendorTrades.createMany({
+        data: (trade_ids || []).map((trade_id) => ({
+          vendor_id: createdVendor.id,
+          trade_id,
+        })),
+      });
+      console.log("Vendor-Trades associations created:", createdTrades.count);
+
+      // Need to save item to activity log as well
+
+      res.status(201).json(createdVendor);
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         console.error("Prisma error creating vendor:", error);
