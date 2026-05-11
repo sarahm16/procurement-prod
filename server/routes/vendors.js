@@ -125,7 +125,7 @@ export default function vendorsRouter(prisma) {
   router.post("/", async (req, res) => {
     console.log("Body", req.body);
     try {
-      const { trade_ids, ...vendorData } = req.body; // Extract trade_ids and vendor data
+      const { trade_ids, user_id, ...vendorData } = req.body; // Extract trade_ids, first activity log, and vendor data
       console.log("Vendor Data:", vendorData);
       console.log("Trade IDs:", trade_ids);
 
@@ -141,6 +141,17 @@ export default function vendorsRouter(prisma) {
         })),
       });
       console.log("Vendor-Trades associations created:", createdTrades.count);
+
+      const createdActivity = await prisma.activityLog.create({
+        data: {
+          entity_type_id: 1,
+          entity_id: createdVendor.id,
+          action: "CREATE",
+          new_value: vendorData?.company,
+          changed_by: user_id || null,
+        },
+      });
+      console.log("Activity log created:", createdActivity);
 
       // Need to save item to activity log as well
 
