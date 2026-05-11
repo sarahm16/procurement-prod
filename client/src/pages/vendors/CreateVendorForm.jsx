@@ -17,6 +17,7 @@ import {
 } from "@mui/material";
 import { usePlacesWidget } from "react-google-autocomplete";
 import { useTrades } from "../../*/hooks/useTrades";
+import useAuthenticatedUser from "../../*/hooks/useAuthenticatedUser";
 
 /**
  * VendorForm
@@ -170,8 +171,11 @@ export default function VendorForm({ onSubmit, onClose, submitting = false }) {
 
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
+  const { user } = useAuthenticatedUser();
+
+  console.log("VendorForm user", user);
+
   const { data: trades = [] } = useTrades();
-  console.log("Trades for VendorForm", trades);
 
   // Google Places: mailing
   const { ref: mailingAutocompleteRef } = usePlacesWidget({

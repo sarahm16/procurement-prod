@@ -9,6 +9,9 @@ import ListPageLayout from "../../components/ListPageLayout/ListPageLayout";
 import ListPageHeader from "../../components/ListPageLayout/ListPageHeader";
 import CreateVendorForm from "./CreateVendorForm";
 
+// Hooks
+import useAuthenticatedUser from "../../*/hooks/useAuthenticatedUser";
+
 // MUI Components
 import Chip from "@mui/material/Chip";
 
@@ -74,10 +77,10 @@ const vendorColumns = [
 function Vendors() {
   // Hooks
   const navigate = useNavigate();
+  const { user } = useAuthenticatedUser();
 
   // State
   const [vendors, setVendors] = useState([]);
-
   const [submitting, setSubmitting] = useState(false);
 
   const fetchVendors = async () => {
@@ -99,7 +102,10 @@ function Vendors() {
     setSubmitting(true);
     console.log("Form Data:", formData);
     try {
-      const response = await axios.post("/api/vendors", formData);
+      const response = await axios.post("/api/vendors", {
+        ...formData,
+        user_id: user?.id, // Assuming user object has an id property
+      });
       console.log("Create Vendor Response:", response.data);
       // Optimistically update the list with the new vendor (requires response to include new vendor data)
       setVendors((prev) => [response.data, ...prev]);
