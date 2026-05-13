@@ -1,6 +1,10 @@
 import { Router } from "express";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 
+// Helper functions
+import serializeActivityLogEntry from "../serializer/activityLogSerializer.js";
+import { logActivity } from "../utils/logActivity.js";
+
 const serializeReply = (reply) => {
   return {
     id: reply.id,
@@ -24,7 +28,7 @@ const serializeNote = (note) => {
   };
 };
 
-const serializeVendor = (vendor, notes) => {
+const serializeVendor = (vendor, notes, activityLog) => {
   return {
     id: vendor.id,
     company: vendor.company,
@@ -41,6 +45,7 @@ const serializeVendor = (vendor, notes) => {
     notes: notes.map(serializeNote),
     status: vendor.VendorStatus,
     trades: vendor.VendorTrades.map((vt) => vt.Trade),
+    activity_log: activityLog.map(serializeActivityLogEntry),
   };
 };
 
@@ -78,7 +83,7 @@ export default function vendorsRouter(prisma) {
   router.get("/:id", async (req, res) => {
     const { id } = req.params;
     try {
-      const [vendor, notes] = await Promise.all([
+      const [vendor, notes, activityLog] = await Promise.all([
         prisma.vendors.findUnique({
           where: { id: Number(id) },
           include: {
@@ -104,8 +109,17 @@ export default function vendorsRouter(prisma) {
             },
           },
         }),
+        prisma.activityLog.findMany({
+          where: {
+            entity_type_id: 1,
+            entity_id: Number(id),
+          },
+          include: {
+            Employee: true,
+          },
+        }),
       ]);
-      res.json(serializeVendor(vendor, notes));
+      res.json(serializeVendor(vendor, notes, activityLog));
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         console.error("Prisma error fetching vendor:", error);
@@ -142,14 +156,12 @@ export default function vendorsRouter(prisma) {
       });
       console.log("Vendor-Trades associations created:", createdTrades.count);
 
-      const createdActivity = await prisma.activityLog.create({
-        data: {
-          entity_type_id: 1,
-          entity_id: createdVendor.id,
-          action: "CREATE",
-          new_value: vendorData?.company,
-          changed_by: user_id || null,
-        },
+      const createdActivity = await logActivity(prisma, {
+        entityTypeId: 1,
+        entityId: createdVendor.id,
+        action: "CREATE",
+        newValue: vendorData?.company,
+        changedBy: user_id || null,
       });
       console.log("Activity log created:", createdActivity);
 
@@ -168,6 +180,40 @@ export default function vendorsRouter(prisma) {
         console.error("Error creating vendor:", error);
         res.status(500).json({ error: "Internal Server Error" });
       }
+    }
+  });
+
+  router.put("/:id", async (req, res) => {
+    const { id } = req.params;
+    const { user_id, fieldChanged, newValue } = req.body;
+
+    try {
+      // Grab previous value for activity log
+      const existing = await prisma.vendors.findUnique({
+        where: { id: Number(id) },
+        select: { [fieldChanged]: true },
+      });
+
+      const updatedVendor = await prisma.vendors.update({
+        where: { id: Number(id) },
+        data: { [fieldChanged]: newValue },
+        include: { VendorStatus: true }, // ← so the response has the full status object
+      });
+
+      await logActivity(prisma, {
+        entityTypeId: 1,
+        entityId: Number(id),
+        fieldChanged,
+        previousValue: existing?.[fieldChanged],
+        newValue,
+        changedBy: user_id ?? null,
+        action: "UPDATE",
+      });
+
+      res.json(updatedVendor);
+    } catch (error) {
+      console.error("Error updating vendor:", error);
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
