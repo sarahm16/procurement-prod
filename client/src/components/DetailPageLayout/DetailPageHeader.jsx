@@ -41,14 +41,14 @@ function StatusChip({ status, statusOptions = [], onStatusChange }) {
           px: 1.25,
           py: 0.4,
           borderRadius: "6px",
-          border: `1.5px solid ${alpha(theme.palette.secondary.main, 0.35)}`,
-          backgroundColor: alpha(theme.palette.secondary.main, 0.08),
+          border: `1.5px solid ${alpha(status.color, 0.35)}`,
+          backgroundColor: alpha(status.color, 0.08),
           cursor: isInteractive ? "pointer" : "default",
           transition: "all 0.15s ease",
           "&:hover": isInteractive
             ? {
-                backgroundColor: alpha(theme.palette.secondary.main, 0.14),
-                borderColor: alpha(theme.palette.secondary.main, 0.6),
+                backgroundColor: alpha(status.color, 0.14),
+                borderColor: alpha(status.color, 0.6),
               }
             : {},
         }}
@@ -58,7 +58,7 @@ function StatusChip({ status, statusOptions = [], onStatusChange }) {
             width: 6,
             height: 6,
             borderRadius: "50%",
-            backgroundColor: theme.palette.secondary.main,
+            backgroundColor: status.color,
             flexShrink: 0,
           }}
         />
@@ -69,7 +69,7 @@ function StatusChip({ status, statusOptions = [], onStatusChange }) {
             fontSize: "0.7rem",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
-            color: theme.palette.secondary.main,
+            color: status.color,
             lineHeight: 1,
           }}
         >
@@ -79,7 +79,7 @@ function StatusChip({ status, statusOptions = [], onStatusChange }) {
           <ExpandMoreIcon
             sx={{
               fontSize: 14,
-              color: theme.palette.secondary.main,
+              color: status.color,
               opacity: 0.7,
               ml: 0.25,
             }}
@@ -127,7 +127,7 @@ function StatusChip({ status, statusOptions = [], onStatusChange }) {
                   width: 7,
                   height: 7,
                   borderRadius: "50%",
-                  backgroundColor: theme.palette.secondary.main,
+                  backgroundColor: option?.color,
                   flexShrink: 0,
                   opacity: option?.id === status?.id ? 1 : 0.35,
                 }}
