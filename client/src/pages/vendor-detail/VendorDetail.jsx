@@ -22,6 +22,7 @@ import VendorDetailsTab from "./tabs/DetailsTab/VendorDetailsTab";
 import { sendEmailFromHTML } from "../../*/api/microsoftApi";
 import { useVendorStatuses } from "../../*/hooks/useVendorStatuses";
 import useAuthenticatedUser from "../../*/hooks/useAuthenticatedUser";
+import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
 
 // Context
 export const VendorDetailsContext = createContext(null);
@@ -78,6 +79,7 @@ function VendorDetail() {
         contact_phone2: vendorData.contact_phone2,
       });
       setVendorTrades(vendorData.trades);
+      setVendorActivity(vendorData.activity_log);
     });
   }, [id]);
 
@@ -211,7 +213,12 @@ function VendorDetail() {
             },
             {
               label: "Activity",
-              content: <></>,
+              content: (
+                <ActivityLog
+                  entries={vendorActivity}
+                  fieldLabels={{ status_id: "Status" }}
+                />
+              ),
             },
           ]}
           notes={vendorNotes}
