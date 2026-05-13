@@ -18,6 +18,11 @@ import DetailPageLayout from "../../components/DetailPageLayout/DetailPageLayout
 // Tabs
 import VendorDetailsTab from "./tabs/DetailsTab/VendorDetailsTab";
 
+// Local Functions
+import { sendEmailFromHTML } from "../../*/api/microsoftApi";
+import { useVendorStatuses } from "../../*/hooks/useVendorStatuses";
+import useAuthenticatedUser from "../../*/hooks/useAuthenticatedUser";
+
 // Context
 export const VendorDetailsContext = createContext(null);
 export const VendorTradesContext = createContext(null);
@@ -40,6 +45,10 @@ function VendorDetail() {
   const [vendorNotes, setVendorNotes] = useState([]);
   const [vendorTrades, setVendorTrades] = useState([]);
 
+  // Hooks
+  const { data: vendorStatuses = [] } = useVendorStatuses();
+  const { user } = useAuthenticatedUser();
+
   const fetchVendor = async () => {
     return axios.get(`/api/vendors/${id}`);
   };
@@ -56,6 +65,7 @@ function VendorDetail() {
 
       // Details Tab
       setVendorDetails({
+        status: vendorData.status,
         company: vendorData.company,
         mailing_address: vendorData.mailing_address,
         mailing_address2: vendorData.mailing_address2,
@@ -104,6 +114,63 @@ function VendorDetail() {
     [vendorDetails, setVendorDetails],
   );
 
+  /*   const addNote = useCallback(
+    async (subject, emailBody, recipients, bccRecipients) => {
+      try {
+        const response = await sendEmailFromHTML(
+          subject,
+          emailBody,
+          recipients,
+          bccRecipients,
+        );
+        console.log("Email sent successfully:", response);
+
+        setVendorNotes((prevNotes) => [
+          ...prevNotes,
+          {
+            id: Date.now(), // Temporary ID, replace with actual ID from backend if needed
+            subject,
+            emailBody,
+            recipients,
+            bccRecipients,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+
+      } catch (error) {
+        console.error("Error sending email:", error);
+      }
+    },
+    [],
+  ); */
+
+  const addNote = useCallback(async (payload) => {
+    console.log("payload in addNote:", payload);
+    // Save note to database here
+    const { data } = await axios.post(`/api/notes`, payload);
+
+    // Update local state
+    setVendorNotes((prevNotes) => [...prevNotes, data]);
+  }, []);
+
+  const updateStatus = async (newStatus) => {
+    try {
+      const response = await axios.put(`/api/vendors/${id}`, {
+        fieldChanged: "status_id",
+        newValue: newStatus?.id,
+        user_id: user?.id,
+      });
+      // Use server response rather than the local newStatus object
+      setVendorDetails((prev) => ({
+        ...prev,
+        status_id: response.data.status_id,
+        status: response.data.VendorStatus, // ← from include
+      }));
+    } catch (error) {
+      console.error("Error updating status:", error);
+    }
+  };
+
   return (
     <VendorDetailsContext.Provider value={detailsContextValue}>
       <VendorTradesContext.Provider value={tradesContextValue}>
@@ -112,11 +179,9 @@ function VendorDetail() {
             <DetailPageHeader
               title={vendorDetails.company}
               subtitle={`Details for Vendor ${vendorDetails.company}`}
-              status="active"
-              statusOptions={["active", "inactive", "suspended", "pending"]}
-              onStatusChange={(newStatus) =>
-                console.log("Status changed to:", newStatus)
-              }
+              status={vendorDetails?.status}
+              statusOptions={vendorStatuses}
+              onStatusChange={updateStatus}
               breadcrumbs={[
                 { label: "Vendors", href: "/vendors" },
                 { label: `Vendor #${id}` },
@@ -151,10 +216,9 @@ function VendorDetail() {
           ]}
           notes={vendorNotes}
           notesLoading={false}
-          onAddNote={async (content) => {
-            console.log("Adding note:", content);
-          }}
+          onAddNote={addNote}
           currentUser="Sarah Carter"
+          entityName={vendorDetails.company}
         />
       </VendorTradesContext.Provider>
     </VendorDetailsContext.Provider>
