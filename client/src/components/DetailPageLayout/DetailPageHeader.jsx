@@ -73,7 +73,7 @@ function StatusChip({ status, statusOptions = [], onStatusChange }) {
             lineHeight: 1,
           }}
         >
-          {status}
+          {status?.name}
         </Typography>
         {isInteractive && (
           <ExpandMoreIcon
@@ -111,9 +111,9 @@ function StatusChip({ status, statusOptions = [], onStatusChange }) {
         >
           {statusOptions.map((option) => (
             <MenuItem
-              key={option}
+              key={option?.id}
               onClick={() => handleSelect(option)}
-              selected={option.toLowerCase() === status?.toLowerCase()}
+              selected={option?.id === status?.id}
               sx={{
                 fontSize: "0.82rem",
                 fontFamily: '"Barlow", sans-serif',
@@ -129,11 +129,10 @@ function StatusChip({ status, statusOptions = [], onStatusChange }) {
                   borderRadius: "50%",
                   backgroundColor: theme.palette.secondary.main,
                   flexShrink: 0,
-                  opacity:
-                    option.toLowerCase() === status?.toLowerCase() ? 1 : 0.35,
+                  opacity: option?.id === status?.id ? 1 : 0.35,
                 }}
               />
-              {option}
+              {option?.name}
             </MenuItem>
           ))}
         </Menu>
@@ -194,9 +193,9 @@ function MetaItem({ label, value, icon }) {
  * Props:
  *   title         {string}    — primary heading
  *   subtitle      {string}    — secondary line (optional)
- *   status        {string}    — current status value
- *   statusOptions {string[]}  — selectable statuses
- *   onStatusChange{fn}        — called with new status string
+ *   status        {object}    — current status value
+ *   statusOptions {object[]}  — selectable statuses
+ *   onStatusChange{fn}        — called with new status object when changed
  *   breadcrumbs   {Array}     — [{ label, href }]
  *   meta          {Array}     — [{ label, value, icon }]
  *   address       {string}    — optional address with pin icon

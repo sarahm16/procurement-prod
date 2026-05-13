@@ -62,11 +62,9 @@ export default function NotesPanel({
   const { id } = useParams();
 
   const { user, error } = useAuthenticatedUser();
-  console.log("User in notes panel:", user);
 
   // Employees for the tagging autocomplete:
   const { data: employees = [] } = useEmployees();
-  console.log("Employees for tagging:", employees);
 
   // Entity type and ID for email notification context:
   const location = useLocation();
