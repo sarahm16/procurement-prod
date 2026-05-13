@@ -159,7 +159,7 @@ function VendorDetail() {
     try {
       const response = await axios.put(`/api/vendors/${id}`, {
         fieldChanged: "status_id",
-        newValue: newStatus?.id,
+        newValue: Number(newStatus?.id),
         user_id: user?.id,
       });
       // Use server response rather than the local newStatus object
@@ -217,6 +217,14 @@ function VendorDetail() {
                 <ActivityLog
                   entries={vendorActivity}
                   fieldLabels={{ status_id: "Status" }}
+                  valueFormatters={{
+                    status_id: (value) => {
+                      const status = vendorStatuses.find(
+                        (s) => s.id === Number(value),
+                      );
+                      return status ? status.name : value;
+                    },
+                  }}
                 />
               ),
             },

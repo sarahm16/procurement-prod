@@ -65,6 +65,9 @@ const composeMessage = (entry, fieldLabels, valueFormatters) => {
   const label =
     fieldLabels[entry.field_changed] ?? prettifyFieldName(entry.field_changed);
   const formatter = valueFormatters[entry.field_changed];
+  const previousValue = formatter
+    ? formatter(entry.previous_value)
+    : entry.previous_value;
   const value = formatter ? formatter(entry.new_value) : entry.new_value;
 
   switch (action) {
@@ -74,7 +77,7 @@ const composeMessage = (entry, fieldLabels, valueFormatters) => {
         : "Created this record";
     case "UPDATE":
       return label
-        ? `Changed ${label} to ${value ?? "—"}`
+        ? `Changed ${label} from ${previousValue ?? "—"} to ${value ?? "—"}`
         : `Updated to ${value ?? "—"}`;
     case "DELETE":
       return label ? `Removed ${label}` : "Deleted this record";
