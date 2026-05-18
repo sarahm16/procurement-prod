@@ -3,6 +3,7 @@ generator client {
 }
 
 
+
 datasource db {
   provider = "sqlserver"
   url      = env("DATABASE_URL")
@@ -52,9 +53,10 @@ model Clients {
   Contracts             Contracts[]
 }
 
+
 model ClientServiceLines {
-  client_id       Int
-  service_line_id Int
+  client_id        Int
+  service_line_id  Int
 
   Client          Clients       @relation(fields: [client_id], references: [id], onUpdate: NoAction, map: "FK__ClientSer__clien__47A6A41B")
   ServiceLine     ServiceLines @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, map: "FK__ClientSer__servi__489AC854")
@@ -75,8 +77,10 @@ model ClientServiceLineSOWs {
 
 model Companies {
   id            Int      @id(map: "PK__Companie__3213E83FBC38A215") @default(autoincrement())
-  company       String   @db.VarChar(100)
+  name          String   @db.VarChar(100)
+
   client_id     Int?
+
   Client        Clients? @relation(fields: [client_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK__Companies__clien__3E1D39E1")
   Sites         Sites[]
 }
@@ -311,21 +315,38 @@ model Softwares {
   Contracts     Contracts[]
 }
 
+model Pillars {
+  id              Int       @id @default(autoincrement())
+  name            String   @db.VarChar(50)
+
+  Contract        Contracts[]
+}
+
+model Sector  {
+  id              Int       @id @default(autoincrement())
+  name            String    @db.VarChar(50)
+
+  Contract        Contracts[]
+}
+
 model Contracts {
-  id                      Int         @id @default(autoincrement())
-  start_date              DateTime    @default(now()) @db.DateTime
-  end_date                DateTime?   @db.DateTime
-  auto_renew              Boolean     @default(false)
-  annual_increase_percent Decimal?        
+  id                        Int         @id @default(autoincrement())
+  start_date                DateTime    @default(now()) @db.DateTime
+  end_date                  DateTime?   @db.DateTime
+  auto_renew                Boolean     @default(false)
+  annual_increase_percent   Decimal?        
 
-  client_id               Int
-  service_line_id         Int
+  client_service_line_id  Int
   software_id             Int?  
+  pillar_id               Int
+  sector_id               Int
 
-  ServiceLine             ServiceLines    @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  Client                  Clients         @relation(fields: [client_id], references: [id], onUpdate: NoAction, onDelete: NoAction)            
-  Software               Softwares?      @relation(fields: [software_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  
+
+  ClientServiceLine         ClientServiceLines   @relation(fields: [client_service_line_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  Software                  Softwares?           @relation(fields: [software_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  Pillar                    Pillars             @relation(fields: [pillar_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  Sector                    Sectors             @relation(fields: [sector_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
   ContractSites           ContractSites[]
 }
 
@@ -377,7 +398,6 @@ model VendorServicePricing {
 }
 
 model Notes {
-    id                          Int               @id @default(autoincrement())
     body                        String            @db.VarChar(1000)
     date                        DateTime          @default(now())
     sarlaccId                   String?           @db.VarChar(50)

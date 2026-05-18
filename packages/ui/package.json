@@ -1,0 +1,6 @@
+{
+  "name": "@sarlacc/ui",
+  "version": "1.0.0",
+  "main": "./theme/theme.js",
+  "type": "module"
+}

@@ -63,7 +63,7 @@ export default function vendorsRouter(prisma) {
           },
         },
       });
-      res.json(vendors.map((vendor) => serializeVendor(vendor, [])));
+      res.json(vendors.map((vendor) => serializeVendor(vendor, [], [])));
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         console.error("Prisma error fetching vendors:", error);

@@ -12,8 +12,12 @@ import clientsRouter from "./routes/clients.js";
 import serviceLinesRouter from "./routes/serviceLines.js";
 import tradesRouter from "./routes/trades.js";
 import softwaresRouter from "./routes/softwares.js";
-/* import employeeRouter from "./routes/employees";
- */
+import vendorStatusesRouter from "./routes/vendorStatuses.js";
+import vendorsRouter from "./routes/vendors.js";
+import rolesRouter from "./routes/roles.js";
+import employeesRouter from "./routes/employees.js";
+import notesRouter from "./routes/notes.js";
+
 // Dynamic import for PrismaClient to avoid issues with top-level await in CommonJS
 const { PrismaClient } = await import("@prisma/client");
 
@@ -39,10 +43,15 @@ app.use("/api/clients", clientsRouter(prisma));
 app.use("/api/softwares", softwaresRouter(prisma));
 app.use("/api/serviceLines", serviceLinesRouter(prisma));
 app.use("/api/trades", tradesRouter(prisma));
+app.use("/api/vendorStatuses", vendorStatusesRouter(prisma));
+app.use("/api/vendors", vendorsRouter(prisma));
+app.use("/api/roles", rolesRouter(prisma));
+app.use("/api/employees", employeesRouter(prisma));
+app.use("/api/notes", notesRouter(prisma));
 
 // Catch-all LAST — hands everything else to React Router
 app.get("/*splat", (req, res) => {
-  res.sendFile(path.join(__dirname, "../client/dist/index.html"));
+  res.sendFile(path.join(__dirname, "../apps/ops/dist/index.html"));
 });
 
 app.listen(PORT, () => {
