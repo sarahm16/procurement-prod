@@ -1,10 +1,21 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.jsx'
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import { MsalProvider } from "@azure/msal-react";
+import App from "./App.jsx";
+import "./App.css";
 
-createRoot(document.getElementById('root')).render(
+import { ThemeProvider } from "./theme/ThemeProvider.jsx";
+import { msalInstance } from "./auth/msalConfig.js";
+
+createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <App />
+    <ThemeProvider>
+      <MsalProvider instance={msalInstance}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </MsalProvider>
+    </ThemeProvider>
   </StrictMode>,
-)
+);

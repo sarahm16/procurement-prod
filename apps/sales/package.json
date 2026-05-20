@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@sarlacc/ui": "*",
     "@azure/msal-browser": "^5.9.0",
     "@azure/msal-react": "^5.3.2",
     "@emotion/react": "^11.14.0",
