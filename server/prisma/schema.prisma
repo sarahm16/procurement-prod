@@ -31,7 +31,7 @@ model Clients {
   client                String                  @db.VarChar(100)
   legal_name            String                  @db.VarChar(100)    // new
   brand                 String                  @db.VarChar(4)      // new
-  sarlaccId             String                  @db.VarChar(100)    // new
+  sarlaccId             String?                  @db.VarChar(100)    // new
   mailing_address       String?                 @db.VarChar(150)
   mailing_address2      String?                 @db.VarChar(150)
   mailing_city          String?                 @db.VarChar(100)
@@ -50,6 +50,27 @@ model Clients {
   Companies             Companies[]
   Sites                 Sites[]
   Contracts             Contracts[]
+  Contacts              ClientContacts[]
+}
+
+model ContactRoles {
+  id                  Int       @id @default(autoincrement())
+  name                String    @db.VarChar(50)
+
+  ClientContacts      ClientContacts[]
+}
+
+model ClientContacts {
+  id                  Int       @id @default(autoincrement())
+  name                 String   @db.VarChar(100)
+  email                String?  @db.VarChar(100)
+  phone                String?  @db.VarChar(100)
+  client_id            Int    
+  contact_role         Int
+
+  ContactRole        ContactRoles      @relation(fields: [contact_role], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  Client              Clients          @relation(fields: [client_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
 }
 
 model ClientServiceLines {

@@ -22,6 +22,7 @@ import TradesAdmin from "./tables/TradesAdmin";
 import ServiceLinesAdmin from "./tables/ServiceLinesAdmin";
 import VendorStatusesAdmin from "./tables/VendorStatusesAdmin";
 import EmployeesAdmin from "./tables/EmployeesTable";
+import ContactRolesAdmin from "./tables/ContactRolesTable";
 // import ServicesAdmin from "./tables/ServicesAdmin";  ← add yours here as you build them
 
 // ── Nav config ────────────────────────────────────────────────────────────────
@@ -73,6 +74,7 @@ function ConstantsSection() {
       }}
     >
       <SoftwaresAdmin />
+      <ContactRolesAdmin />
       <TradesAdmin />
       <ServiceLinesAdmin />
       <VendorStatusesAdmin />
