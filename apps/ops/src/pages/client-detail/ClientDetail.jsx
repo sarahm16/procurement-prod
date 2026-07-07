@@ -6,14 +6,21 @@ import axios from "axios";
 import DetailPageHeader from "../../components/DetailPageLayout/DetailPageHeader";
 import DetailPageLayout from "../../components/DetailPageLayout/DetailPageLayout";
 
+// Tabs
+import ClientDetailsTab from "./tabs/ClientDetailsTab";
+
 // MUI Components
 import Typography from "@mui/material/Typography";
 
 // Context
-const ClientDetailContext = createContext({
-  client: {},
-  updateClient: () => {},
-});
+export const ClientDetailContext = createContext(null);
+// export const VendorTradesContext = createContext(null);
+// export const VendorDocsContext = createContext(null);
+// export const VendorSitesContext = createContext(null);
+// export const VendorWorkOrdersContext = createContext(null);
+export const ClientNotesContext = createContext(null);
+export const ClientContactsContext = createContext(null);
+export const ClientServiceLinesContext = createContext(null);
 
 const fetchClient = async (id) => {
   return axios.get(`/api/clients/${id}`);
@@ -28,6 +35,8 @@ function ClientDetail() {
   const [clientNotes, setClientNotes] = useState([]);
   const [clientDetails, setClientDetails] = useState({});
   const [clientActivity, setClientActivity] = useState([]);
+  const [clientContacts, setClientContacts] = useState([]);
+  const [clientServiceLines, setClientServiceLines] = useState([]);
 
   const updateClient = async (updates) => {
     // Update the client in the database
@@ -52,14 +61,22 @@ function ClientDetail() {
       // Details Tab
       setClientDetails({
         status: clientData.status,
-        company: clientData.company,
+        client: clientData.client,
+        legal_name: clientData.legal_name,
         mailing_address: clientData.mailing_address,
         mailing_address2: clientData.mailing_address2,
         mailing_city: clientData.mailing_city,
         mailing_state: clientData.mailing_state,
         mailing_zipcode: clientData.mailing_zipcode,
+        billing_address: clientData.billing_address,
+        billing_address2: clientData.billing_address2,
+        billing_city: clientData.billing_city,
+        billing_state: clientData.billing_state,
+        billing_zipcode: clientData.billing_zipcode,
       });
       setClientActivity(clientData.activity_log);
+      setClientContacts(clientData.contacts);
+      setClientServiceLines(clientData.service_lines);
     });
   }, [id]);
 
@@ -73,34 +90,78 @@ function ClientDetail() {
   }, []);
 
   return (
-    <ClientDetailContext.Provider value={{ client, updateClient }}>
-      <DetailPageLayout
-        header={
-          <DetailPageHeader
-            title={`Client ${client?.client}`}
-            subtitle={`Details for ${client?.client}`}
-            status="active"
-            statusOptions={["active", "inactive", "suspended", "pending"]}
-            onStatusChange={(newStatus) =>
-              console.log("Status changed to:", newStatus)
-            }
-            breadcrumbs={[
-              { label: "Clients", href: "/clients" },
-              { label: client?.client },
-            ]}
-            meta={[]}
-            address="123 Main St, Anytown, USA"
-            onBack={() => console.log("Back button clicked")}
-            actions={[]}
-          />
-        }
-        notes={clientNotes}
-        onAddNote={addNote}
+    <ClientDetailContext.Provider value={{ clientDetails, updateClient }}>
+      <ClientContactsContext.Provider
+        value={{ clientContacts, setClientContacts }}
       >
-        <Typography variant="h6" gutterBottom>
-          Client Details Content Goes Here
-        </Typography>
-      </DetailPageLayout>
+        <ClientServiceLinesContext.Provider
+          value={{ clientServiceLines, setClientServiceLines }}
+        >
+          <DetailPageLayout
+            header={
+              <DetailPageHeader
+                title={`Client ${clientDetails?.client}`}
+                subtitle={`Details for ${clientDetails?.client}`}
+                status="active"
+                statusOptions={["active", "inactive", "suspended", "pending"]}
+                onStatusChange={(newStatus) =>
+                  console.log("Status changed to:", newStatus)
+                }
+                breadcrumbs={[
+                  { label: "Clients", href: "/clients" },
+                  { label: clientDetails?.client },
+                ]}
+                meta={[]}
+                address={`${clientDetails?.mailing_address}, ${clientDetails?.mailing_city}, ${clientDetails?.mailing_state} ${clientDetails?.mailing_zipcode}`}
+                onBack={() => console.log("Back button clicked")}
+                actions={[]}
+              />
+            }
+            notes={clientNotes}
+            onAddNote={addNote}
+            tabs={[
+              {
+                label: "Details",
+                content: <ClientDetailsTab />,
+              },
+              {
+                label: "Documentation",
+                content: <></>,
+              },
+              {
+                label: "Sites",
+                content: <></>,
+              },
+              {
+                label: "Work Orders",
+                content: <></>,
+              },
+              {
+                label: "Activity",
+                content: <></>,
+                // content: (
+                //   <ActivityLog
+                //     entries={clientActivity}
+                //     fieldLabels={{ status_id: "Status" }}
+                //     valueFormatters={{
+                //       status_id: (value) => {
+                //         const status = vendorStatuses.find(
+                //           (s) => s.id === Number(value),
+                //         );
+                //         return status ? status.name : value;
+                //       },
+                //     }}
+                //   />
+                // ),
+              },
+            ]}
+          >
+            <Typography variant="h6" gutterBottom>
+              Client Details Content Goes Here
+            </Typography>
+          </DetailPageLayout>
+        </ClientServiceLinesContext.Provider>
+      </ClientContactsContext.Provider>
     </ClientDetailContext.Provider>
   );
 }
