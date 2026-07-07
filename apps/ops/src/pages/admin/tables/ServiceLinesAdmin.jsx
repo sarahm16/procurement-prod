@@ -13,6 +13,8 @@ function ServiceLinesAdmin() {
   const { createSingle } = useCreateSingle("serviceLines");
   const { data: serviceLines, loading, error } = useFetchAll("serviceLines");
 
+  console.log("serviceLines", serviceLines);
+
   // State
   const [localServiceLines, setLocalServiceLines] = useState([]);
 
