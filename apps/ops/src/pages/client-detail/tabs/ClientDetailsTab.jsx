@@ -13,11 +13,31 @@ import {
   ClientServiceLinesContext,
 } from "../ClientDetail";
 
+// TO DO:
+// Edit service lines?
+// Add / Edit contacts
+// Autocomplete Addresses
+
 function ClientDetailsTab() {
   // Context
   const { clientDetails } = useContext(ClientDetailContext);
   const { clientServiceLines } = useContext(ClientServiceLinesContext);
   const { clientContacts } = useContext(ClientContactsContext);
+
+  const [allServiceLines, setAllServiceLines] = useState([]);
+
+  useEffect(() => {
+    const fetchAllServiceLines = async () => {
+      try {
+        const response = await axios.get("/api/serviceLines");
+        console.log("All service lines response:", response.data);
+        setAllServiceLines(response.data);
+      } catch (error) {
+        console.error("Error fetching service lines:", error);
+      }
+    };
+    fetchAllServiceLines();
+  }, []);
 
   return (
     <>
@@ -101,23 +121,9 @@ function ClientDetailsTab() {
           /> */}
         </InfoCard>
 
-        {/* <ChipSelectCard
-          title="Trades"
-          options={allTrades}
-          value={clientTrades}
-nDelete={(trade) => {
-            console.log("Deleting trade:", trade);
-            deleteTrade(trade);
-          }}
-          onAdd={(trade) => {
-            console.log("Adding trade:", trade);
-            addTrade(trade);
-          }}
-        /> */}
-
         <ChipSelectCard
           title="Service Lines"
-          options={clientServiceLines}
+          options={allServiceLines}
           value={clientServiceLines}
           onDelete={(serviceLine) => {
             console.log("Deleting service line:", serviceLine);
