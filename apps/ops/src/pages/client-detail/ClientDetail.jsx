@@ -38,11 +38,11 @@ function ClientDetail() {
   const [clientContacts, setClientContacts] = useState([]);
   const [clientServiceLines, setClientServiceLines] = useState([]);
 
-  const updateClient = async (updates) => {
+  const updateClientDetailsLocally = async (updates) => {
     // Update the client in the database
 
     // Update the client locally
-    setClient((prev) => ({ ...prev, ...updates }));
+    setClientDetails((prev) => ({ ...prev, ...updates }));
   };
 
   // Fetch client details using the ID (this is just a placeholder, replace with actual data fetching logic)
@@ -60,6 +60,7 @@ function ClientDetail() {
 
       // Details Tab
       setClientDetails({
+        id: clientData.id,
         status: clientData.status,
         client: clientData.client,
         legal_name: clientData.legal_name,
@@ -90,7 +91,9 @@ function ClientDetail() {
   }, []);
 
   return (
-    <ClientDetailContext.Provider value={{ clientDetails, updateClient }}>
+    <ClientDetailContext.Provider
+      value={{ clientDetails, updateClientDetailsLocally }}
+    >
       <ClientContactsContext.Provider
         value={{ clientContacts, setClientContacts }}
       >

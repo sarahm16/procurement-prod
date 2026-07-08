@@ -5,6 +5,7 @@ import axios from "axios";
 // Local Components
 import InfoGrid, { FieldRow, InfoCard } from "../../../components/InfoGrid";
 import { ChipSelectCard } from "../../../components/ChipSelectCard";
+import AddressAutocomplete from "../../../components/AddressAutocomplete";
 
 // Context
 import {
@@ -13,16 +14,17 @@ import {
   ClientServiceLinesContext,
 } from "../ClientDetail";
 
-// TO DO:
-// Edit service lines?
-// Add / Edit contacts
-// Autocomplete Addresses
+import Typography from "@mui/material/Typography";
+import useAuthenticatedUser from "../../../*/hooks/useAuthenticatedUser";
 
 function ClientDetailsTab() {
   // Context
-  const { clientDetails } = useContext(ClientDetailContext);
+  const { clientDetails, updateClientDetailsLocally } =
+    useContext(ClientDetailContext);
   const { clientServiceLines } = useContext(ClientServiceLinesContext);
   const { clientContacts } = useContext(ClientContactsContext);
+
+  const { user } = useAuthenticatedUser();
 
   const [allServiceLines, setAllServiceLines] = useState([]);
 
@@ -141,21 +143,55 @@ function ClientDetailsTab() {
           collapsible
           defaultOpen
           editable
-          onSave={() => {}}
+          onSave={async (draft) => {
+            try {
+              axios
+                .put(`/api/clients/${clientDetails.id}`, {
+                  user_id: user?.id,
+                  changes: draft,
+                })
+                .then((response) => {
+                  console.log("Client updated successfully:", response.data);
+                  updateClientDetailsLocally(draft);
+                })
+                .catch((error) => {
+                  console.error("Error updating client:", error);
+                });
+            } catch (error) {
+              console.error("Error updating client:", error);
+            }
+          }}
           actions={[]}
           editValues={clientDetails}
           span="half"
         >
           <FieldRow
-            label={"Address"}
+            label="Address"
             value={clientDetails.mailing_address}
-            editing={false}
             fieldKey="mailing_address"
-            onChange={() => {}}
-            fullWidth={false}
-            type="text"
-            render={false}
-            editable
+            fullWidth
+            render={(value, editing, { onChange }) =>
+              editing ? (
+                <AddressAutocomplete
+                  value={value}
+                  countryRestriction={["us", "ca"]}
+                  onChange={(text) => onChange("mailing_address", text)}
+                  onSelect={(place) => {
+                    console.log(place);
+                    onChange("mailing_address", place.address);
+                    onChange("mailing_city", place.city);
+                    onChange("mailing_state", place.state);
+                    onChange("mailing_zipcode", place.zipcode);
+                    onChange("lat", place.lat);
+                    onChange("lng", place.lng);
+                  }}
+                />
+              ) : (
+                <Typography sx={{ fontSize: "0.85rem" }}>
+                  {value || "—"}
+                </Typography>
+              )
+            }
           />
           <FieldRow
             label={"Address 2"}
