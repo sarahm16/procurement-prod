@@ -67,8 +67,8 @@ const clientColumns = [
         >
           {visible.map((line) => (
             <Chip
-              key={line}
-              label={line}
+              key={line.id}
+              label={line.name}
               size="small"
               variant="outlined"
               sx={{ height: 22, fontSize: "0.7rem" }}

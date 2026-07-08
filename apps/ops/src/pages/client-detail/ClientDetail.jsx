@@ -8,6 +8,7 @@ import DetailPageLayout from "../../components/DetailPageLayout/DetailPageLayout
 
 // Tabs
 import ClientDetailsTab from "./tabs/ClientDetailsTab";
+import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
 
 // MUI Components
 import Typography from "@mui/material/Typography";
@@ -141,21 +142,20 @@ function ClientDetail() {
               },
               {
                 label: "Activity",
-                content: <></>,
-                // content: (
-                //   <ActivityLog
-                //     entries={clientActivity}
-                //     fieldLabels={{ status_id: "Status" }}
-                //     valueFormatters={{
-                //       status_id: (value) => {
-                //         const status = vendorStatuses.find(
-                //           (s) => s.id === Number(value),
-                //         );
-                //         return status ? status.name : value;
-                //       },
-                //     }}
-                //   />
-                // ),
+                content: (
+                  <ActivityLog
+                    entries={clientActivity}
+                    fieldLabels={{ status_id: "Status" }}
+                    // valueFormatters={{
+                    //   status_id: (value) => {
+                    //     const status = vendorStatuses.find(
+                    //       (s) => s.id === Number(value),
+                    //     );
+                    //     return status ? status.name : value;
+                    //   },
+                    // }}
+                  />
+                ),
               },
             ]}
           >

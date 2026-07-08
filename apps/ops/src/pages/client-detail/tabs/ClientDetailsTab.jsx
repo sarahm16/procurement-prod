@@ -41,6 +41,25 @@ function ClientDetailsTab() {
     fetchAllServiceLines();
   }, []);
 
+  const handleSaveDetails = async (draft) => {
+    try {
+      axios
+        .put(`/api/clients/${clientDetails.id}`, {
+          user_id: user?.id,
+          changes: draft,
+        })
+        .then((response) => {
+          console.log("Client updated successfully:", response.data);
+          updateClientDetailsLocally(draft);
+        })
+        .catch((error) => {
+          console.error("Error updating client:", error);
+        });
+    } catch (error) {
+      console.error("Error updating client:", error);
+    }
+  };
+
   return (
     <>
       <InfoGrid>
@@ -50,7 +69,7 @@ function ClientDetailsTab() {
           collapsible
           defaultOpen
           editable
-          onSave={() => {}}
+          onSave={handleSaveDetails}
           actions={[]}
           editValues={clientDetails}
           span="half"
@@ -143,24 +162,7 @@ function ClientDetailsTab() {
           collapsible
           defaultOpen
           editable
-          onSave={async (draft) => {
-            try {
-              axios
-                .put(`/api/clients/${clientDetails.id}`, {
-                  user_id: user?.id,
-                  changes: draft,
-                })
-                .then((response) => {
-                  console.log("Client updated successfully:", response.data);
-                  updateClientDetailsLocally(draft);
-                })
-                .catch((error) => {
-                  console.error("Error updating client:", error);
-                });
-            } catch (error) {
-              console.error("Error updating client:", error);
-            }
-          }}
+          onSave={handleSaveDetails}
           actions={[]}
           editValues={clientDetails}
           span="half"
@@ -244,21 +246,36 @@ function ClientDetailsTab() {
           collapsible
           defaultOpen
           editable
-          onSave={() => {}}
+          onSave={handleSaveDetails}
           actions={[]}
           editValues={clientDetails}
           span="half"
         >
           <FieldRow
-            label={"Address"}
+            label="Address"
             value={clientDetails.billing_address}
-            editing={false}
             fieldKey="billing_address"
-            onChange={() => {}}
-            fullWidth={false}
-            type="text"
-            render={false}
-            editable
+            fullWidth
+            render={(value, editing, { onChange }) =>
+              editing ? (
+                <AddressAutocomplete
+                  value={value}
+                  countryRestriction={["us", "ca"]}
+                  onChange={(text) => onChange("billing_address", text)}
+                  onSelect={(place) => {
+                    console.log(place);
+                    onChange("billing_address", place.address);
+                    onChange("billing_city", place.city);
+                    onChange("billing_state", place.state);
+                    onChange("billing_zipcode", place.zipcode);
+                  }}
+                />
+              ) : (
+                <Typography sx={{ fontSize: "0.85rem" }}>
+                  {value || "—"}
+                </Typography>
+              )
+            }
           />
           <FieldRow
             label={"Address 2"}
