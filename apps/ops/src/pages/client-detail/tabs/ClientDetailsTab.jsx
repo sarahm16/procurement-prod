@@ -31,7 +31,7 @@ function ClientDetailsTab() {
   const details = useClientDetails();
   const serviceLines = useClientServiceLines();
   const contacts = useClientContacts();
-  const { updateDetails, addContact } = useClientActions();
+  const { updateDetails, addContact, updateContact } = useClientActions();
 
   const { user } = useAuthenticatedUser();
 
@@ -63,6 +63,14 @@ function ClientDetailsTab() {
       console.error("Error adding contact:", error);
     } finally {
       setSavingContact(false);
+    }
+  };
+
+  const handleSaveContact = async (contactId, draft) => {
+    try {
+      await updateContact(contactId, draft);
+    } catch (error) {
+      console.error("Error updating contact:", error);
     }
   };
 

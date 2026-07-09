@@ -49,7 +49,6 @@ function ClientDetailLayout() {
         { label: "Details", content: <ClientDetailsTab /> },
         { label: "Documentation", content: <></> },
         { label: "Sites", content: <></> },
-        { label: "Work Orders", content: <></> },
         {
           label: "Activity",
           content: (

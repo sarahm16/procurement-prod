@@ -81,7 +81,7 @@ export function ClientDetailProvider({ id, children }) {
     [id, user?.id],
   );
 
-  // TO DO: Create Contacts actions
+  // Contacts Actions
   const addContact = useCallback(
     async (form) => {
       const { data } = await axios.post(`/api/clients/${id}/contacts`, {
@@ -93,6 +93,25 @@ export function ClientDetailProvider({ id, children }) {
     },
     [id, user?.id],
   );
+
+  const updateContact = useCallback(
+    async (contactId, draft) => {
+      const { data } = await axios.put(
+        `/api/clients/${id}/contacts/${contactId}`,
+        {
+          user_id: user?.id,
+          changes: draft,
+        },
+      );
+      setContacts((prev) =>
+        prev.map((contact) =>
+          contact.id === contactId ? { ...contact, ...draft } : contact,
+        ),
+      );
+    },
+    [id, user?.id],
+  );
+
   // TO DO: Create Service Lines actions
 
   // Notes Actions
@@ -106,10 +125,10 @@ export function ClientDetailProvider({ id, children }) {
       updateDetails,
       addNote,
       addContact,
-      // TO DO: Add Contacts actions
+      updateContact,
       // TO DO: Add Service Lines actions
     };
-  }, [updateDetails, addNote, addContact]);
+  }, [updateDetails, addNote, addContact, updateContact]);
 
   return (
     <ActionsContext.Provider value={actions}>
