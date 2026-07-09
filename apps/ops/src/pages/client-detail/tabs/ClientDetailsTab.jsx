@@ -6,27 +6,55 @@ import axios from "axios";
 import InfoGrid, { FieldRow, InfoCard } from "../../../components/InfoGrid";
 import { ChipSelectCard } from "../../../components/ChipSelectCard";
 import AddressAutocomplete from "../../../components/AddressAutocomplete";
+import ContactFormModal from "./ContactFormModal";
 
-// Context
-import {
-  ClientContactsContext,
-  ClientDetailContext,
-  ClientServiceLinesContext,
-} from "../ClientDetail";
-
+// MUI Components
 import Typography from "@mui/material/Typography";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import Button from "@mui/material/Button";
+import AddIcon from "@mui/icons-material/Add";
+import Box from "@mui/material/Box";
+
+// Hooks
 import useAuthenticatedUser from "../../../*/hooks/useAuthenticatedUser";
+import {
+  useClientActions,
+  useClientContacts,
+  useClientDetails,
+  useClientServiceLines,
+} from "../ClientDetailProvider";
 
 function ClientDetailsTab() {
   // Context
-  const { clientDetails, updateClientDetailsLocally } =
-    useContext(ClientDetailContext);
-  const { clientServiceLines } = useContext(ClientServiceLinesContext);
-  const { clientContacts } = useContext(ClientContactsContext);
+  const details = useClientDetails();
+  const serviceLines = useClientServiceLines();
+  const contacts = useClientContacts();
+  const { updateDetails } = useClientActions();
 
   const { user } = useAuthenticatedUser();
 
   const [allServiceLines, setAllServiceLines] = useState([]);
+  const [addingContact, setAddingContact] = useState(false);
+  const [savingContact, setSavingContact] = useState(false);
+
+  const [contactRoles, setContactRoles] = useState([]);
+
+  const fetchAllContactRoles = async () => {
+    try {
+      const response = await axios.get("/api/contactRoles");
+      console.log("All contact roles response:", response.data);
+      setContactRoles(response.data);
+    } catch (error) {
+      console.error("Error fetching contact roles:", error);
+    }
+  };
+  useEffect(() => {
+    fetchAllContactRoles();
+  }, []);
+
+  const handleAddContact = async (form) => {};
 
   useEffect(() => {
     const fetchAllServiceLines = async () => {
@@ -41,25 +69,6 @@ function ClientDetailsTab() {
     fetchAllServiceLines();
   }, []);
 
-  const handleSaveDetails = async (draft) => {
-    try {
-      axios
-        .put(`/api/clients/${clientDetails.id}`, {
-          user_id: user?.id,
-          changes: draft,
-        })
-        .then((response) => {
-          console.log("Client updated successfully:", response.data);
-          updateClientDetailsLocally(draft);
-        })
-        .catch((error) => {
-          console.error("Error updating client:", error);
-        });
-    } catch (error) {
-      console.error("Error updating client:", error);
-    }
-  };
-
   return (
     <>
       <InfoGrid>
@@ -69,14 +78,14 @@ function ClientDetailsTab() {
           collapsible
           defaultOpen
           editable
-          onSave={handleSaveDetails}
+          onSave={updateDetails}
           actions={[]}
-          editValues={clientDetails}
+          editValues={details}
           span="half"
         >
           <FieldRow
             label={"Name"}
-            value={clientDetails.client}
+            value={details.client}
             editing={false}
             fieldKey="client"
             onChange={() => {}}
@@ -87,7 +96,7 @@ function ClientDetailsTab() {
           />
           <FieldRow
             label={"Legal Name"}
-            value={clientDetails.legal_name}
+            value={details.legal_name}
             editing={false}
             fieldKey="legal_name"
             onChange={() => {}}
@@ -98,7 +107,7 @@ function ClientDetailsTab() {
           />
           {/* <FieldRow
             label={"Contact Name"}
-            value={clientDetails.contact_name}
+            value={details.contact_name}
             editing={false}
             fieldKey="contact_name"
             onChange={() => {}}
@@ -109,7 +118,7 @@ function ClientDetailsTab() {
           />
           <FieldRow
             label={"Contact Phone"}
-            value={clientDetails.contact_phone}
+            value={details.contact_phone}
             editing={false}
             fieldKey="contact_phone"
             onChange={() => {}}
@@ -120,7 +129,7 @@ function ClientDetailsTab() {
           />
           <FieldRow
             label={"Secondary Phone"}
-            value={clientDetails.secondary_phone}
+            value={details.secondary_phone}
             editing={false}
             fieldKey="secondary_phone"
             onChange={() => {}}
@@ -131,7 +140,7 @@ function ClientDetailsTab() {
           />
           <FieldRow
             label={"Contact Email"}
-            value={clientDetails.contact_email}
+            value={details.contact_email}
             editing={false}
             fieldKey="contact_email"
             onChange={() => {}}
@@ -145,7 +154,7 @@ function ClientDetailsTab() {
         <ChipSelectCard
           title="Service Lines"
           options={allServiceLines}
-          value={clientServiceLines}
+          value={serviceLines}
           onDelete={(serviceLine) => {
             console.log("Deleting service line:", serviceLine);
             // deleteServiceLine(serviceLine);
@@ -162,14 +171,14 @@ function ClientDetailsTab() {
           collapsible
           defaultOpen
           editable
-          onSave={handleSaveDetails}
+          onSave={updateDetails}
           actions={[]}
-          editValues={clientDetails}
+          editValues={details}
           span="half"
         >
           <FieldRow
             label="Address"
-            value={clientDetails.mailing_address}
+            value={details.mailing_address}
             fieldKey="mailing_address"
             fullWidth
             render={(value, editing, { onChange }) =>
@@ -197,7 +206,7 @@ function ClientDetailsTab() {
           />
           <FieldRow
             label={"Address 2"}
-            value={clientDetails.mailing_address2}
+            value={details.mailing_address2}
             editing={false}
             fieldKey="mailing_address2"
             onChange={() => {}}
@@ -208,7 +217,7 @@ function ClientDetailsTab() {
           />
           <FieldRow
             label={"City"}
-            value={clientDetails.mailing_city}
+            value={details.mailing_city}
             editing={false}
             fieldKey="mailing_city"
             onChange={() => {}}
@@ -219,7 +228,7 @@ function ClientDetailsTab() {
           />
           <FieldRow
             label={"State"}
-            value={clientDetails.mailing_state}
+            value={details.mailing_state}
             editing={false}
             fieldKey="mailing_state"
             onChange={() => {}}
@@ -230,7 +239,7 @@ function ClientDetailsTab() {
           />
           <FieldRow
             label={"Zip Code"}
-            value={clientDetails.mailing_zipcode}
+            value={details.mailing_zipcode}
             editing={false}
             fieldKey="mailing_zipcode"
             onChange={() => {}}
@@ -246,14 +255,14 @@ function ClientDetailsTab() {
           collapsible
           defaultOpen
           editable
-          onSave={handleSaveDetails}
+          onSave={updateDetails}
           actions={[]}
-          editValues={clientDetails}
+          editValues={details}
           span="half"
         >
           <FieldRow
             label="Address"
-            value={clientDetails.billing_address}
+            value={details.billing_address}
             fieldKey="billing_address"
             fullWidth
             render={(value, editing, { onChange }) =>
@@ -279,7 +288,7 @@ function ClientDetailsTab() {
           />
           <FieldRow
             label={"Address 2"}
-            value={clientDetails.billing_address2}
+            value={details.billing_address2}
             editing={false}
             fieldKey="billing_address2"
             onChange={() => {}}
@@ -290,7 +299,7 @@ function ClientDetailsTab() {
           />
           <FieldRow
             label={"City"}
-            value={clientDetails.billing_city}
+            value={details.billing_city}
             editing={false}
             fieldKey="billing_city"
             onChange={() => {}}
@@ -301,7 +310,7 @@ function ClientDetailsTab() {
           />
           <FieldRow
             label={"State"}
-            value={clientDetails.billing_state}
+            value={details.billing_state}
             editing={false}
             fieldKey="billing_state"
             onChange={() => {}}
@@ -312,7 +321,7 @@ function ClientDetailsTab() {
           />
           <FieldRow
             label={"Zip Code"}
-            value={clientDetails.billing_zipcode}
+            value={details.billing_zipcode}
             editing={false}
             fieldKey="billing_zipcode"
             onChange={() => {}}
@@ -322,56 +331,87 @@ function ClientDetailsTab() {
             editable
           />
         </InfoCard>
+        <Box
+          sx={{
+            gridColumn: "1 / -1",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            mt: 1,
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: "0.7rem",
+              fontWeight: 600,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "text.disabled",
+            }}
+          >
+            Contacts
+          </Typography>
+          <Button
+            size="small"
+            startIcon={<AddIcon />}
+            onClick={() => setAddingContact(true)}
+          >
+            Add Contact
+          </Button>
+        </Box>
+        {/* then the mapped contact InfoCards */}
 
-        {clientContacts?.length > 0 &&
-          clientContacts.map((contact) => (
+        {contacts?.length > 0 &&
+          contacts.map((contact) => (
             <InfoCard
+              key={contact.id}
               title={`${contact.contact_role} Contact`}
-              icon={null}
               collapsible
               defaultOpen
               editable
-              onSave={() => {}}
-              actions={[]}
               editValues={contact}
               span="half"
+              onSave={(draft) => handleSaveContact(contact.id, draft)}
+              actions={
+                <Tooltip title="Remove contact">
+                  <IconButton
+                    size="small"
+                    onClick={() => handleDeleteContact(contact)}
+                    sx={{
+                      color: "text.disabled",
+                      "&:hover": { color: "error.main" },
+                    }}
+                  >
+                    <DeleteOutlineIcon sx={{ fontSize: 15 }} />
+                  </IconButton>
+                </Tooltip>
+              }
             >
               <FieldRow
-                label={"Contact Name"}
+                label="Contact Name"
                 value={contact.name}
-                editing={false}
                 fieldKey="name"
-                onChange={() => {}}
-                fullWidth={false}
-                type="text"
-                render={false}
-                editable
               />
               <FieldRow
-                label={"Contact Email"}
+                label="Contact Email"
                 value={contact.email}
-                editing={false}
                 fieldKey="email"
-                onChange={() => {}}
-                fullWidth={false}
-                type="text"
-                render={false}
-                editable
               />
               <FieldRow
-                label={"Contact Phone"}
+                label="Contact Phone"
                 value={contact.phone}
-                editing={false}
                 fieldKey="phone"
-                onChange={() => {}}
-                fullWidth={false}
-                type="text"
-                render={false}
-                editable
               />
             </InfoCard>
           ))}
       </InfoGrid>
+      <ContactFormModal
+        open={addingContact}
+        onClose={() => setAddingContact(false)}
+        onSubmit={handleAddContact}
+        roles={contactRoles}
+        submitting={savingContact}
+      />
     </>
   );
 }
