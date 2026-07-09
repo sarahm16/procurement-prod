@@ -249,5 +249,72 @@ export default function clientsRouter(prisma) {
     }
   });
 
+  // POST /api/clients/:id/contacts - add a contact to a client
+  router.post("/:id/contacts", async (req, res) => {
+    const { id } = req.params;
+    const { user_id, ...body } = req.body;
+
+    // Whitelist — never spread raw req.body into a Prisma create.
+    const contactData = {
+      name: body.name,
+      email: body.email ?? null,
+      phone: body.phone ?? null,
+      contact_role_id: body.contact_role_id ?? null,
+    };
+
+    if (!contactData.name?.trim()) {
+      return res.status(400).json({ error: "Contact name is required" });
+    }
+
+    console.log(`Adding a contact to client ${id}`);
+    try {
+      const contact = await prisma.$transaction(async (tx) => {
+        const created = await tx.clientContacts.create({
+          data: {
+            client_id: Number(id),
+            ...contactData,
+          },
+          include: { ContactRole: true }, // so the response carries the role name
+        });
+
+        const roleName = created.ContactRole?.name;
+        const summary = roleName
+          ? `Added ${roleName} contact: ${created.name}`
+          : `Added contact: ${created.name}`;
+
+        await logActivity(tx, {
+          entityTypeId: entity_type_id,
+          entityId: Number(id), // the client — keeps it in the client's feed
+          fieldChanged: "contacts",
+          previousValue: null,
+          newValue:
+            summary.length > 255 ? summary.slice(0, 252) + "…" : summary,
+          changedBy: user_id ?? null,
+          action: "CREATE",
+        });
+
+        return created;
+      });
+
+      console.log("Contact created:", contact);
+      // flatten the role for the frontend (it expects contact_role, not ContactRole.name)
+      res.status(201).json({
+        ...contact,
+        contact_role: contact.ContactRole?.name ?? null,
+      });
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError) {
+        console.error("Prisma error creating contact:", error);
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        console.error("Error creating contact:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    }
+  });
   return router;
 }
