@@ -82,6 +82,17 @@ export function ClientDetailProvider({ id, children }) {
   );
 
   // TO DO: Create Contacts actions
+  const addContact = useCallback(
+    async (form) => {
+      const { data } = await axios.post(`/api/clients/${id}/contacts`, {
+        user_id: user?.id,
+        ...form,
+      });
+      setContacts((prev) => [...prev, data]);
+      return data; // Return the newly created contact
+    },
+    [id, user?.id],
+  );
   // TO DO: Create Service Lines actions
 
   // Notes Actions
@@ -94,10 +105,11 @@ export function ClientDetailProvider({ id, children }) {
     return {
       updateDetails,
       addNote,
+      addContact,
       // TO DO: Add Contacts actions
       // TO DO: Add Service Lines actions
     };
-  }, [updateDetails, addNote]);
+  }, [updateDetails, addNote, addContact]);
 
   return (
     <ActionsContext.Provider value={actions}>

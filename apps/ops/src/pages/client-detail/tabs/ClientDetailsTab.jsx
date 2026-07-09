@@ -31,7 +31,7 @@ function ClientDetailsTab() {
   const details = useClientDetails();
   const serviceLines = useClientServiceLines();
   const contacts = useClientContacts();
-  const { updateDetails } = useClientActions();
+  const { updateDetails, addContact } = useClientActions();
 
   const { user } = useAuthenticatedUser();
 
@@ -54,7 +54,17 @@ function ClientDetailsTab() {
     fetchAllContactRoles();
   }, []);
 
-  const handleAddContact = async (form) => {};
+  const handleAddContact = async (form) => {
+    setSavingContact(true);
+    try {
+      await addContact(form);
+      setAddingContact(false);
+    } catch (error) {
+      console.error("Error adding contact:", error);
+    } finally {
+      setSavingContact(false);
+    }
+  };
 
   useEffect(() => {
     const fetchAllServiceLines = async () => {
