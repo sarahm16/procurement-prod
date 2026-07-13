@@ -17,7 +17,23 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 
 const EMPTY = { name: "", email: "", phone: "", contact_role_id: "" };
+
 const emailOk = (e) => !e || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+
+const digitsOnly = (s) => (s || "").replace(/\D/g, "");
+const phoneOk = (p) => {
+  if (!p) return true; // optional; return false here to make it required
+  const d = digitsOnly(p);
+  return d.length === 10 || (d.length === 11 && d.startsWith("1"));
+};
+
+const formatPhone = (p) => {
+  const d = digitsOnly(p);
+  const ten = d.length === 11 && d.startsWith("1") ? d.slice(1) : d;
+  return ten.length === 10
+    ? `(${ten.slice(0, 3)}) ${ten.slice(3, 6)}-${ten.slice(6)}`
+    : p; // leave anything unexpected untouched
+};
 
 export default function ContactFormModal({
   open,
@@ -29,28 +45,32 @@ export default function ContactFormModal({
 }) {
   const theme = useTheme();
   const [form, setForm] = useState(EMPTY);
-  const [touched, setTouched] = useState(false);
+  const [touched, setTouched] = useState({});
 
   // Reset whenever the modal opens, so a cancelled add doesn't linger
   useEffect(() => {
     if (open) {
       setForm(EMPTY);
-      setTouched(false);
+      setTouched({});
     }
   }, [open]);
 
   const change = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+  const blur = (k) => setTouched((p) => ({ ...p, [k]: true }));
 
-  const nameError = touched && !form.name.trim();
-  const emailError = touched && !emailOk(form.email);
-  const canSubmit = form.name.trim() && emailOk(form.email) && !submitting;
+  const errors = {
+    name: !form.name.trim() ? "Name is required" : "",
+    email: !emailOk(form.email) ? "Enter a valid email" : "",
+    phone: !phoneOk(form.phone) ? "Enter a valid US/CA phone number" : "",
+  };
+  const isValid = !errors.name && !errors.email && !errors.phone;
+  const canSubmit = isValid && !submitting;
 
   const handleSubmit = async () => {
-    setTouched(true);
-    if (!form.name.trim() || !emailOk(form.email)) return;
+    setTouched({ name: true, email: true, phone: true }); // surface all errors
+    if (!isValid) return;
     await onSubmit?.({
       ...form,
-      // send null rather than "" for the optional/relational fields
       email: form.email.trim() || null,
       phone: form.phone.trim() || null,
       contact_role_id: form.contact_role_id || null,
@@ -119,8 +139,8 @@ export default function ContactFormModal({
             autoFocus
             value={form.name}
             onChange={(e) => change("name", e.target.value)}
-            error={nameError}
-            helperText={nameError ? "Name is required" : " "}
+            error={touched.name && !!errors.name}
+            helperText={touched.name && errors.name ? errors.name : " "}
           />
         </Box>
 
@@ -152,8 +172,8 @@ export default function ContactFormModal({
             type="email"
             value={form.email}
             onChange={(e) => change("email", e.target.value)}
-            error={emailError}
-            helperText={emailError ? "Enter a valid email" : " "}
+            error={touched.email && !!errors.email}
+            helperText={touched.email && errors.email ? errors.email : " "}
           />
         </Box>
 
@@ -164,6 +184,8 @@ export default function ContactFormModal({
             fullWidth
             value={form.phone}
             onChange={(e) => change("phone", e.target.value)}
+            error={touched.phone && !!errors.phone}
+            helperText={touched.phone && errors.phone ? errors.phone : " "}
           />
         </Box>
       </DialogContent>
