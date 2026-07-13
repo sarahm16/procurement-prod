@@ -30,15 +30,18 @@ model Clients {
   id                    Int                     @id(map: "PK__Clients__3213E83F189F30A2") @default(autoincrement())
   client                String                  @db.VarChar(100)
   legal_name            String                  @db.VarChar(100)    // new
+  status                String                  @db.VarChar(20)
   brand                 String                  @db.VarChar(4)      // new
   sarlaccId             String?                  @db.VarChar(100)    // new
+  sandbox                Boolean                  @default(false)
+
   mailing_address       String?                 @db.VarChar(150)
   mailing_address2      String?                 @db.VarChar(150)
   mailing_city          String?                 @db.VarChar(100)
   mailing_state         String?                 @db.Char(50)
   mailing_zipcode       String?                 @db.VarChar(10)
-  lat                   Int?
-  lng                   Int?
+  lat                   Decimal?
+  lng                   Decimal?
   billing_address       String?                 @db.VarChar(150)
   billing_address2      String?                 @db.VarChar(150)
   billing_city          String?                 @db.VarChar(100)
@@ -66,9 +69,9 @@ model ClientContacts {
   email                String?  @db.VarChar(100)
   phone                String?  @db.VarChar(100)
   client_id            Int    
-  contact_role         Int
+  contact_role_id         Int
 
-  ContactRole        ContactRoles      @relation(fields: [contact_role], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  ContactRole        ContactRoles      @relation(fields: [contact_role_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   Client              Clients          @relation(fields: [client_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
 
 }
@@ -141,8 +144,6 @@ model ServiceLines {
   ClientServiceLines          ClientServiceLines[]
   ClientServiceLineSOWs       ClientServiceLineSOWs[]
   ServiceLineExhibitTemplates ServiceLineExhibitTemplates[]
-  SiteServiceLines            SiteServiceLines[]
-  VendorSiteServiceLines      VendorSiteServiceLines[]
   ServiceLineServices         ServiceLineServices[]
   Contracts                   Contracts[]
 }
@@ -173,28 +174,17 @@ model Sites {
   mailing_city           String?                  @db.VarChar(100)
   mailing_state          String?                  @db.Char(50)
   mailing_zipcode        String?                  @db.VarChar(10)
-  lat                    Int?
-  lng                    Int?
+  lat                    Decimal?
+  lng                    Decimal?
   client_id              Int
   company_id             Int?
+    sandbox                Boolean                  @default(false)
+
 
   Client                 Clients                  @relation(fields: [client_id], references: [id], onUpdate: NoAction, map: "FK__Sites__client_id__40F9A68C")
   Company                Companies?               @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK__Sites__company_i__41EDCAC5")
-  SiteServiceLines       SiteServiceLines[]
-  VendorSites            VendorSites[]
-  VendorSiteServiceLines VendorSiteServiceLines[]
   WorkOrders             WorkOrders[]
   ContractSites          ContractSites[]
-}
-
-model SiteServiceLines {
-  site_id         Int
-  service_line_id Int
-
-  ServiceLine    ServiceLines @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, map: "FK__SiteServi__servi__4C6B5938")
-  Site            Sites         @relation(fields: [site_id], references: [id], onUpdate: NoAction, map: "FK__SiteServi__site___4B7734FF")
-
-  @@id([site_id, service_line_id], map: "PK_SiteServiceLines")
 }
 
 model Trades {
@@ -222,8 +212,8 @@ model Vendors {
   mailing_city           String?                  @db.VarChar(100)
   mailing_state          String?                  @db.Char(50)
   mailing_zipcode        String?                  @db.VarChar(10)
-  lat                    Int?
-  lng                    Int?
+  lat                    Decimal?
+  lng                    Decimal?
   billing_address        String?                  @db.VarChar(150)
   billing_address2       String?                  @db.VarChar(150)
   billing_city           String?                  @db.VarChar(100)
@@ -234,44 +224,35 @@ model Vendors {
 
   VendorStatus           VendorStatuses           @relation(fields: [status_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK__Vendors__status___44CA3770")
   
-  VendorSites            VendorSites[]
-  VendorSiteServiceLines VendorSiteServiceLines[]
+  ContractSites          VendorContractSites[]
   VendorTrades           VendorTrades[]
   WorkOrderServices      WorkOrderServices[]
   VendorServicePricing   VendorServicePricing[]
 }
 
-model VendorSites {
-  vendor_id Int
-  site_id   Int
+model VendorContractSites {
+  id                Int       @id @default(autoincrement())
+  is_primary        Boolean   @default(false)
+  status_id         Int
+  vendor_id         Int
+  contract_site_id  Int
 
-  Site      Sites   @relation(fields: [site_id], references: [id], onUpdate: NoAction, map: "FK__VendorSit__site___503BEA1C")
-  Vendor    Vendors @relation(fields: [vendor_id], references: [id], onUpdate: NoAction, map: "FK__VendorSit__vendo__4F47C5E3")
-  
-  @@id([vendor_id, site_id], map: "PK_VendorSites")
+  Vendor            Vendors            @relation(fields: [vendor_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  ContractSite      ContractSites      @relation(fields: [contract_site_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  VendorSiteStatus  VendorSiteStatuses @relation(fields: [status_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@index([contract_site_id])
+  @@index([vendor_id])
 }
 
-model VendorSiteServiceLines {
-  vendor_id          Int
-  site_id            Int
-  service_line_id    Int
-  is_primary         Boolean            @default(false, map: "DF__VendorSit__is_pr__531856C7")
-  status_id          Int
-
-  ServiceLine        ServiceLines      @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, map: "FK__VendorSit__servi__55F4C372")
-  Site               Sites              @relation(fields: [site_id], references: [id], onUpdate: NoAction, map: "FK__VendorSit__site___55009F39")
-  VendorSiteStatus   VendorSiteStatuses @relation(fields: [status_id], references: [id], onUpdate: NoAction, map: "FK__VendorSit__statu__56E8E7AB")
-  Vendor             Vendors            @relation(fields: [vendor_id], references: [id], onUpdate: NoAction, map: "FK__VendorSit__vendo__540C7B00")
-
-  @@id([vendor_id, site_id, service_line_id], map: "PK_VendorSiteServiceLines")
-}
 
 model VendorSiteStatuses {
   id                     Int                      @id(map: "PK__VendorSi__3213E83F10849821") @default(autoincrement())
   name                   String                   @db.VarChar(50)
   category               String                   @db.VarChar(20)
   description            String?                  @db.VarChar(200)
-  VendorSiteServiceLines VendorSiteServiceLines[]
+
+  VendorContractSite     VendorContractSites[]
 }
 
 model VendorStatuses {
@@ -345,9 +326,9 @@ model Contracts {
 
   ServiceLine             ServiceLines    @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   Client                  Clients         @relation(fields: [client_id], references: [id], onUpdate: NoAction, onDelete: NoAction)            
-  Software               Softwares?      @relation(fields: [software_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  Software                Softwares?      @relation(fields: [software_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   
-  ContractSites           ContractSites[]
+  ContractSites                   ContractSites[]
 }
 
 model ServiceTypes {
@@ -368,6 +349,7 @@ model ContractSites {
   Contract                Contracts               @relation(fields: [contract_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   
   ContractSiteServices    ContractSiteServices[]  
+  VendorContractSites     VendorContractSites[]
 }
 
 model ContractSiteServices {
@@ -378,9 +360,9 @@ model ContractSiteServices {
   service_type_id           Int
   service_line_service_id   Int
 
-  Site                      ContractSites         @relation(fields: [contract_site_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  ContractSite              ContractSites         @relation(fields: [contract_site_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   ServiceType               ServiceTypes          @relation(fields: [service_type_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  Service                   ServiceLineServices   @relation(fields: [service_line_service_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  ServiceLineService        ServiceLineServices   @relation(fields: [service_line_service_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
     
   VendorServicePricing      VendorServicePricing?
 }
