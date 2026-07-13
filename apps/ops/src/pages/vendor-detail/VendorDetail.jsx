@@ -17,12 +17,12 @@ import DetailPageLayout from "../../components/DetailPageLayout/DetailPageLayout
 
 // Tabs
 import VendorDetailsTab from "./tabs/DetailsTab/VendorDetailsTab";
+import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
 
 // Local Functions
 import { sendEmailFromHTML } from "../../*/api/microsoftApi";
 import { useVendorStatuses } from "../../*/hooks/useVendorStatuses";
 import useAuthenticatedUser from "../../*/hooks/useAuthenticatedUser";
-import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
 
 // Context
 export const VendorDetailsContext = createContext(null);
@@ -30,7 +30,6 @@ export const VendorTradesContext = createContext(null);
 export const VendorDocsContext = createContext(null);
 export const VendorSitesContext = createContext(null);
 export const VendorWorkOrdersContext = createContext(null);
-export const VendorNotesContext = createContext(null);
 
 function VendorDetail() {
   // Get the vendor ID from the URL parameters
