@@ -118,7 +118,10 @@ model Employees {
   TaggedInNotes                 NoteTaggedUsers[]   @relation("NoteTaggedUser")
   AuthoredNotes                 Notes[]             @relation("NoteAuthor")
   ActivityLog                   ActivityLog[]
-}
+  ContractProjectManager        Contracts[]         @relation("ContractProjectManager")
+  ContractSalesPerson           Contracts[]         @relation("ContractSalesPerson")
+  ContractOperationsPerson      Contracts[]         @relation("ContractOperationsPerson")
+} 
 
 model Roles {
   id            Int           @id @default(autoincrement())
@@ -319,15 +322,24 @@ model Contracts {
   end_date                DateTime?   @db.DateTime
   auto_renew              Boolean     @default(false)
   annual_increase_percent Decimal?        
+  value                   Decimal
+  project_name            String
+
 
   client_id               Int
   service_line_id         Int
   software_id             Int?  
+  project_manager_id      Int?
+  sales_person_id         Int?
+  operations_person_id    Int?
 
   ServiceLine             ServiceLines    @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   Client                  Clients         @relation(fields: [client_id], references: [id], onUpdate: NoAction, onDelete: NoAction)            
   Software                Softwares?      @relation(fields: [software_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  
+  ProjectManager          Employees?      @relation("ContractProjectManager", fields: [project_manager_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  SalesPerson             Employees?      @relation("ContractSalesPerson", fields: [sales_person_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  OperationsPerson        Employees?      @relation("ContractOperationsPerson", fields: [operations_person_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
   ContractSites                   ContractSites[]
 }
 
@@ -335,7 +347,7 @@ model ServiceTypes {
   id                      Int       @id @default(autoincrement())
   name                    String    @db.VarChar(100)
   description             String?   @db.VarChar(300)
-
+  
   ContractSiteServices    ContractSiteServices[]
 }
 
