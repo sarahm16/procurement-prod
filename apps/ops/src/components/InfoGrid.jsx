@@ -81,7 +81,7 @@ export function FieldRow({
             {label}
           </Typography>
           {render ? (
-            render(value, editing)
+            render(value, editing, { onChange, fieldKey })
           ) : showInput ? (
             <TextField
               size="small"

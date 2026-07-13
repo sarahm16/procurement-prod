@@ -187,6 +187,8 @@ function ActivityLog({
 }) {
   const [search, setSearch] = useState("");
 
+  console.log("ActivityLog entries:", entries);
+
   // Compose messages once per entries/labels change, then sort newest -> oldest.
   // Doing this in a single memo keeps the search filter cheap on each keystroke.
   const prepared = useMemo(() => {
