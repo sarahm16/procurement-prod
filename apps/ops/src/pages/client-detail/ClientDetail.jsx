@@ -1,7 +1,11 @@
 import { useParams } from "react-router-dom";
 
+// Layout
 import DetailPageHeader from "../../components/DetailPageLayout/DetailPageHeader";
 import DetailPageLayout from "../../components/DetailPageLayout/DetailPageLayout";
+
+// Tabs
+import ClientDocumentationTab from "./tabs/ClientDocumentationTab";
 import ClientDetailsTab from "./tabs/ClientDetailsTab";
 import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
 
@@ -47,7 +51,7 @@ function ClientDetailLayout() {
       onAddNote={addNote}
       tabs={[
         { label: "Details", content: <ClientDetailsTab /> },
-        { label: "Documentation", content: <></> },
+        { label: "Documentation", content: <ClientDocumentationTab /> },
         { label: "Sites", content: <></> },
         {
           label: "Activity",

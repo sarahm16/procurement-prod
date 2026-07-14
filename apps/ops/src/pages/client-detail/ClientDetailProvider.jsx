@@ -16,6 +16,7 @@ import useAuthenticatedUser from "../../*/hooks/useAuthenticatedUser";
 const DetailsContext = createContext();
 const ContactsContext = createContext();
 const ServiceLinesContext = createContext();
+const ContractsContext = createContext();
 const NotesContext = createContext();
 const ActivityContext = createContext();
 const ActionsContext = createContext();
@@ -27,6 +28,7 @@ export function ClientDetailProvider({ id, children }) {
   const [details, setDetails] = useState({});
   const [contacts, setContacts] = useState([]);
   const [serviceLines, setServiceLines] = useState([]);
+  const [contracts, setContracts] = useState(null);
   const [notes, setNotes] = useState([]);
   const [activity, setActivity] = useState([]);
 
@@ -36,6 +38,7 @@ export function ClientDetailProvider({ id, children }) {
     axios
       .get(`/api/clients/${id}`)
       .then(({ data }) => {
+        console.log("ClientDetailProvider data:", data);
         if (!active) return;
         setNotes(data.notes);
 
@@ -120,6 +123,13 @@ export function ClientDetailProvider({ id, children }) {
     setNotes((prev) => [...prev, data]);
   }, []);
 
+  // Contracts Actions
+  const loadContracts = useCallback(async () => {
+    const { data } = await axios.get(`/api/clients/${id}/contracts`);
+    console.log("Loaded contracts for client in context provider:", data);
+    setContracts(data);
+  }, [id]);
+
   const actions = useMemo(() => {
     return {
       updateDetails,
@@ -127,19 +137,24 @@ export function ClientDetailProvider({ id, children }) {
       addContact,
       updateContact,
       // TO DO: Add Service Lines actions
+
+      // Contracts actions
+      loadContracts,
     };
-  }, [updateDetails, addNote, addContact, updateContact]);
+  }, [updateDetails, addNote, addContact, updateContact, loadContracts]);
 
   return (
     <ActionsContext.Provider value={actions}>
       <DetailsContext.Provider value={details}>
         <ContactsContext.Provider value={contacts}>
           <ServiceLinesContext.Provider value={serviceLines}>
-            <NotesContext.Provider value={notes}>
-              <ActivityContext.Provider value={activity}>
-                {children}
-              </ActivityContext.Provider>
-            </NotesContext.Provider>
+            <ContractsContext.Provider value={contracts}>
+              <NotesContext.Provider value={notes}>
+                <ActivityContext.Provider value={activity}>
+                  {children}
+                </ActivityContext.Provider>
+              </NotesContext.Provider>
+            </ContractsContext.Provider>
           </ServiceLinesContext.Provider>
         </ContactsContext.Provider>
       </DetailsContext.Provider>
@@ -149,7 +164,7 @@ export function ClientDetailProvider({ id, children }) {
 
 function useCtx(ctx, name) {
   const v = useContext(ctx);
-  if (v === null)
+  if (v === undefined)
     throw new Error(`${name} must be used within a ClientDetailProvider`);
   return v;
 }
@@ -160,6 +175,8 @@ export const useClientContacts = () =>
   useCtx(ContactsContext, "useClientContacts");
 export const useClientServiceLines = () =>
   useCtx(ServiceLinesContext, "useClientServiceLines");
+export const useClientContracts = () =>
+  useCtx(ContractsContext, "useClientContracts");
 export const useClientNotes = () => useCtx(NotesContext, "useClientNotes");
 export const useClientActivity = () =>
   useCtx(ActivityContext, "useClientActivity");
