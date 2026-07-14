@@ -129,6 +129,55 @@ export default function clientsRouter(prisma) {
     }
   });
 
+  // GET /api/clients/:id/contracts
+  router.get("/:id/contracts", async (req, res) => {
+    const { id } = req.params;
+
+    try {
+      const contracts = await prisma.contracts.findMany({
+        where: { client_id: Number(id) },
+        include: {
+          ServiceLine: {
+            select: {
+              name: true,
+            },
+          },
+          Software: {
+            select: { name: true, id: true },
+          },
+          ProjectManager: {
+            select: { name: true, id: true },
+          },
+          SalesPerson: {
+            select: { name: true, id: true },
+          },
+          OperationsPerson: {
+            select: { name: true, id: true },
+          },
+        },
+      });
+
+      console.log(
+        `Fetched ${contracts.length} contracts for client ${id}:`,
+        contracts,
+      );
+
+      res.status(200).json(contracts);
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError) {
+        console.error("Prisma error fetching contracts:", error);
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        console.error("Error fetching contracts:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    }
+  });
+
   // POST /api/clients
   router.post("/", async (req, res) => {
     console.log("Body", req.body);
