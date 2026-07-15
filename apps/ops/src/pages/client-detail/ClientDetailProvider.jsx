@@ -130,6 +130,24 @@ export function ClientDetailProvider({ id, children }) {
     setContracts(data);
   }, [id]);
 
+  const updateContract = useCallback(
+    async (contractId, draft) => {
+      const { data } = await axios.put(
+        `/api/clients/${id}/contracts/${contractId}`,
+        {
+          user_id: user?.id,
+          changes: draft,
+        },
+      );
+      setContracts((prev) =>
+        prev.map((contract) =>
+          contract.id === contractId ? { ...contract, ...draft } : contract,
+        ),
+      );
+    },
+    [id, user?.id],
+  );
+
   const actions = useMemo(() => {
     return {
       updateDetails,
@@ -140,8 +158,16 @@ export function ClientDetailProvider({ id, children }) {
 
       // Contracts actions
       loadContracts,
+      updateContract,
     };
-  }, [updateDetails, addNote, addContact, updateContact, loadContracts]);
+  }, [
+    updateDetails,
+    addNote,
+    addContact,
+    updateContact,
+    loadContracts,
+    updateContract,
+  ]);
 
   return (
     <ActionsContext.Provider value={actions}>

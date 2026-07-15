@@ -1,5 +1,5 @@
 // tabs/ContractCard.jsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
@@ -35,6 +35,8 @@ export default function ContractCard({ contract, employees = [], onSave }) {
   const [sites, setSites] = useState(null); // null = not yet fetched
   const [loadingSites, setLoadingSites] = useState(false);
 
+  const [serviceTypes, setServiceTypes] = useState([]);
+
   const handleExpand = (_, isOpen) => {
     setExpanded(isOpen);
     if (isOpen && sites === null) fetchSites();
@@ -57,10 +59,27 @@ export default function ContractCard({ contract, employees = [], onSave }) {
 
   const empName = (id) => employees.find((e) => e.id === id)?.name ?? "—";
 
+  const serviceTypeName = (id) =>
+    serviceTypes.find((st) => st.id === id)?.name ?? "—";
+
   // Heuristic "placeholder" flag until you add a real status/is_placeholder column
   const isPlaceholder =
     (contract.value == null || Number(contract.value) === 0) &&
     !contract.project_manager_id;
+
+  useEffect(() => {
+    const fetchServiceTypes = async () => {
+      try {
+        const { data } = await axios.get("/api/service-types");
+        console.log("Fetched service types:", data);
+        setServiceTypes(data);
+      } catch (error) {
+        console.error("Error fetching service types:", error);
+      }
+    };
+
+    fetchServiceTypes();
+  }, []);
 
   return (
     <Accordion
@@ -148,6 +167,35 @@ export default function ContractCard({ contract, employees = [], onSave }) {
               value={contract.project_name}
               fieldKey="project_name"
               fullWidth
+            />
+
+            <FieldRow
+              label={"Service Type"}
+              value={contract.service_type_id}
+              fieldKey="service_type_id"
+              render={(value, editing, { onChange }) =>
+                editing ? (
+                  <TextField
+                    select
+                    size="small"
+                    fullWidth
+                    value={value ?? ""}
+                    onChange={(e) =>
+                      onChange("service_type_id", e.target.value || null)
+                    }
+                  >
+                    {serviceTypes.map((stype) => (
+                      <MenuItem key={stype.id} value={stype.id}>
+                        {stype.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                ) : (
+                  <Typography sx={{ fontSize: "0.85rem" }}>
+                    {serviceTypeName(value)}
+                  </Typography>
+                )
+              }
             />
 
             <FieldRow

@@ -14,7 +14,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 
 function ClientDocumentationTab() {
   const contracts = useClientContracts();
-  const { loadContracts } = useClientActions();
+  const { loadContracts, updateContract } = useClientActions();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,6 +36,14 @@ function ClientDocumentationTab() {
     };
   }, []);
 
+  const handleSaveContract = async (contractId, draft) => {
+    try {
+      await updateContract(contractId, draft);
+    } catch (error) {
+      console.error("Error updating contract:", error);
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
@@ -44,7 +52,7 @@ function ClientDocumentationTab() {
     );
   }
 
-  if (!contracts.length) {
+  if (contracts && !contracts.length) {
     return (
       <Typography sx={{ py: 4, color: "text.disabled", textAlign: "center" }}>
         No contracts for this client yet.
@@ -65,6 +73,8 @@ function ClientDocumentationTab() {
               onSave={(draft) => {
                 // TODO: PUT /api/contracts/:id — the diff+log route, same shape as clients
                 console.log("save contract", contract.id, draft);
+
+                handleSaveContract(contract.id, draft);
               }}
             />
           ))}
