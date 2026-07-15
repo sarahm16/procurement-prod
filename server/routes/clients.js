@@ -458,6 +458,7 @@ export default function clientsRouter(prisma) {
     "project_manager_id",
     "sales_person_id",
     "operations_person_id",
+    "service_type_id",
   ]);
 
   // PUT /api/clients/:id/contacts/:cid - update a contact for a client
