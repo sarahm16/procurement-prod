@@ -27,13 +27,16 @@ model ActivityLog {
 }
 
 model Clients {
+  created_at            DateTime                @default(now())
+
   id                    Int                     @id(map: "PK__Clients__3213E83F189F30A2") @default(autoincrement())
   client                String                  @db.VarChar(100)
   legal_name            String                  @db.VarChar(100)    // new
   status                String                  @db.VarChar(20)
   brand                 String                  @db.VarChar(4)      // new
-  sarlaccId             String?                  @db.VarChar(100)    // new
-  sandbox                Boolean                  @default(false)
+  sarlaccId             String?                 @db.VarChar(100)    // new
+  tax_treatment         String                  @db.VarChar(30)   @default("Billed separately")
+  sandbox               Boolean                @default(false)
 
   mailing_address       String?                 @db.VarChar(150)
   mailing_address2      String?                 @db.VarChar(150)
@@ -48,15 +51,23 @@ model Clients {
   billing_state         String?                 @db.Char(50)
   billing_zipcode       String?                 @db.VarChar(10)
 
+  account_manager_id    Int?      
+
+  AccountManager        Employees?              @relation("ClientAccountManager", fields: [account_manager_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
   ClientServiceLines    ClientServiceLines[]
   ClientServiceLineSOWs ClientServiceLineSOWs[]
   Companies             Companies[]
   Sites                 Sites[]
   Contracts             Contracts[]
   Contacts              ClientContacts[]
+
+  
 }
 
 model ContactRoles {
+  created_at            DateTime                @default(now())
+
   id                  Int       @id @default(autoincrement())
   name                String    @db.VarChar(50)
 
@@ -64,6 +75,8 @@ model ContactRoles {
 }
 
 model ClientContacts {
+  created_at            DateTime                @default(now())
+
   id                  Int       @id @default(autoincrement())
   name                 String   @db.VarChar(100)
   email                String?  @db.VarChar(100)
@@ -77,6 +90,8 @@ model ClientContacts {
 }
 
 model ClientServiceLines {
+  created_at            DateTime                @default(now())
+
   client_id       Int
   service_line_id Int
 
@@ -87,6 +102,8 @@ model ClientServiceLines {
 }
 
 model ClientServiceLineSOWs {
+  created_at            DateTime                @default(now())
+
   client_id                     Int
   service_line_id               Int
   pandadoc_content_library_uuid String        @db.VarChar(100)
@@ -98,6 +115,8 @@ model ClientServiceLineSOWs {
 }
 
 model Companies {
+  created_at            DateTime                @default(now())
+
   id            Int      @id(map: "PK__Companie__3213E83FBC38A215") @default(autoincrement())
   company       String   @db.VarChar(100)
   client_id     Int?
@@ -118,12 +137,14 @@ model Employees {
   TaggedInNotes                 NoteTaggedUsers[]   @relation("NoteTaggedUser")
   AuthoredNotes                 Notes[]             @relation("NoteAuthor")
   ActivityLog                   ActivityLog[]
-  ContractProjectManager        Contracts[]         @relation("ContractProjectManager")
   ContractSalesPerson           Contracts[]         @relation("ContractSalesPerson")
   ContractOperationsPerson      Contracts[]         @relation("ContractOperationsPerson")
+  ClientAccountManager          Clients[]           @relation("ClientAccountManager")
 } 
 
 model Roles {
+  created_at            DateTime                @default(now())
+
   id            Int           @id @default(autoincrement())
   name          String        @db.VarChar(50)
   description   String?       @db.VarChar(100)
@@ -170,6 +191,8 @@ model ServiceLineExhibitTemplates {
 }
 
 model Sites {
+  created_at            DateTime                @default(now())
+
   id                     Int                      @id(map: "PK__Sites__3213E83F412421E7") @default(autoincrement())
   store                  String?                  @db.VarChar(100)
   mailing_address        String?                  @db.VarChar(150)
@@ -181,7 +204,7 @@ model Sites {
   lng                    Decimal?
   client_id              Int
   company_id             Int?
-    sandbox                Boolean                  @default(false)
+  sandbox                Boolean                  @default(false)
 
 
   Client                 Clients                  @relation(fields: [client_id], references: [id], onUpdate: NoAction, map: "FK__Sites__client_id__40F9A68C")
@@ -201,6 +224,8 @@ model Trades {
 }
 
 model Vendors {
+  created_at            DateTime                @default(now())
+
   id                     Int                      @id(map: "PK__Vendors__3213E83F06619C60") @default(autoincrement())
   sarlaccId              String?                  @db.VarChar(50)
   company                String                   @db.VarChar(100)
@@ -234,6 +259,8 @@ model Vendors {
 }
 
 model VendorContractSites {
+  created_at            DateTime                @default(now())
+
   id                Int       @id @default(autoincrement())
   is_primary        Boolean   @default(false)
   status_id         Int
@@ -278,6 +305,8 @@ model VendorTrades {
 }
 
 model WorkOrders {
+  created_at            DateTime                @default(now())
+
   id                      Int                 @id(map: "PK__WorkOrde__3213E83FA1A0BFFC") @default(autoincrement())
 
   trade_id                Int
@@ -317,6 +346,8 @@ model Softwares {
 }
 
 model Contracts {
+  created_at            DateTime                @default(now())
+
   id                      Int         @id @default(autoincrement())
   start_date              DateTime    @default(now()) @db.DateTime
   end_date                DateTime?   @db.DateTime
@@ -329,16 +360,17 @@ model Contracts {
   client_id               Int
   service_line_id         Int
   software_id             Int?  
-  project_manager_id      Int?
   sales_person_id         Int?
   operations_person_id    Int?
+  service_type_id         Int?
 
   ServiceLine             ServiceLines    @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   Client                  Clients         @relation(fields: [client_id], references: [id], onUpdate: NoAction, onDelete: NoAction)            
   Software                Softwares?      @relation(fields: [software_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  ProjectManager          Employees?      @relation("ContractProjectManager", fields: [project_manager_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   SalesPerson             Employees?      @relation("ContractSalesPerson", fields: [sales_person_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   OperationsPerson        Employees?      @relation("ContractOperationsPerson", fields: [operations_person_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  ServiceType             ServiceTypes?          @relation(fields: [service_type_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
 
   ContractSites                   ContractSites[]
 }
@@ -348,10 +380,12 @@ model ServiceTypes {
   name                    String    @db.VarChar(100)
   description             String?   @db.VarChar(300)
   
-  ContractSiteServices    ContractSiteServices[]
+  Contracts               Contracts[]
 }
 
 model ContractSites {
+  created_at            DateTime                @default(now())
+
   id              Int       @id @default(autoincrement())
   high_risk       Boolean   @default(false)
   site_id         Int
@@ -373,13 +407,14 @@ model ContractSiteServices {
   service_line_service_id   Int
 
   ContractSite              ContractSites         @relation(fields: [contract_site_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  ServiceType               ServiceTypes          @relation(fields: [service_type_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   ServiceLineService        ServiceLineServices   @relation(fields: [service_line_service_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
     
   VendorServicePricing      VendorServicePricing?
 }
 
 model VendorServicePricing {
+  created_at            DateTime                @default(now())
+
   id                          Int   @id @default(autoincrement())
   vendor_price                Decimal
 
@@ -392,6 +427,8 @@ model VendorServicePricing {
 }
 
 model Notes {
+    created_at            DateTime                @default(now())
+
     id                          Int               @id @default(autoincrement())
     body                        String            @db.VarChar(1000)
     date                        DateTime          @default(now())
