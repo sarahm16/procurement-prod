@@ -8,6 +8,7 @@ import DetailPageLayout from "../../components/DetailPageLayout/DetailPageLayout
 import ClientDocumentationTab from "./tabs/ClientDocumentationTab";
 import ClientDetailsTab from "./tabs/ClientDetailsTab";
 import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
+import ClientSitesTab from "./tabs/ClientSitesTab";
 
 import {
   ClientDetailProvider,
@@ -52,7 +53,7 @@ function ClientDetailLayout() {
       tabs={[
         { label: "Details", content: <ClientDetailsTab /> },
         { label: "Documentation", content: <ClientDocumentationTab /> },
-        { label: "Sites", content: <></> },
+        { label: "Sites", content: <ClientSitesTab /> },
         {
           label: "Activity",
           content: (

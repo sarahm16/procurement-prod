@@ -48,10 +48,11 @@ export default function ContractCard({ contract, employees = [], onSave }) {
       // TODO: GET /api/contracts/:id/sites → ContractSites with Site included.
       // Shape is provisional until the ContractSites model settles (Wed meeting).
       const { data } = await axios.get(`/api/contracts/${contract.id}/sites`);
+      console.log("Fetched contract sites for contract", contract.id, data);
       setSites(data);
     } catch (e) {
       console.error("Error fetching contract sites:", e);
-      setSites([]);
+      // setSites([]);
     } finally {
       setLoadingSites(false);
     }
@@ -63,9 +64,7 @@ export default function ContractCard({ contract, employees = [], onSave }) {
     serviceTypes.find((st) => st.id === id)?.name ?? "—";
 
   // Heuristic "placeholder" flag until you add a real status/is_placeholder column
-  const isPlaceholder =
-    (contract.value == null || Number(contract.value) === 0) &&
-    !contract.project_manager_id;
+  const isPlaceholder = contract.value == null || Number(contract.value) === 0;
 
   useEffect(() => {
     const fetchServiceTypes = async () => {
@@ -298,7 +297,6 @@ export default function ContractCard({ contract, employees = [], onSave }) {
             span="half"
           >
             {[
-              ["Project Manager", "project_manager_id"],
               ["Sales", "sales_person_id"],
               ["Operations", "operations_person_id"],
             ].map(([label, key]) => (
@@ -401,6 +399,9 @@ export default function ContractCard({ contract, employees = [], onSave }) {
                   }}
                 />
               )}
+              <Typography sx={{ fontSize: "0.85rem", fontWeight: 500 }}>
+                {new Date(cs.Site?.created_at).toLocaleString() || "—"}
+              </Typography>
             </Box>
           ))}
         </Box>

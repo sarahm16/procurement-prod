@@ -20,6 +20,7 @@ const ContractsContext = createContext();
 const NotesContext = createContext();
 const ActivityContext = createContext();
 const ActionsContext = createContext();
+const SitesContext = createContext();
 
 export function ClientDetailProvider({ id, children }) {
   const { user } = useAuthenticatedUser();
@@ -31,6 +32,7 @@ export function ClientDetailProvider({ id, children }) {
   const [contracts, setContracts] = useState(null);
   const [notes, setNotes] = useState([]);
   const [activity, setActivity] = useState([]);
+  const [sites, setSites] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -148,6 +150,12 @@ export function ClientDetailProvider({ id, children }) {
     [id, user?.id],
   );
 
+  // Sites Actions
+  const loadSites = useCallback(async () => {
+    const { data } = await axios.get(`/api/clients/${id}/sites`);
+    setSites(data);
+  }, [id]);
+
   const actions = useMemo(() => {
     return {
       updateDetails,
@@ -159,6 +167,10 @@ export function ClientDetailProvider({ id, children }) {
       // Contracts actions
       loadContracts,
       updateContract,
+      // Sites actions
+      loadSites,
+      // TO DO: Add Sites actions like updateSite, deleteSite, etc.
+      // Sites context
     };
   }, [
     updateDetails,
@@ -167,6 +179,7 @@ export function ClientDetailProvider({ id, children }) {
     updateContact,
     loadContracts,
     updateContract,
+    loadSites,
   ]);
 
   return (
@@ -175,11 +188,13 @@ export function ClientDetailProvider({ id, children }) {
         <ContactsContext.Provider value={contacts}>
           <ServiceLinesContext.Provider value={serviceLines}>
             <ContractsContext.Provider value={contracts}>
-              <NotesContext.Provider value={notes}>
-                <ActivityContext.Provider value={activity}>
-                  {children}
-                </ActivityContext.Provider>
-              </NotesContext.Provider>
+              <SitesContext.Provider value={sites}>
+                <NotesContext.Provider value={notes}>
+                  <ActivityContext.Provider value={activity}>
+                    {children}
+                  </ActivityContext.Provider>
+                </NotesContext.Provider>
+              </SitesContext.Provider>
             </ContractsContext.Provider>
           </ServiceLinesContext.Provider>
         </ContactsContext.Provider>
@@ -206,5 +221,6 @@ export const useClientContracts = () =>
 export const useClientNotes = () => useCtx(NotesContext, "useClientNotes");
 export const useClientActivity = () =>
   useCtx(ActivityContext, "useClientActivity");
+export const useClientSites = () => useCtx(SitesContext, "useClientSites");
 export const useClientActions = () =>
   useCtx(ActionsContext, "useClientActions");
