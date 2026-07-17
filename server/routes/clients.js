@@ -145,9 +145,6 @@ export default function clientsRouter(prisma) {
           Software: {
             select: { name: true, id: true },
           },
-          ProjectManager: {
-            select: { name: true, id: true },
-          },
           SalesPerson: {
             select: { name: true, id: true },
           },
@@ -455,7 +452,6 @@ export default function clientsRouter(prisma) {
     "value",
     "project_name",
     "software_id",
-    "project_manager_id",
     "sales_person_id",
     "operations_person_id",
     "service_type_id",
@@ -509,7 +505,6 @@ export default function clientsRouter(prisma) {
           where: { id: Number(cid) },
           data,
           include: {
-            ProjectManager: true,
             SalesPerson: true,
             OperationsPerson: true,
           }, // so the response carries the role name
@@ -531,7 +526,6 @@ export default function clientsRouter(prisma) {
 
         return {
           ...updated,
-          project_manager: updated.ProjectManager?.name ?? null,
           sales_person: updated.SalesPerson?.name ?? null,
           operations_person: updated.OperationsPerson?.name ?? null,
         }; // flatten the role for the frontend
