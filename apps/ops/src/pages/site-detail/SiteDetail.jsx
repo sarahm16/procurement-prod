@@ -1,59 +1,59 @@
 import { useParams } from "react-router-dom";
 import { createContext, useEffect, useState } from "react";
 
-// Components
+// Layout Components
 import DetailPageHeader from "../../components/DetailPageLayout/DetailPageHeader";
 import DetailPageLayout from "../../components/DetailPageLayout/DetailPageLayout";
 
 // Context
-const SiteDetailContext = createContext({
-  site: {},
-  updateSite: () => {},
-});
+import { SiteDetailProvider, useSiteDetails } from "./SiteDetailProvider";
+
+// Components
+import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
 
 function SiteDetail() {
-  // Get the site ID from the URL parameters
   const { id } = useParams();
+  return (
+    <SiteDetailProvider id={id}>
+      <SiteDetailLayout />
+    </SiteDetailProvider>
+  );
+}
 
-  // State
-  const [site, setSite] = useState({});
-
-  const updateSite = async (updates) => {
-    // Update the site in the database
-
-    // Update the site locally
-    setSite((prev) => ({ ...prev, ...updates }));
-  };
-
-  // Fetch site details using the ID (this is just a placeholder, replace with actual data fetching logic)
-  useEffect(() => {
-    console.log("Fetching details for site ID:", id);
-  }, [id]);
+function SiteDetailLayout() {
+  const details = useSiteDetails();
+  // const notes = useSiteNotes();
+  // const activity = useSiteActivity();
 
   return (
-    <SiteDetailContext.Provider value={{ site, updateSite }}>
-      <DetailPageLayout
-        header={
-          <DetailPageHeader
-            title={`Site #${id}`}
-            subtitle={`Details for Site #${id}`}
-            status="active"
-            statusOptions={["active", "inactive", "suspended", "pending"]}
-            onStatusChange={(newStatus) =>
-              console.log("Status changed to:", newStatus)
-            }
-            breadcrumbs={[
-              { label: "Sites", href: "/sites" },
-              { label: `Site #${id}` },
-            ]}
-            meta={[]}
-            address="123 Main St, Anytown, USA"
-            onBack={() => console.log("Back button clicked")}
-            actions={[]}
-          />
-        }
-      ></DetailPageLayout>
-    </SiteDetailContext.Provider>
+    <DetailPageLayout
+      header={
+        <DetailPageHeader
+          title={`Site ${details?.store ?? ""}`}
+          subtitle={`Details for ${details?.store ?? ""}`}
+          status={details?.status}
+          onStatusChange={(status) => updateDetails({ status })}
+          breadcrumbs={[
+            { label: "Sites", href: "/sites" },
+            { label: details?.store },
+          ]}
+          address={`${details?.mailing_address}, ${details?.mailing_city}, ${details?.mailing_state} ${details?.mailing_zipcode}`}
+        />
+      }
+      notes={[]}
+      onAddNote={() => {}}
+      tabs={[
+        { label: "Details", content: <></> },
+        { label: "Documentation", content: <></> },
+        { label: "Sites", content: <></> },
+        {
+          label: "Activity",
+          content: (
+            <ActivityLog entries={[]} fieldLabels={{ status_id: "Status" }} />
+          ),
+        },
+      ]}
+    />
   );
 }
 
