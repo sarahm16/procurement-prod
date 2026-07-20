@@ -7,6 +7,7 @@ import seedTrades from "./seeds/trades.js";
 import seedRoles from "./seeds/rolesSeed.js";
 import seedEntityTypes from "./seeds/entityTypesSeed.js";
 import seedContactRoles from "./seeds/contactRolesSeed.js";
+import seedServiceTypes from "./seeds/serviceTypes.js";
 
 const prisma = new PrismaClient();
 
@@ -20,7 +21,9 @@ async function main() {
   /*   await seedRoles(prisma);
    */
   // await seedEntityTypes(prisma);
-  await seedContactRoles(prisma);
+  // await seedContactRoles(prisma);
+
+  await seedServiceTypes(prisma);
 }
 
 main()

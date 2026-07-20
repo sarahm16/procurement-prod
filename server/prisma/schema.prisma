@@ -41,14 +41,14 @@ model Clients {
   mailing_address       String?                 @db.VarChar(150)
   mailing_address2      String?                 @db.VarChar(150)
   mailing_city          String?                 @db.VarChar(100)
-  mailing_state         String?                 @db.Char(50)
+  mailing_state         String?                 @db.VarChar(50)
   mailing_zipcode       String?                 @db.VarChar(10)
   lat                   Decimal?
   lng                   Decimal?
   billing_address       String?                 @db.VarChar(150)
   billing_address2      String?                 @db.VarChar(150)
   billing_city          String?                 @db.VarChar(100)
-  billing_state         String?                 @db.Char(50)
+  billing_state         String?                 @db.VarChar(50)
   billing_zipcode       String?                 @db.VarChar(10)
 
   account_manager_id    Int?      
@@ -72,6 +72,7 @@ model ContactRoles {
   name                String    @db.VarChar(50)
 
   ClientContacts      ClientContacts[]
+  SiteContacts        SiteContacts[]
 }
 
 model ClientContacts {
@@ -86,6 +87,21 @@ model ClientContacts {
 
   ContactRole        ContactRoles      @relation(fields: [contact_role_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   Client              Clients          @relation(fields: [client_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+}
+
+model SiteContacts {
+  created_at            DateTime                @default(now())
+
+  id                   Int       @id @default(autoincrement())
+  name                 String   @db.VarChar(100)
+  email                String?  @db.VarChar(100)
+  phone                String?  @db.VarChar(100)
+  site_id              Int    
+  contact_role_id      Int
+
+  ContactRole        ContactRoles      @relation(fields: [contact_role_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  Site                Sites          @relation(fields: [site_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
 
 }
 
@@ -198,7 +214,7 @@ model Sites {
   mailing_address        String?                  @db.VarChar(150)
   mailing_address2       String?                  @db.VarChar(150)
   mailing_city           String?                  @db.VarChar(100)
-  mailing_state          String?                  @db.Char(50)
+  mailing_state          String?                  @db.VarChar(50)
   mailing_zipcode        String?                  @db.VarChar(10)
   lat                    Decimal?
   lng                    Decimal?
@@ -211,6 +227,7 @@ model Sites {
   Company                Companies?               @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK__Sites__company_i__41EDCAC5")
   WorkOrders             WorkOrders[]
   ContractSites          ContractSites[]
+  Contacts               SiteContacts[]
 }
 
 model Trades {
@@ -238,14 +255,14 @@ model Vendors {
   mailing_address        String?                  @db.VarChar(150)
   mailing_address2       String?                  @db.VarChar(150)
   mailing_city           String?                  @db.VarChar(100)
-  mailing_state          String?                  @db.Char(50)
+  mailing_state          String?                  @db.VarChar(50)
   mailing_zipcode        String?                  @db.VarChar(10)
   lat                    Decimal?
   lng                    Decimal?
   billing_address        String?                  @db.VarChar(150)
   billing_address2       String?                  @db.VarChar(150)
   billing_city           String?                  @db.VarChar(100)
-  billing_state          String?                  @db.Char(50)
+  billing_state          String?                  @db.VarChar(50)
   billing_zipcode        String?                  @db.VarChar(10)
 
   status_id              Int
@@ -307,7 +324,7 @@ model VendorTrades {
 model WorkOrders {
   created_at            DateTime                @default(now())
 
-  id                      Int                 @id(map: "PK__WorkOrde__3213E83FA1A0BFFC") @default(autoincrement())
+  id                        Int                 @id(map: "PK__WorkOrde__3213E83FA1A0BFFC") @default(autoincrement())
 
   trade_id                Int
   site_id                 Int
@@ -395,6 +412,8 @@ model ContractSites {
   Contract                Contracts               @relation(fields: [contract_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   
   ContractSiteServices    ContractSiteServices[]  
+
+  @@unique([contract_id, site_id])
   VendorContractSites     VendorContractSites[]
 }
 

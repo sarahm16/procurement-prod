@@ -241,3 +241,6 @@ async function migrateClients() {
 }
 
 migrateClients();
+
+// IN PRODUCTION:
+// - Need to also migrate software?

@@ -17,7 +17,6 @@ const prisma = new PrismaClient();
 //   client_id               Int
 //   service_line_id         Int
 //   software_id             Int?
-//   project_manager_id      Int?
 //   sales_person_id         Int?
 //   operations_person_id    Int?
 

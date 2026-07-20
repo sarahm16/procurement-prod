@@ -18,6 +18,9 @@ import rolesRouter from "./routes/roles.js";
 import employeesRouter from "./routes/employees.js";
 import notesRouter from "./routes/notes.js";
 import contactRolesRouter from "./routes/contactRoles.js";
+import serviceTypesRouter from "./routes/serviceTypes.js";
+import contractsRouter from "./routes/contracts.js";
+import sitesRouter from "./routes/sites.js";
 
 // Dynamic import for PrismaClient to avoid issues with top-level await in CommonJS
 const { PrismaClient } = await import("@prisma/client");
@@ -50,6 +53,9 @@ app.use("/api/roles", rolesRouter(prisma));
 app.use("/api/employees", employeesRouter(prisma));
 app.use("/api/notes", notesRouter(prisma));
 app.use("/api/contactRoles", contactRolesRouter(prisma));
+app.use("/api/service-types", serviceTypesRouter(prisma));
+app.use("/api/contracts", contractsRouter(prisma));
+app.use("/api/sites", sitesRouter(prisma));
 
 // Catch-all LAST — hands everything else to React Router
 app.get("/*splat", (req, res) => {
