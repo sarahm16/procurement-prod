@@ -12,21 +12,30 @@ import useAuthenticatedUser from "../../*/hooks/useAuthenticatedUser";
 import axios from "axios";
 
 const SiteDetailsContext = createContext();
+const ActivityContext = createContext();
+const NotesContext = createContext();
+const SiteContactsContext = createContext();
+const ActionsContext = createContext();
 
 export function SiteDetailProvider({ id, children }) {
   const { user } = useAuthenticatedUser();
 
-  const [siteDetails, setSiteDetails] = useState(null);
+  const [details, setDetails] = useState({});
   const [siteContacts, setSiteContacts] = useState([]);
-  const [notesContext, setNotesContext] = useState([]);
-  const [activityContext, setActivityContext] = useState([]);
+  const [notes, setNotes] = useState([]);
+  const [activity, setActivity] = useState([]);
+  const [contacts, setContacts] = useState([]);
 
   useEffect(() => {
     let active = true;
 
-    axios.get(`/api/sites/${id}`).then((response) => {
+    axios.get(`/api/sites/${id}`).then(({ data }) => {
+      console.log(data);
       if (!active) return;
-      setSiteDetails(response.data);
+      setDetails(data);
+      setActivity(data.activity_log);
+      setNotes(data.notes);
+      setContacts(data.contacts);
     });
 
     return () => {
@@ -34,10 +43,70 @@ export function SiteDetailProvider({ id, children }) {
     };
   }, [id]);
 
+  // Details Actions
+  const updateDetails = useCallback(
+    async (draft) => {
+      const { data } = await axios.put(`/api/sites/${id}`, {
+        user_id: user?.id,
+        changes: draft,
+      });
+      setDetails((prev) => ({ ...prev, ...draft }));
+    },
+    [id, user?.id],
+  );
+
+  // Contacts Actions
+  const addContact = useCallback(
+    async (form) => {
+      const { data } = await axios.post(`/api/sites/${id}/contacts`, {
+        user_id: user?.id,
+        ...form,
+      });
+      setContacts((prev) => [...prev, data]);
+      return data; // Return the newly created contact
+    },
+    [id, user?.id],
+  );
+
+  const updateContact = useCallback(
+    async (contactId, draft) => {
+      const { data } = await axios.put(
+        `/api/sites/${id}/contacts/${contactId}`,
+        {
+          user_id: user?.id,
+          changes: draft,
+        },
+      );
+      setContacts((prev) =>
+        prev.map((contact) =>
+          contact.id === contactId ? { ...contact, ...draft } : contact,
+        ),
+      );
+    },
+    [id, user?.id],
+  );
+
+  const actions = useMemo(
+    () => ({
+      updateDetails,
+      addContact,
+      updateContact,
+    }),
+    [updateDetails, addContact, updateContact],
+  );
+
   return (
-    <SiteDetailsContext.Provider value={siteDetails}>
-      {children}
-    </SiteDetailsContext.Provider>
+    <ActionsContext.Provider value={actions}>
+      <SiteDetailsContext.Provider value={details}>
+        <ActivityContext.Provider value={activity}>
+          <NotesContext.Provider value={notes}>
+            <SiteContactsContext.Provider value={contacts}>
+              {children}
+            </SiteContactsContext.Provider>
+          </NotesContext.Provider>
+        </ActivityContext.Provider>
+      </SiteDetailsContext.Provider>
+    </ActionsContext.Provider>
   );
 }
 
@@ -50,3 +119,8 @@ function useCtx(ctx, name) {
 
 export const useSiteDetails = () =>
   useCtx(SiteDetailsContext, "useSiteDetails");
+export const useSiteActivity = () => useCtx(ActivityContext, "useSiteActivity");
+export const useSiteNotes = () => useCtx(NotesContext, "useSiteNotes");
+export const useSiteContacts = () =>
+  useCtx(SiteContactsContext, "useSiteContacts");
+export const useSiteActions = () => useCtx(ActionsContext, "useSiteActions");
