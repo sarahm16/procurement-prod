@@ -6,7 +6,7 @@ import axios from "axios";
 import InfoGrid, { FieldRow, InfoCard } from "../../../components/InfoGrid";
 import { ChipSelectCard } from "../../../components/ChipSelectCard";
 import AddressAutocomplete from "../../../components/AddressAutocomplete";
-import ContactFormModal from "./ContactFormModal";
+import ContactFormModal from "../../../components/Forms/ContactFormModal";
 
 // MUI Components
 import Typography from "@mui/material/Typography";
