@@ -175,6 +175,30 @@ export default function clientsRouter(prisma) {
     }
   });
 
+  // GET /api/clients/:id/sites
+  router.get("/:id/sites", async (req, res) => {
+    const { id } = req.params;
+
+    try {
+      const sites = await prisma.sites.findMany({
+        where: { client_id: Number(id) },
+      });
+      res.status(200).json(sites);
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError) {
+        console.error("Prisma error fetching sites:", error);
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        console.error("Error fetching sites:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    }
+  });
+
   // POST /api/clients
   router.post("/", async (req, res) => {
     console.log("Body", req.body);
