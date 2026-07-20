@@ -468,6 +468,20 @@ export default function clientsRouter(prisma) {
     }
   });
 
+  // DELETE /api/clients/:id/contacts/:cid
+  router.delete("/:id/contacts/:cid", async (req, res) => {
+    const { id, cid } = req.params;
+    try {
+      const deleted = await prisma.clientContacts.delete({
+        where: { id: Number(cid) },
+      });
+      res.json(deleted);
+    } catch (error) {
+      console.error("Error deleting contact:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
   const CONTRACT_ALLOWED_FIELDS = new Set([
     "start_date",
     "end_date",
