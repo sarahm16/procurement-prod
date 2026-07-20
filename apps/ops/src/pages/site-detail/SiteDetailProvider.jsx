@@ -86,13 +86,28 @@ export function SiteDetailProvider({ id, children }) {
     [id, user?.id],
   );
 
+  const deleteContact = useCallback(
+    async (contactId) => {
+      const { data } = await axios.delete(
+        `/api/sites/${id}/contacts/${contactId}`,
+        {
+          data: { user_id: user?.id },
+        },
+      );
+      setContacts((prev) => prev.filter((contact) => contact.id !== contactId));
+      return data;
+    },
+    [id, user?.id],
+  );
+
   const actions = useMemo(
     () => ({
       updateDetails,
       addContact,
       updateContact,
+      deleteContact,
     }),
-    [updateDetails, addContact, updateContact],
+    [updateDetails, addContact, updateContact, deleteContact],
   );
 
   return (
