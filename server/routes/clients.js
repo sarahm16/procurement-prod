@@ -3,6 +3,7 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import serializeNote from "../serializer/noteSerializer.js";
 import serializeActivityLogEntry from "../serializer/activityLogSerializer.js";
 import { logActivity } from "../utils/logActivity.js";
+import serializeContact from "../serializer/serializeContact.js";
 
 const serializeClient = (client) => {
   return {
@@ -19,16 +20,6 @@ const serializeClientById = (client, notes, activityLog, contacts) => {
     notes: notes.map(serializeNote),
     activity_log: (activityLog || []).map(serializeActivityLogEntry),
     contacts: (contacts || []).map(serializeContact),
-  };
-};
-
-const serializeContact = (contact) => {
-  return {
-    id: contact.id,
-    name: contact.name,
-    email: contact.email,
-    phone: contact.phone,
-    contact_role: contact.ContactRole ? contact.ContactRole.name : null,
   };
 };
 
