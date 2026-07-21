@@ -312,16 +312,35 @@ export default function vendorsRouter(prisma) {
   // POST /api/vendors/:id/trades/:tid - associate a trade with a vendor
   router.post("/:id/trades/:tid", async (req, res) => {
     const { id, tid } = req.params;
+    const { user_id } = req.body;
     console.log(`Adding trade ${tid} to vendor ${id}`);
+
     try {
-      const association = await prisma.vendorTrades.create({
-        data: {
-          vendor_id: Number(id),
-          trade_id: Number(tid),
-        },
+      const createdAssociation = await prisma.$transaction(async (tx) => {
+        const association = await tx.vendorTrades.create({
+          data: {
+            vendor_id: Number(id),
+            trade_id: Number(tid),
+          },
+          include: {
+            Trade: true,
+          },
+        });
+        console.log("Association created:", association);
+
+        await logActivity(tx, {
+          entityTypeId: entity_type_id,
+          entityId: Number(id),
+          fieldChanged: "trades", // e.g. "mailing_city, mailing_state, lat, lng"
+          previousValue: null, // see note below
+          newValue: `Added trade ${association.Trade.name}`,
+          changedBy: user_id ?? null,
+          action: "UPDATE",
+        });
+
+        return association;
       });
-      console.log("Association created:", association);
-      res.status(201).json(association);
+      res.status(201).json(createdAssociation);
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         console.error("Prisma error creating association:", error);
