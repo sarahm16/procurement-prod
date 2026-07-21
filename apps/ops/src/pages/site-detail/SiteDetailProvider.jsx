@@ -21,7 +21,6 @@ export function SiteDetailProvider({ id, children }) {
   const { user } = useAuthenticatedUser();
 
   const [details, setDetails] = useState({});
-  const [siteContacts, setSiteContacts] = useState([]);
   const [notes, setNotes] = useState([]);
   const [activity, setActivity] = useState([]);
   const [contacts, setContacts] = useState([]);

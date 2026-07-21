@@ -111,7 +111,7 @@ function SiteDetailsTab() {
           collapsible
           defaultOpen
           editable
-          onSave={() => {}}
+          onSave={updateDetails}
           actions={[]}
           editValues={details}
           span="half"
@@ -160,7 +160,7 @@ function SiteDetailsTab() {
           collapsible
           defaultOpen
           editable
-          onSave={() => {}}
+          onSave={updateDetails}
           actions={[]}
           editValues={details}
           span="half"
@@ -239,12 +239,12 @@ function SiteDetailsTab() {
           />
         </InfoCard>
         <InfoCard
-          title="Store Billing Address"
+          title="Site Billing Address"
           icon={null}
           collapsible
           defaultOpen
           editable
-          onSave={() => {}}
+          onSave={updateDetails}
           actions={[]}
           editValues={details}
           span="half"
