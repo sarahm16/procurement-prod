@@ -137,11 +137,14 @@ export function VendorDetailProvider({ id, children }) {
     async (tradeToAdd) => {
       const addResponse = await axios.post(
         `/api/vendors/${id}/trades/${tradeToAdd.id}`,
+        {
+          user_id: user?.id,
+        },
       );
       console.log("Add association response:", addResponse.data);
       setTrades((prevTrades) => [...prevTrades, tradeToAdd]);
     },
-    [id],
+    [id, user?.id],
   );
 
   const addNote = useCallback(async (payload) => {
