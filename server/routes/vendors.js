@@ -333,9 +333,9 @@ export default function vendorsRouter(prisma) {
           entityId: Number(id),
           fieldChanged: "trades", // e.g. "mailing_city, mailing_state, lat, lng"
           previousValue: null, // see note below
-          newValue: `Added trade ${association.Trade.name}`,
+          newValue: `${association.Trade.name}`,
           changedBy: user_id ?? null,
-          action: "UPDATE",
+          action: "ASSIGN",
         });
 
         return association;
@@ -359,28 +359,47 @@ export default function vendorsRouter(prisma) {
   // DELETE /api/vendors/:id/trades/:tid - disassociate a trade from a vendor
   router.delete("/:id/trades/:tid", async (req, res) => {
     const { id, tid } = req.params;
-    console.log(`Removing trade ${tid} from vendor ${id}`);
+    const { user_id } = req.body;
+    console.log(`Deleting trade ${tid} from vendor ${id}`);
+
     try {
-      const association = await prisma.vendorTrades.delete({
-        where: {
-          vendor_id_trade_id: {
-            vendor_id: Number(id),
-            trade_id: Number(tid),
+      const deletedAssociation = await prisma.$transaction(async (tx) => {
+        const association = await tx.vendorTrades.delete({
+          where: {
+            vendor_id_trade_id: {
+              vendor_id: Number(id),
+              trade_id: Number(tid),
+            },
           },
-        },
+          include: {
+            Trade: true,
+          },
+        });
+        console.log("Association deleted:", association);
+
+        await logActivity(tx, {
+          entityTypeId: entity_type_id,
+          entityId: Number(id),
+          fieldChanged: "trades", // e.g. "mailing_city, mailing_state, lat, lng"
+          previousValue: null, // see note below
+          newValue: `${association.Trade.name}`,
+          changedBy: user_id ?? null,
+          action: "REMOVE",
+        });
+
+        return association;
       });
-      console.log("Association removed:", association);
-      res.status(200).json(association);
+      res.status(200).json(deletedAssociation);
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
-        console.error("Prisma error removing association:", error);
+        console.error("Prisma error deleting association:", error);
         res.status(400).json({
           error: "Database Error",
           code: error.code,
           message: error.message,
         });
       } else {
-        console.error("Error removing association:", error);
+        console.error("Error deleting association:", error);
         res.status(500).json({ error: "Internal Server Error" });
       }
     }
