@@ -117,6 +117,20 @@ export function ClientDetailProvider({ id, children }) {
     [id, user?.id],
   );
 
+  const deleteContact = useCallback(
+    async (contactId) => {
+      const { data } = await axios.delete(
+        `/api/clients/${id}/contacts/${contactId}`,
+        {
+          data: { user_id: user?.id },
+        },
+      );
+      setContacts((prev) => prev.filter((contact) => contact.id !== contactId));
+      return data;
+    },
+    [id, user?.id],
+  );
+
   // TO DO: Create Service Lines actions
 
   // Notes Actions
@@ -160,8 +174,11 @@ export function ClientDetailProvider({ id, children }) {
     return {
       updateDetails,
       addNote,
+
+      // Contacts actions
       addContact,
       updateContact,
+      deleteContact,
       // TO DO: Add Service Lines actions
 
       // Contracts actions
@@ -177,6 +194,7 @@ export function ClientDetailProvider({ id, children }) {
     addNote,
     addContact,
     updateContact,
+    deleteContact,
     loadContracts,
     updateContract,
     loadSites,

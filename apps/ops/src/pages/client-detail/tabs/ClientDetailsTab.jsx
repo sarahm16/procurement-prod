@@ -7,6 +7,7 @@ import InfoGrid, { FieldRow, InfoCard } from "../../../components/InfoGrid";
 import { ChipSelectCard } from "../../../components/ChipSelectCard";
 import AddressAutocomplete from "../../../components/AddressAutocomplete";
 import ContactFormModal from "../../../components/Forms/ContactFormModal";
+import ConfirmDialog from "../../../components/ConfirmDialog";
 
 // MUI Components
 import Typography from "@mui/material/Typography";
@@ -31,7 +32,8 @@ function ClientDetailsTab() {
   const details = useClientDetails();
   const serviceLines = useClientServiceLines();
   const contacts = useClientContacts();
-  const { updateDetails, addContact, updateContact } = useClientActions();
+  const { updateDetails, addContact, updateContact, deleteContact } =
+    useClientActions();
 
   const { user } = useAuthenticatedUser();
 
@@ -40,6 +42,8 @@ function ClientDetailsTab() {
   const [savingContact, setSavingContact] = useState(false);
 
   const [contactRoles, setContactRoles] = useState([]);
+  const [contactToDelete, setContactToDelete] = useState(null);
+  const [deletingContact, setDeletingContact] = useState(false);
 
   const fetchAllContactRoles = async () => {
     try {
@@ -63,6 +67,18 @@ function ClientDetailsTab() {
       console.error("Error adding contact:", error);
     } finally {
       setSavingContact(false);
+    }
+  };
+
+  const handleDeleteContact = async (contactId) => {
+    setDeletingContact(true);
+    try {
+      await deleteContact(contactId);
+      setContactToDelete(null);
+    } catch (error) {
+      console.error("Error deleting contact:", error);
+    } finally {
+      setDeletingContact(false);
     }
   };
 
@@ -394,7 +410,7 @@ function ClientDetailsTab() {
                 <Tooltip title="Remove contact">
                   <IconButton
                     size="small"
-                    onClick={() => handleDeleteContact(contact)}
+                    onClick={() => setContactToDelete(contact)}
                     sx={{
                       color: "text.disabled",
                       "&:hover": { color: "error.main" },
@@ -429,6 +445,20 @@ function ClientDetailsTab() {
         onSubmit={handleAddContact}
         roles={contactRoles}
         submitting={savingContact}
+      />
+
+      <ConfirmDialog
+        open={!!contactToDelete}
+        onClose={() => setContactToDelete(null)}
+        onConfirm={() => handleDeleteContact(contactToDelete.id)}
+        title="Remove contact"
+        message={
+          contactToDelete
+            ? `Remove ${contactToDelete.name || "this contact"}? This can't be undone.`
+            : ""
+        }
+        confirmLabel="Remove"
+        loading={deletingContact}
       />
     </>
   );
