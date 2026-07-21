@@ -156,10 +156,13 @@ export function VendorDetailProvider({ id, children }) {
   const updateStatus = async (newStatus) => {
     try {
       const response = await axios.put(`/api/vendors/${id}`, {
-        fieldChanged: "status_id",
-        newValue: Number(newStatus?.id),
+        changes: {
+          status_id: Number(newStatus?.id),
+        },
         user_id: user?.id,
       });
+      console.log("Update status response:", response.data);
+
       // Use server response rather than the local newStatus object
       setDetails((prev) => ({
         ...prev,
