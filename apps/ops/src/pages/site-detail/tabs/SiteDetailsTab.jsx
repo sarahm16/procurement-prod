@@ -26,11 +26,11 @@ import {
   useSiteDetails,
   useSiteActions,
 } from "../SiteDetailProvider";
+import Contacts from "../../../components/Contacts";
 
 function SiteDetailsTab() {
   // Context
   const details = useSiteDetails();
-  console.log("site details", details);
   const contacts = useSiteContacts();
   const { updateDetails, addContact, updateContact, deleteContact } =
     useSiteActions();
@@ -38,56 +38,6 @@ function SiteDetailsTab() {
   const { user } = useAuthenticatedUser();
 
   const [allServiceLines, setAllServiceLines] = useState([]);
-  const [addingContact, setAddingContact] = useState(false);
-  const [savingContact, setSavingContact] = useState(false);
-  const [deletingContact, setDeletingContact] = useState(false);
-  const [contactToDelete, setContactToDelete] = useState(null);
-  const [contactRoles, setContactRoles] = useState([]);
-
-  const fetchAllContactRoles = async () => {
-    try {
-      const response = await axios.get("/api/contactRoles");
-      console.log("All contact roles response:", response.data);
-      setContactRoles(response.data);
-    } catch (error) {
-      console.error("Error fetching contact roles:", error);
-    }
-  };
-  useEffect(() => {
-    fetchAllContactRoles();
-  }, []);
-
-  const handleAddContact = async (form) => {
-    setSavingContact(true);
-    try {
-      await addContact(form);
-      setAddingContact(false);
-    } catch (error) {
-      console.error("Error adding contact:", error);
-    } finally {
-      setSavingContact(false);
-    }
-  };
-
-  const handleDeleteContact = async (contactId) => {
-    setDeletingContact(true);
-    try {
-      await deleteContact(contactId);
-      setContactToDelete(null);
-    } catch (error) {
-      console.error("Error deleting contact:", error);
-    } finally {
-      setDeletingContact(false);
-    }
-  };
-
-  const handleSaveContact = async (contactId, draft) => {
-    try {
-      await updateContact(contactId, draft);
-    } catch (error) {
-      console.error("Error updating contact:", error);
-    }
-  };
 
   useEffect(() => {
     const fetchAllServiceLines = async () => {
@@ -320,102 +270,16 @@ function SiteDetailsTab() {
             editable
           />
         </InfoCard>
-        <Box
-          sx={{
-            gridColumn: "1 / -1",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            mt: 1,
-          }}
-        >
-          <Typography
-            sx={{
-              fontSize: "0.7rem",
-              fontWeight: 600,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "text.disabled",
-            }}
-          >
-            Contacts
-          </Typography>
-          <Button
-            size="small"
-            startIcon={<AddIcon />}
-            onClick={() => setAddingContact(true)}
-          >
-            Add Contact
-          </Button>
-        </Box>
-        {/* then the mapped contact InfoCards */}
 
-        {contacts?.length > 0 &&
-          contacts.map((contact) => (
-            <InfoCard
-              key={contact.id}
-              title={`${contact.contact_role} Contact`}
-              collapsible
-              defaultOpen
-              editable
-              editValues={contact}
-              span="half"
-              onSave={(draft) => updateContact(contact.id, draft)}
-              actions={
-                <Tooltip title="Remove contact">
-                  <IconButton
-                    size="small"
-                    onClick={() => {
-                      setContactToDelete(contact);
-                    }}
-                    sx={{
-                      color: "text.disabled",
-                      "&:hover": { color: "error.main" },
-                    }}
-                  >
-                    <DeleteOutlineIcon sx={{ fontSize: 15 }} />
-                  </IconButton>
-                </Tooltip>
-              }
-            >
-              <FieldRow
-                label="Contact Name"
-                value={contact.name}
-                fieldKey="name"
-              />
-              <FieldRow
-                label="Contact Email"
-                value={contact.email}
-                fieldKey="email"
-              />
-              <FieldRow
-                label="Contact Phone"
-                value={contact.phone}
-                fieldKey="phone"
-              />
-            </InfoCard>
-          ))}
+        {/* Reusable Contacts Component */}
+
+        <Contacts
+          contacts={contacts}
+          updateContact={updateContact}
+          addContact={addContact}
+          deleteContact={deleteContact}
+        />
       </InfoGrid>
-      <ContactFormModal
-        open={addingContact}
-        onClose={() => setAddingContact(false)}
-        onSubmit={handleAddContact}
-        roles={contactRoles}
-        submitting={savingContact}
-      />
-      <ConfirmDialog
-        open={!!contactToDelete}
-        onClose={() => setContactToDelete(null)}
-        onConfirm={() => handleDeleteContact(contactToDelete.id)}
-        title="Remove contact"
-        message={
-          contactToDelete
-            ? `Remove ${contactToDelete.name || "this contact"}? This can't be undone.`
-            : ""
-        }
-        confirmLabel="Remove"
-        loading={deletingContact}
-      />
     </>
   );
 }

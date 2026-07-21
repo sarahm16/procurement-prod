@@ -125,12 +125,15 @@ export function VendorDetailProvider({ id, children }) {
     async (tradeToDelete) => {
       const deleteResponse = await axios.delete(
         `/api/vendors/${id}/trades/${tradeToDelete.id}`,
+        {
+          data: { user_id: user?.id },
+        },
       );
       setTrades((prevTrades) =>
         prevTrades.filter((trade) => trade.id !== tradeToDelete.id),
       );
     },
-    [id],
+    [id, user?.id],
   );
 
   const addTrade = useCallback(

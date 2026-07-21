@@ -6,17 +6,10 @@ import axios from "axios";
 import InfoGrid, { FieldRow, InfoCard } from "../../../components/InfoGrid";
 import { ChipSelectCard } from "../../../components/ChipSelectCard";
 import AddressAutocomplete from "../../../components/AddressAutocomplete";
-import ContactFormModal from "../../../components/Forms/ContactFormModal";
-import ConfirmDialog from "../../../components/ConfirmDialog";
+import Contacts from "../../../components/Contacts";
 
 // MUI Components
 import Typography from "@mui/material/Typography";
-import IconButton from "@mui/material/IconButton";
-import Tooltip from "@mui/material/Tooltip";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import Button from "@mui/material/Button";
-import AddIcon from "@mui/icons-material/Add";
-import Box from "@mui/material/Box";
 
 // Hooks
 import useAuthenticatedUser from "../../../*/hooks/useAuthenticatedUser";
@@ -139,50 +132,6 @@ function ClientDetailsTab() {
             render={false}
             editable
           />
-          {/* <FieldRow
-            label={"Contact Name"}
-            value={details.contact_name}
-            editing={false}
-            fieldKey="contact_name"
-            onChange={() => {}}
-            fullWidth={false}
-            type="text"
-            render={false}
-            editable
-          />
-          <FieldRow
-            label={"Contact Phone"}
-            value={details.contact_phone}
-            editing={false}
-            fieldKey="contact_phone"
-            onChange={() => {}}
-            fullWidth={false}
-            type="text"
-            render={false}
-            editable
-          />
-          <FieldRow
-            label={"Secondary Phone"}
-            value={details.secondary_phone}
-            editing={false}
-            fieldKey="secondary_phone"
-            onChange={() => {}}
-            fullWidth={false}
-            type="text"
-            render={false}
-            editable
-          />
-          <FieldRow
-            label={"Contact Email"}
-            value={details.contact_email}
-            editing={false}
-            fieldKey="contact_email"
-            onChange={() => {}}
-            fullWidth={false}
-            type="text"
-            render={false}
-            editable
-          /> */}
         </InfoCard>
 
         <ChipSelectCard
@@ -365,101 +314,13 @@ function ClientDetailsTab() {
             editable
           />
         </InfoCard>
-        <Box
-          sx={{
-            gridColumn: "1 / -1",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            mt: 1,
-          }}
-        >
-          <Typography
-            sx={{
-              fontSize: "0.7rem",
-              fontWeight: 600,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "text.disabled",
-            }}
-          >
-            Contacts
-          </Typography>
-          <Button
-            size="small"
-            startIcon={<AddIcon />}
-            onClick={() => setAddingContact(true)}
-          >
-            Add Contact
-          </Button>
-        </Box>
-        {/* then the mapped contact InfoCards */}
-
-        {contacts?.length > 0 &&
-          contacts.map((contact) => (
-            <InfoCard
-              key={contact.id}
-              title={`${contact.contact_role} Contact`}
-              collapsible
-              defaultOpen
-              editable
-              editValues={contact}
-              span="half"
-              onSave={(draft) => handleSaveContact(contact.id, draft)}
-              actions={
-                <Tooltip title="Remove contact">
-                  <IconButton
-                    size="small"
-                    onClick={() => setContactToDelete(contact)}
-                    sx={{
-                      color: "text.disabled",
-                      "&:hover": { color: "error.main" },
-                    }}
-                  >
-                    <DeleteOutlineIcon sx={{ fontSize: 15 }} />
-                  </IconButton>
-                </Tooltip>
-              }
-            >
-              <FieldRow
-                label="Contact Name"
-                value={contact.name}
-                fieldKey="name"
-              />
-              <FieldRow
-                label="Contact Email"
-                value={contact.email}
-                fieldKey="email"
-              />
-              <FieldRow
-                label="Contact Phone"
-                value={contact.phone}
-                fieldKey="phone"
-              />
-            </InfoCard>
-          ))}
+        <Contacts
+          contacts={contacts}
+          addContact={addContact}
+          updateContact={updateContact}
+          deleteContact={deleteContact}
+        />
       </InfoGrid>
-      <ContactFormModal
-        open={addingContact}
-        onClose={() => setAddingContact(false)}
-        onSubmit={handleAddContact}
-        roles={contactRoles}
-        submitting={savingContact}
-      />
-
-      <ConfirmDialog
-        open={!!contactToDelete}
-        onClose={() => setContactToDelete(null)}
-        onConfirm={() => handleDeleteContact(contactToDelete.id)}
-        title="Remove contact"
-        message={
-          contactToDelete
-            ? `Remove ${contactToDelete.name || "this contact"}? This can't be undone.`
-            : ""
-        }
-        confirmLabel="Remove"
-        loading={deletingContact}
-      />
     </>
   );
 }

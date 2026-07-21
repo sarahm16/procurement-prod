@@ -12,17 +12,27 @@ import {
   useVendorActions,
   useVendorDetails,
   useVendorTrades,
+  useVendorContacts,
 } from "../../VendorDetailProvider";
 
 // MUI Components
 import Typography from "@mui/material/Typography";
+import Contacts from "../../../../components/Contacts";
 
 function VendorDetailsTab() {
   // Context
   const details = useVendorDetails();
   const trades = useVendorTrades();
+  const contacts = useVendorContacts();
 
-  const { deleteTrade, addTrade, updateDetails } = useVendorActions();
+  const {
+    deleteTrade,
+    addTrade,
+    updateDetails,
+    addContact,
+    updateContact,
+    deleteContact,
+  } = useVendorActions();
 
   // State
   const [allTrades, setAllTrades] = useState([]);
@@ -292,6 +302,13 @@ function VendorDetailsTab() {
             editable
           />
         </InfoCard>
+
+        <Contacts
+          contacts={contacts || []}
+          addContact={addContact}
+          updateContact={updateContact}
+          deleteContact={deleteContact}
+        />
       </InfoGrid>
     </>
   );
