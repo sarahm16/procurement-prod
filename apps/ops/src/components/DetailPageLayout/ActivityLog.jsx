@@ -69,18 +69,23 @@ const composeMessage = (entry, fieldLabels, valueFormatters) => {
     ? formatter(entry.previous_value)
     : entry.previous_value;
   const value = formatter ? formatter(entry.new_value) : entry.new_value;
+  const singularize = (label) => {
+    return label?.endsWith("s") ? label.slice(0, -1) : label;
+  };
 
   switch (action) {
-    case "CREATE":
-      return entry.new_value
-        ? `Created "${entry.new_value}"`
-        : "Created this record";
     case "UPDATE":
       return label
         ? `Changed ${label} from ${previousValue ?? "—"} to ${value ?? "—"}`
         : `Updated to ${value ?? "—"}`;
+    case "CREATE":
+      return previousValue || value
+        ? `Added ${singularize(label)} ${value}` // "Added contact Joe Smith"
+        : `Created this record`;
     case "DELETE":
-      return label ? `Removed ${label}` : "Deleted this record";
+      return previousValue
+        ? `Removed ${singularize(label)} ${previousValue}`
+        : `Removed ${label}`;
     default:
       // Fall back gracefully for action types we haven't enumerated
       return label
