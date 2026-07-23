@@ -135,14 +135,29 @@ function makeContactRoutes({ delegate, foreignKey, entityTypeId }) {
     }
   });
 
-  // DELETE /api/clients/:id/contacts/:cid
+  // DELETE /:id/contacts/:cid
   router.delete("/:id/contacts/:cid", async (req, res) => {
     const { id, cid } = req.params;
+    const { user_id } = req.body;
     try {
-      const deleted = await prisma[delegate].delete({
-        where: { id: Number(cid) },
+      const deletedContact = await prisma.$transaction(async (tx) => {
+        const deleted = await tx[delegate].delete({
+          where: { id: Number(cid) },
+        });
+
+        await logActivity(tx, {
+          entityTypeId,
+          entityId: Number(id),
+          fieldChanged: "contacts",
+          previousValue: `${deleted.name}`,
+          newValue: null,
+          changedBy: user_id ?? null,
+          action: "DELETE",
+        });
+        return deleted;
       });
-      res.json(deleted);
+
+      res.json(deletedContact);
     } catch (error) {
       console.error("Error deleting contact:", error);
       res.status(500).json({ error: "Internal Server Error" });
