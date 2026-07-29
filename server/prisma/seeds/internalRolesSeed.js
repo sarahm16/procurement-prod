@@ -1,4 +1,4 @@
-const roles = [
+const internalRoles = [
   {
     name: "Sourcer",
     description: "",
@@ -21,13 +21,13 @@ const roles = [
   },
 ];
 
-async function seedRoles(prisma) {
-  await prisma.roles.createMany({
-    data: roles.map((role) => ({
+async function seedInternalRoles(prisma) {
+  await prisma.internalRoles.createMany({
+    data: internalRoles.map((role) => ({
       name: role.name,
       description: role.description,
     })),
   });
 }
 
-export default seedRoles;
+export default seedInternalRoles;

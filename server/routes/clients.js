@@ -6,10 +6,21 @@ import { logActivity } from "../utils/logActivity.js";
 import serializeContact from "../serializer/serializeContact.js";
 import makeContactRoutes from "./makeContactRoutes.js";
 
+const serializeRoleAssignment = (roleAssignment) => {
+  return {
+    internal_role_id: roleAssignment.id,
+    role_name: roleAssignment.Role?.name,
+    employee_name: roleAssignment.Employee?.name,
+  };
+};
+
 const serializeClient = (client) => {
   return {
     ...client,
     service_lines: client.ClientServiceLines.map((csl) => csl.ServiceLine),
+    role_assignments: (client.role_assignments || []).map(
+      serializeRoleAssignment,
+    ),
   };
 };
 
@@ -41,7 +52,31 @@ function clientsRouter(prisma) {
           },
         },
       });
-      res.json(clients.map(serializeClient));
+
+      const roleAssignments = await prisma.roleAssignments.findMany({
+        where: { entity_type_id: entity_type_id },
+        include: {
+          Employee: {
+            select: {
+              name: true,
+            },
+          },
+          Role: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      });
+      console.log("Fetched role assignments:", roleAssignments);
+
+      const clientsWithAssignments = clients.map((client) => ({
+        ...client,
+        role_assignments: roleAssignments.filter(
+          (ra) => ra.entity_id === client.id,
+        ),
+      }));
+      res.json(clientsWithAssignments.map(serializeClient));
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         console.error("Prisma error fetching clients:", error);

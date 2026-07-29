@@ -73,6 +73,7 @@ model ContactRoles {
 
   ClientContacts      ClientContacts[]
   SiteContacts        SiteContacts[]
+  VendorContacts      VendorContacts[]
 }
 
 model ClientContacts {
@@ -146,6 +147,7 @@ model Employees {
   name                          String             @db.VarChar(100)
   email                         String             @db.VarChar(100)
   role_id                       Int
+  terminated                    Boolean             @default(false)
 
   ManagedWorkOrders             WorkOrders[]        @relation("ProjectManager")
   SourcedWorkOrders             WorkOrders[]        @relation("Sourcer")
@@ -156,7 +158,45 @@ model Employees {
   ContractSalesPerson           Contracts[]         @relation("ContractSalesPerson")
   ContractOperationsPerson      Contracts[]         @relation("ContractOperationsPerson")
   ClientAccountManager          Clients[]           @relation("ClientAccountManager")
+  RoleAssignments               RoleAssignments[]   
 } 
+
+model InternalRoles {
+  id            Int      @id @default(autoincrement())
+  name          String   @db.VarChar(100)   // "Account Manager", "Coordinator", "Sales"
+  description   String?  @db.VarChar(100)
+  // optionally: description, active flag
+
+  RoleAssignments  RoleAssignments[]
+  RoleEntityType   RoleEntityTypes[]
+}
+
+model RoleAssignments {
+  id              Int      @id @default(autoincrement())
+  employee_id     Int
+  
+  internal_role_id         Int
+  entity_type_id  Int      // which model: Clients, Sites, Contracts...
+  entity_id       Int      // which row of that model
+  created_at      DateTime @default(now())
+
+  Role            InternalRoles  @relation(fields: [internal_role_id], references: [id])
+  // employee is your synced Employees table
+  Employee        Employees      @relation(fields: [employee_id], references: [id])
+
+  @@index([entity_type_id, entity_id])   // "who's assigned to this client"
+  @@index([employee_id])                  // "what is this employee assigned to"
+}
+
+model RoleEntityTypes {
+  id              Int      @id @default(autoincrement())
+  internal_role_id         Int
+  entity_type_id  Int
+
+  InternalRole            InternalRoles  @relation(fields: [internal_role_id], references: [id])
+
+  @@unique([internal_role_id, entity_type_id])   // a role applies to an entity type once
+}
 
 model Roles {
   created_at            DateTime                @default(now())
@@ -273,6 +313,22 @@ model Vendors {
   VendorTrades           VendorTrades[]
   WorkOrderServices      WorkOrderServices[]
   VendorServicePricing   VendorServicePricing[]
+  Contacts               VendorContacts[]
+}
+
+model VendorContacts {
+  created_at            DateTime                @default(now())
+
+  id                   Int       @id @default(autoincrement())
+  name                 String   @db.VarChar(100)
+  email                String?  @db.VarChar(100)
+  phone                String?  @db.VarChar(100)
+  vendor_id            Int    
+  contact_role_id      Int
+
+  ContactRole        ContactRoles      @relation(fields: [contact_role_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  Vendor             Vendors           @relation(fields: [vendor_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
 }
 
 model VendorContractSites {

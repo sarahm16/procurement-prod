@@ -4,8 +4,10 @@ dotenv.config();
 
 import express from "express";
 import cors from "cors";
-import path from "path";
-import { fileURLToPath } from "url";
+// import path from "path";
+// import { fileURLToPath } from "url";
+
+// app service object id (principal id): 665ddbea-342d-4a6c-ba90-86d7b9769cb9
 
 // Routes
 import clientsRouter from "./routes/clients.js";
@@ -21,17 +23,17 @@ import contactRolesRouter from "./routes/contactRoles.js";
 import serviceTypesRouter from "./routes/serviceTypes.js";
 import contractsRouter from "./routes/contracts.js";
 import sitesRouter from "./routes/sites.js";
+import internalRolesRouter from "./routes/internalRoles.js";
+import roleEntityTypesRouter from "./routes/roleEntityTypes.js";
+import roleAssignmentsRouter from "./routes/roleAssignments.js";
 
-// Dynamic import for PrismaClient to avoid issues with top-level await in CommonJS
-const { PrismaClient } = await import("@prisma/client");
+import prisma from "./db.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const prisma = new PrismaClient();
+// const __filename = fileURLToPath(import.meta.url);
+// const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 app.use(express.json());
 
@@ -56,11 +58,14 @@ app.use("/api/contactRoles", contactRolesRouter(prisma));
 app.use("/api/service-types", serviceTypesRouter(prisma));
 app.use("/api/contracts", contractsRouter(prisma));
 app.use("/api/sites", sitesRouter(prisma));
+app.use("/api/internalRoles", internalRolesRouter(prisma));
+app.use("/api/roleEntityTypes", roleEntityTypesRouter(prisma));
+app.use("/api/roleAssignments", roleAssignmentsRouter(prisma));
 
 // Catch-all LAST — hands everything else to React Router
-app.get("/*splat", (req, res) => {
-  res.sendFile(path.join(__dirname, "../apps/ops/dist/index.html"));
-});
+// app.get("/*splat", (req, res) => {
+//   res.sendFile(path.join(__dirname, "../apps/ops/dist/index.html"));
+// });
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
