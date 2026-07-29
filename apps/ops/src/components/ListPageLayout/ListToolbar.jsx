@@ -10,6 +10,7 @@ export default function ListToolbar({
   onSearchChange,
   searchPlaceholder = "Search…",
   filters = [],
+  actions,
 }) {
   return (
     <Box
@@ -48,6 +49,9 @@ export default function ListToolbar({
           ))}
         </TextField>
       ))}
+      {actions && (
+        <Box sx={{ ml: "auto", display: "flex", gap: 1 }}>{actions}</Box>
+      )}
     </Box>
   );
 }
