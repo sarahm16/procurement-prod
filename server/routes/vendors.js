@@ -5,6 +5,7 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import serializeActivityLogEntry from "../serializer/activityLogSerializer.js";
 import { logActivity } from "../utils/logActivity.js";
 import serializeContact from "../serializer/serializeContact.js";
+import serializeRoleAssignment from "../serializer/roleAssignmentSerializer.js";
 import makeContactRoutes from "./makeContactRoutes.js";
 
 const serializeReply = (reply) => {
@@ -49,6 +50,9 @@ const serializeVendor = (vendor, notes, activityLog) => {
     trades: vendor.VendorTrades.map((vt) => vt.Trade),
     activity_log: activityLog.map(serializeActivityLogEntry),
     contacts: (vendor.Contacts || []).map(serializeContact),
+    role_assignments: (vendor.role_assignments || []).map(
+      serializeRoleAssignment,
+    ),
   };
 };
 
@@ -68,7 +72,32 @@ export default function vendorsRouter(prisma) {
           },
         },
       });
-      res.json(vendors.map((vendor) => serializeVendor(vendor, [], [])));
+      const roleAssignments = await prisma.roleAssignments.findMany({
+        where: { entity_type_id: entity_type_id },
+        include: {
+          Employee: {
+            select: {
+              name: true,
+            },
+          },
+          Role: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      });
+      console.log("Fetched role assignments:", roleAssignments);
+
+      const vendorsWithAssignments = vendors.map((vendor) => ({
+        ...vendor,
+        role_assignments: roleAssignments.filter(
+          (ra) => ra.entity_id === vendor.id,
+        ),
+      }));
+      res.json(
+        vendorsWithAssignments.map((vendor) => serializeVendor(vendor, [], [])),
+      );
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         console.error("Prisma error fetching vendors:", error);

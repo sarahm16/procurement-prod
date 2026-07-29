@@ -5,14 +5,7 @@ import serializeActivityLogEntry from "../serializer/activityLogSerializer.js";
 import { logActivity } from "../utils/logActivity.js";
 import serializeContact from "../serializer/serializeContact.js";
 import makeContactRoutes from "./makeContactRoutes.js";
-
-const serializeRoleAssignment = (roleAssignment) => {
-  return {
-    internal_role_id: roleAssignment.id,
-    role_name: roleAssignment.Role?.name,
-    employee_name: roleAssignment.Employee?.name,
-  };
-};
+import serializeRoleAssignment from "../serializer/roleAssignmentSerializer.js";
 
 const serializeClient = (client) => {
   return {
@@ -64,6 +57,7 @@ function clientsRouter(prisma) {
           Role: {
             select: {
               name: true,
+              id: true,
             },
           },
         },
