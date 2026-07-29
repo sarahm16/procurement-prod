@@ -1,11 +1,14 @@
 // Libraries
 import { useContext, useEffect, useState } from "react";
 import axios from "axios";
+import { useParams } from "react-router-dom";
 
 // Local Components
 import InfoGrid, { FieldRow, InfoCard } from "../../../../components/InfoGrid";
 import { ChipSelectCard } from "../../../../components/ChipSelectCard";
 import AddressAutocomplete from "../../../../components/AddressAutocomplete";
+import RoleAssignment from "../../../../components/RoleAssignment";
+import Contacts from "../../../../components/Contacts";
 
 // Context
 import {
@@ -17,9 +20,9 @@ import {
 
 // MUI Components
 import Typography from "@mui/material/Typography";
-import Contacts from "../../../../components/Contacts";
 
 function VendorDetailsTab() {
+  const { id } = useParams();
   // Context
   const details = useVendorDetails();
   const trades = useVendorTrades();
@@ -41,7 +44,6 @@ function VendorDetailsTab() {
     const fetchAllTrades = async () => {
       try {
         const response = await axios.get("/api/trades");
-        console.log("All trades response:", response.data);
         setAllTrades(response.data);
       } catch (error) {
         console.error("Error fetching trades:", error);
@@ -53,6 +55,7 @@ function VendorDetailsTab() {
   return (
     <>
       <InfoGrid>
+        <RoleAssignment entity_type_id={1} entity_id={Number(id)} />
         <InfoCard
           title="Vendor Info"
           icon={null}

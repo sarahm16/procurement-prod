@@ -151,7 +151,7 @@ function Clients() {
         // pull this client's assignees for THIS role out of its role_assignments
         valueGetter: (value, row) => {
           const names = (row.role_assignments || [])
-            .filter((a) => a.internal_role_id === role.id)
+            .filter((a) => a.internal_role_id === role.internal_role_id)
             .map((a) => a.employee_name);
           return names.length ? names.join(", ") : "—";
         },

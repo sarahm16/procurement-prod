@@ -21,7 +21,7 @@ import Button from "@mui/material/Button";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import AddIcon from "@mui/icons-material/Add";
 
-const VENDOR_ENTITY_TYPE_ID = 4;
+const VENDOR_ENTITY_TYPE_ID = 1;
 
 const baseColumns = [
   { field: "company", headerName: "Company", flex: 1.5, minWidth: 180 },
@@ -99,7 +99,9 @@ function Vendors() {
         axios.get("/api/vendors"),
         axios.get(`/api/roleEntityTypes/${VENDOR_ENTITY_TYPE_ID}`),
       ]);
+      console.log("fetched vendors", vendorsRes.data);
       setVendors(vendorsRes.data);
+      console.log("vendor roles available", rolesRes.data);
       setVendorRoles(rolesRes.data);
     } catch (error) {
       console.error("Error fetching vendors:", error);
@@ -160,7 +162,7 @@ function Vendors() {
         sortable: false,
         valueGetter: (value, row) => {
           const names = (row.role_assignments || [])
-            .filter((a) => a.internal_role_id === role.id)
+            .filter((a) => a.internal_role_id === role.internal_role_id)
             .map((a) => a.employee_name);
           return names.length ? names.join(", ") : "—";
         },
