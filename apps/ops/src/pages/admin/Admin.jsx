@@ -1,4 +1,5 @@
 import { useState } from "react";
+import axios from "axios";
 
 // MUI Components
 import Box from "@mui/material/Box";
@@ -23,6 +24,9 @@ import ServiceLinesAdmin from "./tables/ServiceLinesAdmin";
 import VendorStatusesAdmin from "./tables/VendorStatusesAdmin";
 import EmployeesAdmin from "./tables/EmployeesTable";
 import ContactRolesAdmin from "./tables/ContactRolesTable";
+import InternalRolesAdmin from "./tables/InternalRolesAdmin";
+// import { Button } from "@mui/material";
+// import fetchAndUpdateEmployees from "../../*/api/fetchCurrentEmployees";
 // import ServicesAdmin from "./tables/ServicesAdmin";  ← add yours here as you build them
 
 // ── Nav config ────────────────────────────────────────────────────────────────
@@ -38,6 +42,12 @@ const NAV_SECTIONS = [
     label: "Permissions",
     icon: <SecurityOutlinedIcon fontSize="small" />,
     disabled: true,
+  },
+  {
+    id: "internalRoles",
+    label: "Internal Roles",
+    icon: <SecurityOutlinedIcon fontSize="small" />,
+    disabled: false,
   },
   {
     id: "users",
@@ -90,7 +100,7 @@ function UsersSection() {
       sx={{
         // CSS columns give a true masonry layout — tables of different heights
         // stack naturally without awkward whitespace.
-        columnCount: { xs: 1, md: 2, xl: 3 },
+        columnCount: { xs: 1 },
         columnGap: 3,
         "& > *": {
           // Each child breaks out of the column flow on its own terms
@@ -106,12 +116,35 @@ function UsersSection() {
   );
 }
 
+function InternalRolesSection() {
+  return (
+    <Box
+      sx={{
+        // CSS columns give a true masonry layout — tables of different heights
+        // stack naturally without awkward whitespace.
+        columnCount: { xs: 1, md: 2, xl: 3 },
+        columnGap: 3,
+        "& > *": {
+          // Each child breaks out of the column flow on its own terms
+          breakInside: "avoid",
+          marginBottom: 3,
+          display: "block",
+        },
+      }}
+    >
+      <InternalRolesAdmin />
+      {/* Keep adding tables here */}
+    </Box>
+  );
+}
+
 // ── Section registry ──────────────────────────────────────────────────────────
 // Maps nav ids to their content components.
 const SECTION_CONTENT = {
   constants: <ConstantsSection />,
   // permissions: <PermissionsSection />,
   users: <UsersSection />,
+  internalRoles: <InternalRolesSection />,
 };
 
 // ── Admin page ────────────────────────────────────────────────────────────────
@@ -127,6 +160,16 @@ function Admin() {
           gap: 0,
         }}
       >
+        {/* <Button
+          onClick={async () => {
+            const response = await axios.post(
+              "https://sarlacc-server-htfaarfvczc0hrgv.westus2-01.azurewebsites.net/api/employees/sync",
+            );
+            console.log("Update employees response:", response);
+          }}
+        >
+          Update Employees
+        </Button> */}
         {/* Secondary admin nav */}
         <Box
           sx={{

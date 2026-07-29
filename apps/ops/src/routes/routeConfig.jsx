@@ -11,7 +11,7 @@ import Admin from "../pages/admin/Admin";
 // Detail Pages
 import ClientDetail from "../pages/client-detail/ClientDetail";
 import SiteDetail from "../pages/site-detail/SiteDetail";
-import VendorDetail from "../pages/vendor-detail/VendorDetail";
+import VendorDetail from "../pages/vendor-detail/NewVendorDetail";
 import WorkorderDetail from "../pages/workorder-detail/WorkOrderDetail";
 
 // MUI Icons

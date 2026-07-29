@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { Box, Chip, TextField, MenuItem, Typography } from "@mui/material";
+import { Box, Chip, Typography } from "@mui/material";
 
-// Components
 import ListDataGrid from "../../components/ListPageLayout/ListDataGrid";
 import ListPageLayout from "../../components/ListPageLayout/ListPageLayout";
+import ListToolbar from "../../components/ListPageLayout/ListToolbar";
 
 function Sites() {
   const navigate = useNavigate();
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [search, setSearch] = useState("");
   const [clientFilter, setClientFilter] = useState("all");
   const [serviceLineFilter, setServiceLineFilter] = useState("all");
 
@@ -34,18 +35,26 @@ function Sites() {
       if (s.client_id)
         map.set(s.client_id, s.client || `Client ${s.client_id}`);
     }
-    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+    return [...map.entries()]
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([value, label]) => ({ value, label }));
   }, [sites]);
 
-  // Distinct service line names across the data — drives the service line filter.
+  // Distinct service line names — service_lines here is an array of strings.
   const serviceLineOptions = useMemo(() => {
     const set = new Set();
     for (const s of sites) for (const sl of s.service_lines ?? []) set.add(sl);
-    return [...set].sort();
+    return [...set].sort().map((name) => ({ value: name, label: name }));
   }, [sites]);
 
   const filteredSites = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return sites.filter((s) => {
+      if (q) {
+        const hay =
+          `${s.store ?? ""} ${s.client ?? ""} ${s.mailing_city ?? ""} ${s.mailing_state ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
       if (clientFilter !== "all" && s.client_id !== Number(clientFilter))
         return false;
       if (
@@ -55,7 +64,7 @@ function Sites() {
         return false;
       return true;
     });
-  }, [sites, clientFilter, serviceLineFilter]);
+  }, [sites, search, clientFilter, serviceLineFilter]);
 
   const columns = useMemo(
     () => [
@@ -136,59 +145,29 @@ function Sites() {
   );
 
   return (
-    <ListPageLayout>
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          mb: 2,
-          gap: 2,
-        }}
-      >
-        <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
-          {filteredSites.length} {filteredSites.length === 1 ? "site" : "sites"}
-          {(clientFilter !== "all" || serviceLineFilter !== "all") &&
-            " · filtered"}
-        </Typography>
-
-        <Box sx={{ display: "flex", gap: 1.5 }}>
-          <TextField
-            select
-            size="small"
-            label="Client"
-            value={clientFilter}
-            onChange={(e) => setClientFilter(e.target.value)}
-            sx={{ minWidth: 180 }}
-            disabled={clientOptions.length === 0}
-          >
-            <MenuItem value="all">All clients</MenuItem>
-            {clientOptions.map(([id, name]) => (
-              <MenuItem key={id} value={id}>
-                {name}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <TextField
-            select
-            size="small"
-            label="Service Line"
-            value={serviceLineFilter}
-            onChange={(e) => setServiceLineFilter(e.target.value)}
-            sx={{ minWidth: 180 }}
-            disabled={serviceLineOptions.length === 0}
-          >
-            <MenuItem value="all">All service lines</MenuItem>
-            {serviceLineOptions.map((name) => (
-              <MenuItem key={name} value={name}>
-                {name}
-              </MenuItem>
-            ))}
-          </TextField>
-        </Box>
-      </Box>
-
+    <ListPageLayout
+      toolbar={
+        <ListToolbar
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search sites…"
+          filters={[
+            {
+              label: "Client",
+              value: clientFilter,
+              onChange: setClientFilter,
+              options: clientOptions,
+            },
+            {
+              label: "Service Line",
+              value: serviceLineFilter,
+              onChange: setServiceLineFilter,
+              options: serviceLineOptions,
+            },
+          ]}
+        />
+      }
+    >
       <ListDataGrid
         rows={filteredSites}
         columns={columns}

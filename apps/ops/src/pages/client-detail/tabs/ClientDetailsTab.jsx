@@ -19,8 +19,11 @@ import {
   useClientDetails,
   useClientServiceLines,
 } from "../ClientDetailProvider";
+import RoleAssignment from "../../../components/RoleAssignment";
+import { useParams } from "react-router-dom";
 
 function ClientDetailsTab() {
+  const { id } = useParams();
   // Context
   const details = useClientDetails();
   const serviceLines = useClientServiceLines();
@@ -99,6 +102,7 @@ function ClientDetailsTab() {
   return (
     <>
       <InfoGrid>
+        <RoleAssignment entity_type_id={3} entity_id={Number(id)} />
         <InfoCard
           title="Client Info"
           icon={null}
