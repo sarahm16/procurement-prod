@@ -76,5 +76,28 @@ export default function roleAssignmentsRouter(prisma) {
     }
   });
 
+  // DELETE /api/roleAssignments/:id
+  router.delete("/:id", async (req, res) => {
+    const { id } = req.params;
+    try {
+      await prisma.roleAssignments.delete({
+        where: { id: Number(id) },
+      });
+      res.status(204).end();
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError) {
+        console.error("Prisma error deleting role assignment:", error);
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        console.error("Error deleting role assignment:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    }
+  });
+
   return router;
 }
