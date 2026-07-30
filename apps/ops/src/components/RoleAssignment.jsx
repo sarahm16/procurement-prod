@@ -18,9 +18,11 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 
 // Hooks
 import { useEmployees } from "../*/hooks/useEmployees";
+import useAuthenticatedUser from "../*/hooks/useAuthenticatedUser";
 
 function RoleAssignment({ entity_type_id, entity_id }) {
   const theme = useTheme();
+  const { user } = useAuthenticatedUser();
 
   const [availableRoles, setAvailableRoles] = useState([]); // global (cache later)
   const [roleAssignments, setRoleAssignments] = useState([]); // per-record
@@ -79,6 +81,7 @@ function RoleAssignment({ entity_type_id, entity_id }) {
     setSaving(true);
     try {
       const { data } = await axios.post(`/api/roleAssignments`, {
+        user_id: user?.id,
         entity_type_id,
         entity_id,
         internal_role_id: draftRole,
@@ -98,7 +101,11 @@ function RoleAssignment({ entity_type_id, entity_id }) {
   const handleRemove = async (assignment) => {
     setRemovingId(assignment.id);
     try {
-      await axios.delete(`/api/roleAssignments/${assignment.id}`);
+      await axios.delete(`/api/roleAssignments/${assignment.id}`, {
+        data: {
+          user_id: user?.id,
+        },
+      });
       setRoleAssignments((prev) => prev.filter((a) => a.id !== assignment.id));
     } catch (e) {
       console.error("Error removing assignment:", e);
