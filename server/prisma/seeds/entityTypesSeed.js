@@ -1,4 +1,4 @@
-const entityTypes = ["vendor", "site", "client", "workorder"];
+const entityTypes = ["vendor", "site", "client", "workorder", "contract"];
 
 async function seedEntityTypes(prisma) {
   await prisma.entityTypes.createMany({

@@ -7,6 +7,8 @@ import serializeContact from "../serializer/serializeContact.js";
 import makeContactRoutes from "./makeContactRoutes.js";
 import serializeRoleAssignment from "../serializer/roleAssignmentSerializer.js";
 
+const CONTRACT_ENTITY_TYPE_ID = 5; // set to your actual Contracts entity type id
+
 const serializeClient = (client) => {
   return {
     ...client,
@@ -158,29 +160,40 @@ function clientsRouter(prisma) {
       const contracts = await prisma.contracts.findMany({
         where: { client_id: Number(id) },
         include: {
-          ServiceLine: {
-            select: {
-              name: true,
-            },
-          },
-          Software: {
-            select: { name: true, id: true },
-          },
-          SalesPerson: {
-            select: { name: true, id: true },
-          },
-          OperationsPerson: {
-            select: { name: true, id: true },
-          },
+          ServiceLine: { select: { name: true } },
+          Software: { select: { name: true, id: true } },
+          // SalesPerson / OperationsPerson removed — those columns no longer exist
         },
       });
 
-      console.log(
-        `Fetched ${contracts.length} contracts for client ${id}:`,
-        contracts,
-      );
+      // Pull role assignments for these contracts (polymorphic — separate query)
+      const contractIds = contracts.map((c) => c.id);
+      const roleAssignments = await prisma.roleAssignments.findMany({
+        where: {
+          entity_type_id: CONTRACT_ENTITY_TYPE_ID,
+          entity_id: { in: contractIds },
+        },
+        include: {
+          Employee: { select: { id: true, name: true } },
+          Role: { select: { id: true, name: true } },
+        },
+      });
 
-      res.status(200).json(contracts);
+      // Attach each contract's assignments
+      const withAssignments = contracts.map((contract) => ({
+        ...contract,
+        role_assignments: roleAssignments
+          .filter((ra) => ra.entity_id === contract.id)
+          .map((ra) => ({
+            id: ra.id,
+            internal_role_id: ra.internal_role_id,
+            role_name: ra.Role?.name,
+            employee_id: ra.employee_id,
+            employee_name: ra.Employee?.name,
+          })),
+      }));
+
+      res.status(200).json(withAssignments);
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         console.error("Prisma error fetching contracts:", error);
@@ -348,9 +361,8 @@ function clientsRouter(prisma) {
     "value",
     "project_name",
     "software_id",
-    "sales_person_id",
-    "operations_person_id",
     "service_type_id",
+    // sales_person_id, operations_person_id removed — no longer columns
   ]);
 
   // PUT /api/clients/:id/contacts/:cid - update a contact for a client
@@ -400,10 +412,7 @@ function clientsRouter(prisma) {
         const updated = await tx.contracts.update({
           where: { id: Number(cid) },
           data,
-          include: {
-            SalesPerson: true,
-            OperationsPerson: true,
-          }, // so the response carries the role name
+          // no SalesPerson/OperationsPerson includes — those relations are gone
         });
 
         const fieldNames = changedFields.map(([k]) => k);
@@ -411,20 +420,16 @@ function clientsRouter(prisma) {
 
         await logActivity(tx, {
           entityTypeId: entity_type_id,
-          entityId: Number(id),
-          fieldChanged: fieldNames.join(", "), // e.g. "name, email, phone"
-          previousValue: null, // see note below
+          entityId: Number(id), // ← Should update on the client since we don't have a tab for contracts yet
+          fieldChanged: fieldNames.join(", "),
+          previousValue: null,
           newValue:
             summary.length > 255 ? summary.slice(0, 252) + "…" : summary,
           changedBy: user_id ?? null,
           action: "UPDATE",
         });
 
-        return {
-          ...updated,
-          sales_person: updated.SalesPerson?.name ?? null,
-          operations_person: updated.OperationsPerson?.name ?? null,
-        }; // flatten the role for the frontend
+        return updated; // no more sales_person/operations_person flattening
       });
 
       res.json(updatedContract);

@@ -21,11 +21,11 @@ async function main() {
 
   /*   await seedRoles(prisma);
    */
-  // await seedEntityTypes(prisma);
+  await seedEntityTypes(prisma);
   // await seedContactRoles(prisma);
 
   // await seedServiceTypes(prisma);
-  await seedInternalRoles(prisma);
+  // await seedInternalRoles(prisma);
 }
 
 main()
