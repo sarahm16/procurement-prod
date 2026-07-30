@@ -16,13 +16,18 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 
+// Hooks
+import { useEmployees } from "../*/hooks/useEmployees";
+
 function RoleAssignment({ entity_type_id, entity_id }) {
   const theme = useTheme();
 
   const [availableRoles, setAvailableRoles] = useState([]); // global (cache later)
-  const [employees, setEmployees] = useState([]); // global (cache later)
   const [roleAssignments, setRoleAssignments] = useState([]); // per-record
   const [loading, setLoading] = useState(true);
+
+  const { data: employees = [] } = useEmployees();
+  const activeEmployees = employees.filter((e) => !e.terminated);
 
   // the "add assignment" draft
   const [adding, setAdding] = useState(false);
@@ -38,16 +43,13 @@ function RoleAssignment({ entity_type_id, entity_id }) {
     Promise.all([
       // available roles for THIS entity type (global config → cache later)
       axios.get(`/api/roleEntityTypes/${entity_type_id}`),
-      // employee list (global → cache later; filter terminated when you get to it)
-      axios.get(`/api/employees`),
       // assignments for THIS specific record (per-record → always fresh)
       axios.get(`/api/roleAssignments/${entity_type_id}/${entity_id}`),
     ])
-      .then(([rolesRes, empRes, assignRes]) => {
+      .then(([rolesRes, assignRes]) => {
         if (!active) return;
         console.log("available roles", rolesRes.data);
         setAvailableRoles(rolesRes.data);
-        setEmployees(empRes.data);
         setRoleAssignments(assignRes.data);
       })
       .catch((e) => console.error("Error loading role assignments:", e))
@@ -259,7 +261,7 @@ function RoleAssignment({ entity_type_id, entity_id }) {
               <MenuItem value="" disabled>
                 <em>Select employee</em>
               </MenuItem>
-              {employees.map((emp) => (
+              {activeEmployees.map((emp) => (
                 <MenuItem key={emp.id} value={emp.id}>
                   {emp.name}
                 </MenuItem>
