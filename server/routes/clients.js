@@ -162,7 +162,6 @@ function clientsRouter(prisma) {
         include: {
           ServiceLine: { select: { name: true } },
           Software: { select: { name: true, id: true } },
-          // SalesPerson / OperationsPerson removed — those columns no longer exist
         },
       });
 
@@ -412,7 +411,6 @@ function clientsRouter(prisma) {
         const updated = await tx.contracts.update({
           where: { id: Number(cid) },
           data,
-          // no SalesPerson/OperationsPerson includes — those relations are gone
         });
 
         const fieldNames = changedFields.map(([k]) => k);
