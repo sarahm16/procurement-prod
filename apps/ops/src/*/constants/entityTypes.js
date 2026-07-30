@@ -3,4 +3,5 @@ export const ENTITY_TYPES = {
   sites: 2,
   clients: 3,
   workorders: 4,
+  contracts: 5,
 };

@@ -3,6 +3,7 @@ import axios from "axios";
 
 // Hooks
 import { useClientActions, useClientContracts } from "../ClientDetailProvider";
+import { useEmployees } from "../../../*/hooks/useEmployees";
 
 // Local Components
 import ContractCard from "./ContractCard";
@@ -15,26 +16,14 @@ import CircularProgress from "@mui/material/CircularProgress";
 function ClientDocumentationTab() {
   const contracts = useClientContracts();
   const { loadContracts, updateContract } = useClientActions();
-  const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(true);
+
+  const { data: employees = [] } = useEmployees();
+  const activeEmployees = employees.filter((e) => !e.terminated);
 
   useEffect(() => {
     console.log("ClientDocumentationTab contracts:", contracts);
     if (contracts === null) loadContracts();
   }, [contracts, loadContracts]);
-
-  useEffect(() => {
-    let active = true;
-    axios.get("/api/employees").then(({ data }) => {
-      if (!active) return;
-      setEmployees(data);
-      setLoading(false);
-    });
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const handleSaveContract = async (contractId, draft) => {
     try {
@@ -44,13 +33,13 @@ function ClientDocumentationTab() {
     }
   };
 
-  if (loading) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-        <CircularProgress size={28} />
-      </Box>
-    );
-  }
+  // if (contracts === null) {
+  //   return (
+  //     <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+  //       <CircularProgress size={28} />
+  //     </Box>
+  //   );
+  // }
 
   if (contracts && !contracts.length) {
     return (
@@ -69,7 +58,7 @@ function ClientDocumentationTab() {
             <ContractCard
               key={contract.id}
               contract={contract}
-              employees={employees}
+              employees={activeEmployees}
               onSave={(draft) => {
                 // TODO: PUT /api/contracts/:id — the diff+log route, same shape as clients
                 console.log("save contract", contract.id, draft);

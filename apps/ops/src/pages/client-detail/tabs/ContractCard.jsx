@@ -18,6 +18,7 @@ import {
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import InfoGrid, { InfoCard, FieldRow } from "../../../components/InfoGrid";
+import RoleAssignment from "../../../components/RoleAssignment";
 
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString() : "—");
 const toDateInput = (iso) =>
@@ -286,7 +287,7 @@ export default function ContractCard({ contract, employees = [], onSave }) {
             />
           </InfoCard>
 
-          {/* ── Team (needs the employees list — editable via select) ── */}
+          {/* ── Team (needs the employees list — editable via select) ──
           <InfoCard
             title="Team"
             collapsible
@@ -331,7 +332,8 @@ export default function ContractCard({ contract, employees = [], onSave }) {
                 }
               />
             ))}
-          </InfoCard>
+          </InfoCard> */}
+          <RoleAssignment entity_type_id={5} entity_id={contract.id} />
         </InfoGrid>
 
         {/* ── Sites (provisional — light display, links out to site detail) ── */}
