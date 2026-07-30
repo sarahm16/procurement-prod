@@ -102,7 +102,6 @@ async function migrateExistingEmployees() {
       name: employee.displayName,
       email: employee.mail,
       ms_user_id: employee.id,
-      role_id: 1, // Assuming 'Sourcer' role has an ID of 1, adjust if necessary
     }));
 
   const createdEmployees = await prisma.employees.createMany({

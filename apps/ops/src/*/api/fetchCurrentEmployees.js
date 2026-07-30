@@ -49,7 +49,6 @@ async function fetchCurrentEmployees() {
       email: member.mail,
       ms_user_id: member.id,
       name: member.displayName,
-      role_id: 1,
     }));
   console.log("newEmployees", newEmployees);
 

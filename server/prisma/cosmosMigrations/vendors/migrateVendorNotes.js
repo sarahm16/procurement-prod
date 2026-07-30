@@ -44,7 +44,6 @@ const terminatedEmployee = {
   name: "Former Employee",
   email: "terminated@nationalfacilitycontractors.com",
   ms_user_id: "00000000-0000-0000-0000-000000000000", // Placeholder ID for terminated employee
-  role_id: 1, // Assuming 'Sourcer' role has an ID of 1, adjust if necessary
 };
 
 async function migrateVendorNotes() {
