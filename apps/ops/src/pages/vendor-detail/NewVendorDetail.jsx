@@ -17,6 +17,7 @@ import DetailPageLayout from "../../components/DetailPageLayout/DetailPageLayout
 // Tabs
 import VendorDetailsTab from "./tabs/DetailsTab/VendorDetailsTab";
 import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
+import VendorComplianceTab from "./tabs/ComplianceTab/ComplianceTab";
 
 // Local Functions
 import { sendEmailFromHTML } from "../../*/api/microsoftApi";
@@ -34,12 +35,12 @@ function VendorDetail() {
   const { id } = useParams();
   return (
     <VendorDetailProvider id={id}>
-      <VendorDetailLayout />
+      <VendorDetailLayout id={id} />
     </VendorDetailProvider>
   );
 }
 
-function VendorDetailLayout() {
+function VendorDetailLayout({ id }) {
   // Get the vendor details from the vendor context
 
   // Hooks
@@ -62,10 +63,10 @@ function VendorDetailLayout() {
           onStatusChange={updateStatus}
           breadcrumbs={[
             { label: "Vendors", href: "/vendors" },
-            { label: `Vendor #${details.id}` },
+            { label: `${details.company}` },
           ]}
           meta={[]}
-          address="123 Main St, Anytown, USA"
+          address={`${details.mailing_address ?? ""}, ${details.mailing_city ?? ""}, ${details.mailing_state ?? ""} ${details.mailing_zipcode ?? ""}`}
           onBack={() => console.log("Back button clicked")}
           actions={[]}
         />
@@ -77,8 +78,8 @@ function VendorDetailLayout() {
           content: <VendorDetailsTab />,
         },
         {
-          label: "Documentation",
-          content: <></>,
+          label: "Compliance",
+          content: <VendorComplianceTab vendorId={id} />,
         },
         {
           label: "Sites",
