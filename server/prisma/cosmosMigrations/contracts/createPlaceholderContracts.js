@@ -17,15 +17,10 @@ const prisma = new PrismaClient();
 //   client_id               Int
 //   service_line_id         Int
 //   software_id             Int?
-//   sales_person_id         Int?
-//   operations_person_id    Int?
 
 //   ServiceLine             ServiceLines    @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
 //   Client                  Clients         @relation(fields: [client_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
 //   Software                Softwares?      @relation(fields: [software_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-//   ProjectManager          Employees?      @relation("ContractProjectManager", fields: [project_manager_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-//   SalesPerson             Employees?      @relation("ContractSalesPerson", fields: [sales_person_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-//   OperationsPerson        Employees?      @relation("ContractOperationsPerson", fields: [operations_person_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
 
 //   ContractSites                   ContractSites[]
 // }

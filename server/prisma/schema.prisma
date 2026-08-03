@@ -205,6 +205,7 @@ model ServiceLines {
   ServiceLineExhibitTemplates ServiceLineExhibitTemplates[]
   ServiceLineServices         ServiceLineServices[]
   Contracts                   Contracts[]
+  Exhibits                    VendorExhibits[]
 }
 
 model ServiceLineServices {
@@ -293,6 +294,8 @@ model Vendors {
   WorkOrderServices      WorkOrderServices[]
   VendorServicePricing   VendorServicePricing[]
   Contacts               VendorContacts[]
+  ComplianceDocuments    VendorComplianceDocuments[]
+  Exhibits               VendorExhibits[]
 }
 
 model VendorContacts {
@@ -507,4 +510,33 @@ model NoteTaggedUsers {
 
   @@unique([note_id, tagged_user_id])
   @@index([tagged_user_id])
+}
+
+model VendorComplianceDocuments {
+  id             Int       @id @default(autoincrement())
+  vendor_id      Int
+  document_type  String    // "MSA", "ACH", "W9"  (or FK to a types table)
+  pandadoc_id    String?   // the actual document instance in PandaDoc
+  status         String    // sent, viewed, completed, declined
+  date_sent      DateTime?
+  date_completed DateTime?
+  created_at     DateTime  @default(now())
+
+  Vendor         Vendors   @relation(fields: [vendor_id], references: [id])
+}
+
+model VendorExhibits {
+  id               Int       @id @default(autoincrement())
+  vendor_id        Int
+  service_line_id  Int?      // which service line this exhibit covers
+  pandadoc_id      String?
+  template_id      String?   // which PandaDoc exhibit template was used
+  is_work_order    Boolean   @default(false)  // work-order exhibit vs standard
+  status           String
+  date_sent        DateTime?
+  date_completed   DateTime?
+  created_at       DateTime  @default(now())
+
+  Vendor           Vendors   @relation(fields: [vendor_id], references: [id])
+  ServiceLine      ServiceLines? @relation(fields: [service_line_id], references: [id])
 }

@@ -7,6 +7,7 @@ import { logActivity } from "../utils/logActivity.js";
 import serializeContact from "../serializer/serializeContact.js";
 import serializeRoleAssignment from "../serializer/roleAssignmentSerializer.js";
 import makeContactRoutes from "./makeContactRoutes.js";
+import { sendAch } from "../services/pandadoc/sendAch.js";
 
 const serializeReply = (reply) => {
   return {
@@ -432,6 +433,84 @@ export default function vendorsRouter(prisma) {
         console.error("Error deleting association:", error);
         res.status(500).json({ error: "Internal Server Error" });
       }
+    }
+  });
+
+  // POST /api/vendors/:id/documents  (compliance example)
+  // router.post("/:id/documents", async (req, res) => {
+  //   const { id } = req.params;
+  //   const { document_type, user_id } = req.body;
+
+  //   try {
+  //     // 1. Create the document in PandaDoc from the template
+  //     const pandaDoc = await createPandaDocDocument({
+  //       templateId: templateIdFor(document_type),
+  //       recipient: /* vendor's name/email */ {},
+  //       // ...prefilled fields...
+  //     });
+
+  //     // 2. Record it locally so we can track it (and the webhook can find it)
+  //     const record = await prisma.$transaction(async (tx) => {
+  //       const created = await tx.vendorComplianceDocuments.create({
+  //         data: {
+  //           vendor_id: Number(id),
+  //           document_type,
+  //           pandadoc_id: pandaDoc.id,
+  //           status: "sent",
+  //           date_sent: new Date(),
+  //         },
+  //       });
+  //       await logActivity(tx, {
+  //         /* logged against the vendor */
+  //       });
+  //       return created;
+  //     });
+
+  //     res.status(201).json(record);
+  //   } catch (error) {
+  //     console.error("Error sending document:", error);
+  //     res.status(500).json({ error: "Failed to send document" });
+  //   }
+  // });
+
+  // in vendors router
+  // POST /api/vendors/:id/documents/ach
+  router.post("/:id/documents/ach", async (req, res) => {
+    const { id } = req.params;
+    const { user_id } = req.body;
+
+    try {
+      // fetch the vendor WITH contacts (sendAch needs the primary contact's email)
+      const vendor = await prisma.vendors.findUnique({
+        where: { id: Number(id) },
+        include: { Contacts: true }, // whatever your contacts relation is named
+      });
+      if (!vendor) return res.status(404).json({ error: "Vendor not found" });
+
+      const record = await sendAch(vendor, { user_id });
+      res.status(201).json(record);
+    } catch (error) {
+      console.error("Error sending ACH:", error);
+      res.status(500).json({ error: "Failed to send ACH document" });
+    }
+  });
+
+  // GET /api/vendors/:id/documents
+  router.get("/:id/documents", async (req, res) => {
+    const { id } = req.params;
+
+    try {
+      // fetch the vendor WITH contacts (sendAch needs the primary contact's email)
+      const documents = await prisma.vendorComplianceDocuments.findMany({
+        where: { vendor_id: Number(id) },
+      });
+      if (!documents)
+        return res.status(404).json({ error: "Vendor not found" });
+
+      res.status(200).json(documents);
+    } catch (error) {
+      console.error("Error fetching documents:", error);
+      res.status(500).json({ error: "Failed to fetch documents" });
     }
   });
 
