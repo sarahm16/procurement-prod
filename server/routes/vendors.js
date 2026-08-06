@@ -9,6 +9,7 @@ import serializeRoleAssignment from "../serializer/roleAssignmentSerializer.js";
 import makeContactRoutes from "./makeContactRoutes.js";
 import { sendAch } from "../services/pandadoc/send/sendAch.js";
 import { sendW9 } from "../services/pandadoc/send/sendW9.js";
+import { sendMsa } from "../services/pandadoc/send/sendMsa.js";
 
 const serializeReply = (reply) => {
   return {
@@ -514,6 +515,27 @@ export default function vendorsRouter(prisma) {
     } catch (error) {
       console.error("Error sending W9:", error);
       res.status(500).json({ error: "Failed to send W9 document" });
+    }
+  });
+
+  // POST /api/vendors/:id/documents/msa
+  router.post("/:id/documents/msa", async (req, res) => {
+    const { id } = req.params;
+    const { user_id } = req.body;
+
+    try {
+      // fetch the vendor WITH contacts (sendMsa needs the primary contact's email)
+      const vendor = await prisma.vendors.findUnique({
+        where: { id: Number(id) },
+        include: { Contacts: true }, // whatever your contacts relation is named
+      });
+      if (!vendor) return res.status(404).json({ error: "Vendor not found" });
+
+      const record = await sendMsa(vendor, { user_id });
+      res.status(201).json(record);
+    } catch (error) {
+      console.error("Error sending MSA:", error);
+      res.status(500).json({ error: "Failed to send MSA document" });
     }
   });
 

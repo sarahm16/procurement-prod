@@ -199,7 +199,7 @@ function Detail({ label, value }) {
 
 export default function VendorComplianceTab({ vendorId }) {
   const { user } = useAuthenticatedUser();
-  const [documents, setDocuments] = useState([]); // TODO: fetch from GET /api/vendors/:id/documents
+  const [documents, setDocuments] = useState([]);
   const [busyType, setBusyType] = useState(null); // which doc type is mid-send
 
   const fetchDocuments = async () => {
