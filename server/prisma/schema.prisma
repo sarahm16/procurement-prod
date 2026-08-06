@@ -148,6 +148,7 @@ model Employees {
   AuthoredNotes                 Notes[]             @relation("NoteAuthor")
   ActivityLog                   ActivityLog[]
   RoleAssignments               RoleAssignments[]   
+  PandaDocUserToken            PandaDocUserTokens?
 } 
 
 model InternalRoles {
@@ -539,4 +540,16 @@ model VendorExhibits {
 
   Vendor           Vendors   @relation(fields: [vendor_id], references: [id])
   ServiceLine      ServiceLines? @relation(fields: [service_line_id], references: [id])
+}
+
+model PandaDocUserTokens {
+  id             Int       @id @default(autoincrement())
+  employee_id    Int       @unique   // one PandaDoc connection per employee
+  access_token   String    @db.VarChar(2000)  // tokens can be long
+  refresh_token  String    @db.VarChar(2000)
+  expires_at     DateTime
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  Employee       Employees @relation(fields: [employee_id], references: [id])
 }

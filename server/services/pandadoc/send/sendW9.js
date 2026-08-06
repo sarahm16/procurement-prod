@@ -1,21 +1,26 @@
-// services/pandadoc/sendAch.js
+// services/pandadoc/sendW9.js
 import axios from "axios";
-import { getAccountingToken } from "./accountingToken.js";
-import { pollUntilDraft } from "./pollUntilDraft.js";
-import prisma from "../../db.js";
+import { getValidUserToken } from "../tokens/getValidUserToken.js";
+// import { getAccountingToken } from "../tokens/accountingToken.js";
+import { pollUntilDraft } from "../pollUntilDraft.js";
+import prisma from "../../../db.js";
+import { logActivity } from "../../../utils/logActivity.js";
 
 const PANDADOC_BASE = "https://api.pandadoc.com/public/v1";
-const ACH_TEMPLATE_ID = process.env.PANDADOC_ACH_TEMPLATE_ID; // the ACH template
+const W9_TEMPLATE_ID = process.env.PANDADOC_W9_TEMPLATE_ID; // the W9 template
+
+const entity_type_id = 1; // confirm your vendor entity type id
 
 // small sleep helper
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Send an ACH document to a vendor.
+ * Send a W9 document to a vendor.
  * @param vendor - vendor object from details context (has company + contacts)
  */
-export async function sendAch(vendor, { user_id } = {}) {
-  const token = await getAccountingToken();
+export async function sendW9(vendor, { user_id } = {}) {
+  const token = await getValidUserToken(user_id);
+  console.log("user token", token);
 
   console.log("vendor contacts", vendor.contacts || vendor.Contacts);
 
@@ -30,12 +35,12 @@ export async function sendAch(vendor, { user_id } = {}) {
 
   const authHeader = { Authorization: `Bearer ${token}` };
 
-  // 1. Create the document from the ACH template
+  // 1. Create the document from the W9 template
   const { data: created } = await axios.post(
     `${PANDADOC_BASE}/documents`,
     {
-      name: `ACH Authorization - ${vendor.company}`,
-      template_uuid: ACH_TEMPLATE_ID,
+      name: `W9 - ${vendor.company}`,
+      template_uuid: W9_TEMPLATE_ID,
       recipients: [
         {
           email: primaryContact.email,
@@ -67,14 +72,22 @@ export async function sendAch(vendor, { user_id } = {}) {
     const doc = await tx.vendorComplianceDocuments.create({
       data: {
         vendor_id: vendor.id,
-        document_type: "ACH",
+        document_type: "W9",
         pandadoc_id: documentId,
         status: "sent",
         date_sent: new Date(),
       },
     });
     // log against the vendor's activity feed
-    // await logActivity(tx, { entityTypeId: VENDOR_ENTITY_TYPE, entityId: vendor.id, ... });
+    await logActivity(tx, {
+      entityTypeId: entity_type_id, // confirm your vendor entity type id
+      entityId: vendor.id,
+      fieldChanged: "compliance_document",
+      previousValue: null,
+      newValue: `Sent ACH to ${vendor.company}`, // "Sent W9..." in sendW9
+      changedBy: user_id ?? null,
+      action: "CREATE",
+    });
     return doc;
   });
 

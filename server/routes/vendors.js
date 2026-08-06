@@ -7,7 +7,8 @@ import { logActivity } from "../utils/logActivity.js";
 import serializeContact from "../serializer/serializeContact.js";
 import serializeRoleAssignment from "../serializer/roleAssignmentSerializer.js";
 import makeContactRoutes from "./makeContactRoutes.js";
-import { sendAch } from "../services/pandadoc/sendAch.js";
+import { sendAch } from "../services/pandadoc/send/sendAch.js";
+import { sendW9 } from "../services/pandadoc/send/sendW9.js";
 
 const serializeReply = (reply) => {
   return {
@@ -492,6 +493,27 @@ export default function vendorsRouter(prisma) {
     } catch (error) {
       console.error("Error sending ACH:", error);
       res.status(500).json({ error: "Failed to send ACH document" });
+    }
+  });
+
+  // POST /api/vendors/:id/documents/w9
+  router.post("/:id/documents/w9", async (req, res) => {
+    const { id } = req.params;
+    const { user_id } = req.body;
+
+    try {
+      // fetch the vendor WITH contacts (sendAch needs the primary contact's email)
+      const vendor = await prisma.vendors.findUnique({
+        where: { id: Number(id) },
+        include: { Contacts: true }, // whatever your contacts relation is named
+      });
+      if (!vendor) return res.status(404).json({ error: "Vendor not found" });
+
+      const record = await sendW9(vendor, { user_id });
+      res.status(201).json(record);
+    } catch (error) {
+      console.error("Error sending W9:", error);
+      res.status(500).json({ error: "Failed to send W9 document" });
     }
   });
 
