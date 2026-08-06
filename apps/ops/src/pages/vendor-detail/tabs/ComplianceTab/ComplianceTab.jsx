@@ -15,6 +15,8 @@ import SendIcon from "@mui/icons-material/Send";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import AddIcon from "@mui/icons-material/Add";
 
+import ConfirmDialog from "../../../../components/ConfirmDialog";
+
 import useAuthenticatedUser from "../../../../*/hooks/useAuthenticatedUser";
 
 // Fixed set of compliance docs, each mapped to its send endpoint slug.
@@ -202,6 +204,17 @@ export default function VendorComplianceTab({ vendorId }) {
   const [documents, setDocuments] = useState([]);
   const [busyType, setBusyType] = useState(null); // which doc type is mid-send
 
+  const [confirmNew, setConfirmNew] = useState(null); // the docType awaiting confirmation
+
+  // button calls this instead of sendNewCopy directly:
+  const requestSendNew = (docType) => setConfirmNew(docType);
+
+  // dialog confirm runs the actual send:
+  const handleConfirmNew = () => {
+    if (confirmNew) handleSendNew(confirmNew);
+    setConfirmNew(null);
+  };
+
   const fetchDocuments = async () => {
     const response = await axios.get(`/api/vendors/${vendorId}/documents`);
     setDocuments(response.data);
@@ -256,32 +269,70 @@ export default function VendorComplianceTab({ vendorId }) {
     }
   };
 
-  return (
-    <Box sx={{ pb: 4 }}>
-      <Typography
-        sx={{
-          fontSize: "0.7rem",
-          fontWeight: 600,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          color: "text.disabled",
-          mb: 1.5,
-        }}
-      >
-        Compliance Documents
-      </Typography>
+  const handleSendNew = async (docType) => {
+    setBusyType(docType.type);
+    try {
+      const { data } = await axios.post(
+        `/api/vendors/${vendorId}/documents/${docType.endpoint}/new`,
+        { user_id: user?.id },
+      );
+      // replace the type's record in state with the new one
+      setDocuments((prev) => [data, ...prev.filter((d) => d.id !== data.id)]);
+    } catch (err) {
+      if (
+        err.response?.status === 409 &&
+        err.response.data?.needsPandaDocAuth
+      ) {
+        window.location.href = "/api/pandadoc/oauth/initiate";
+      } else {
+        console.error(`Error sending new ${docType.type}:`, err);
+      }
+    } finally {
+      setBusyType(null);
+    }
+  };
 
-      {COMPLIANCE_TYPES.map((docType) => (
-        <ComplianceCard
-          key={docType.type}
-          docType={docType}
-          document={docByType[docType.type]}
-          busy={busyType === docType.type}
-          onSend={sendDocument}
-          onSendNew={sendDocument} // "send new" = same as send (fresh document)
-          onResend={resendDocument} // resend = re-send the existing one
-        />
-      ))}
-    </Box>
+  return (
+    <>
+      {" "}
+      <Box sx={{ pb: 4 }}>
+        <Typography
+          sx={{
+            fontSize: "0.7rem",
+            fontWeight: 600,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "text.disabled",
+            mb: 1.5,
+          }}
+        >
+          Compliance Documents
+        </Typography>
+
+        {COMPLIANCE_TYPES.map((docType) => (
+          <ComplianceCard
+            key={docType.type}
+            docType={docType}
+            document={docByType[docType.type]}
+            busy={busyType === docType.type}
+            onSend={sendDocument}
+            onSendNew={requestSendNew} // open dialog to confirm user wants to send a NEW copy
+            onResend={resendDocument} // resend = re-send the existing one
+          />
+        ))}
+      </Box>
+      <ConfirmDialog
+        open={!!confirmNew}
+        onClose={() => setConfirmNew(null)}
+        onConfirm={handleConfirmNew}
+        title="Send a new copy?"
+        message={
+          confirmNew
+            ? `This will void the current ${confirmNew.label} and send a new copy to the vendor. The previous document will no longer be valid.`
+            : ""
+        }
+        confirmLabel="Void & Send New"
+      />
+    </>
   );
 }
