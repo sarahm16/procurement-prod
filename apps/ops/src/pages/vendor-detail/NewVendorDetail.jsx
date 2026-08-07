@@ -17,7 +17,7 @@ import DetailPageLayout from "../../components/DetailPageLayout/DetailPageLayout
 // Tabs
 import VendorDetailsTab from "./tabs/DetailsTab/VendorDetailsTab";
 import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
-import VendorComplianceTab from "./tabs/ComplianceTab/ComplianceTab";
+import VendorDocumentationTab from "./tabs/Documentation/VendorDocumentationTab";
 
 // Local Functions
 import { sendEmailFromHTML } from "../../*/api/microsoftApi";
@@ -78,8 +78,8 @@ function VendorDetailLayout({ id }) {
           content: <VendorDetailsTab />,
         },
         {
-          label: "Compliance",
-          content: <VendorComplianceTab vendorId={id} />,
+          label: "Documents",
+          content: <VendorDocumentationTab vendorId={id} />,
         },
         {
           label: "Sites",
