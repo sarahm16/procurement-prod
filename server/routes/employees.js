@@ -4,6 +4,7 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { DefaultAzureCredential } from "@azure/identity";
 import { Client } from "@microsoft/microsoft-graph-client";
 import { TokenCredentialAuthenticationProvider } from "@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials/index.js";
+import axios from "axios";
 
 export default function employeesRouter(prisma) {
   const router = Router();
@@ -77,52 +78,87 @@ export default function employeesRouter(prisma) {
 
   // POST /api/employees/sync
   router.post("/sync", async (req, res) => {
-    // const { newEmployees, terminatedEmployees } = req.body;
+    // internal trigger auth (timer or admin button)
+    if (req.headers["x-sync-secret"] !== process.env.SYNC_SECRET) {
+      return res.status(401).end();
+    }
 
     try {
-      // const result = await prisma.$transaction(async (tx) => {
-      //   const createdCount = await tx.employees.createMany({
-      //     data: newEmployees,
-      //   });
+      // --- get token (extract to services/graph later) ---
+      const tokenResponse = await axios.post(
+        `https://login.microsoftonline.com/${process.env.AZURE_EVB_TENANT_ID}/oauth2/v2.0/token`,
+        new URLSearchParams({
+          scope: "https://graph.microsoft.com/.default",
+          grant_type: "client_credentials",
+          client_id: process.env.AZURE_EMPLOYEES_SYNC_CLIENT_ID,
+          client_secret: process.env.AZURE_EMPLOYEES_SYNC_CLIENT_SECRET,
+        }),
+        { headers: { "Content-Type": "application/x-www-form-urlencoded" } },
+      );
+      // NOTE: do not log tokenResponse.data — it contains the access token
 
-      //   const terminatedCount = await tx.employees.updateMany({
-      //     where: {
-      //       id: {
-      //         in: terminatedEmployees, // List of IDs of terminated employees in SQL
-      //       },
-      //     },
-      //     data: { terminated: true },
-      //   });
-
-      //   return { createdCount, terminatedCount };
-      // });
-      // res.json(result);
-
-      const credential = new DefaultAzureCredential();
-      const authProvider = new TokenCredentialAuthenticationProvider(
-        credential,
+      // --- fetch group members (paginate — see note) ---
+      const msUsers = await axios.get(
+        `https://graph.microsoft.com/v1.0/groups/${process.env.AZURE_EVB_GROUP_ID}/members`,
         {
-          scopes: ["https://graph.microsoft.com/.default"],
+          headers: {
+            Authorization: `Bearer ${tokenResponse.data.access_token}`,
+          },
         },
       );
-      const graph = Client.initWithMiddleware({ authProvider });
 
-      const users = await graph
-        .api("/groups/4aa44b4c-0655-4769-aae2-9030e4276471/members")
-        .get();
-      console.log("Users fetched from Microsoft Graph:", users);
+      const members = msUsers.data.value ?? [];
 
-      res.json(users);
+      // SAFETY: never let an empty/failed fetch terminate everyone
+      if (members.length === 0) {
+        throw new Error("Graph returned no members — aborting sync");
+      }
+
+      const sqlUsers = await prisma.employees.findMany();
+      const memberIds = new Set(members.map((m) => m.id));
+
+      const newEmployees = members
+        .filter((m) => !sqlUsers.some((e) => e.ms_user_id === m.id))
+        .map((m) => ({
+          email: m.mail,
+          ms_user_id: m.id,
+          name: m.displayName,
+          terminated: false,
+        }));
+
+      const newlyTerminated = sqlUsers
+        .filter((e) => !e.terminated && !memberIds.has(e.ms_user_id))
+        .map((e) => e.id);
+
+      const reactivated = sqlUsers
+        .filter((e) => e.terminated && memberIds.has(e.ms_user_id))
+        .map((e) => e.id);
+
+      const result = await prisma.$transaction(async (tx) => {
+        const created = await tx.employees.createMany({ data: newEmployees });
+        const terminated = await tx.employees.updateMany({
+          where: { id: { in: newlyTerminated } },
+          data: { terminated: true },
+        });
+        const restored = await tx.employees.updateMany({
+          where: { id: { in: reactivated } },
+          data: { terminated: false },
+        });
+        return {
+          created: created.count,
+          terminated: terminated.count,
+          reactivated: restored.count,
+        };
+      });
+
+      console.log("Employee sync:", result); // counts only, no PII/tokens
+      res.json(result);
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
-        console.error("Prisma error syncing employees:", error);
-        res.status(400).json({
-          error: "Database Error",
-          code: error.code,
-          message: error.message,
-        });
+        console.error("Prisma error syncing employees:", error.code);
+        res.status(400).json({ error: "Database Error", code: error.code });
       } else {
-        console.error("Error syncing employees:", error);
+        console.error("Error syncing employees:", error.message);
         res.status(500).json({ error: "Internal Server Error" });
       }
     }
