@@ -1,15 +1,29 @@
 import { Router } from "express";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 
+import multer from "multer";
+import { uploadToBlob } from "../services/blob/uploadToBlob.js";
+
 // Helper functions
 import serializeActivityLogEntry from "../serializer/activityLogSerializer.js";
 import { logActivity } from "../utils/logActivity.js";
 import serializeContact from "../serializer/serializeContact.js";
 import serializeRoleAssignment from "../serializer/roleAssignmentSerializer.js";
 import makeContactRoutes from "./makeContactRoutes.js";
+// in vendors router
 import { sendAch } from "../services/pandadoc/send/sendAch.js";
 import { sendW9 } from "../services/pandadoc/send/sendW9.js";
+import { sendNewCopy } from "../services/pandadoc/sendNewCopy.js";
+import { getAccountingToken } from "../services/pandadoc/tokens/accountingToken.js";
+import { getValidUserToken } from "../services/pandadoc/tokens/getValidUserToken.js";
 import { sendMsa } from "../services/pandadoc/send/sendMsa.js";
+
+// Use MEMORY storage — the file stays in RAM as a Buffer, we hand it straight
+// to blob storage, nothing touches local disk (which is ephemeral on Azure anyway).
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB cap — COIs are small
+});
 
 const serializeReply = (reply) => {
   return {
@@ -60,6 +74,32 @@ const serializeVendor = (vendor, notes, activityLog) => {
 };
 
 const entity_type_id = 1;
+
+// Map each compliance type → its sender + how to get the token that can VOID
+// its old document (voiding must use the workspace the old doc was sent from).
+const DOC_CONFIG = {
+  ach: {
+    send: sendAch,
+    voidToken: async () => ({
+      token: await getAccountingToken(),
+      authScheme: "Bearer",
+    }),
+  },
+  w9: {
+    send: sendW9,
+    voidToken: async (userId) => ({
+      token: await getValidUserToken(userId),
+      authScheme: "Bearer",
+    }),
+  },
+  msa: {
+    send: sendMsa,
+    voidToken: async (userId) => ({
+      token: await getValidUserToken(userId),
+      authScheme: "Bearer",
+    }),
+  },
+};
 
 export default function vendorsRouter(prisma) {
   const router = Router();
@@ -539,6 +579,60 @@ export default function vendorsRouter(prisma) {
     }
   });
 
+  // POST /api/vendors/:id/documents/:type/new  — void old, send fresh
+  router.post("/:id/documents/:type/new", async (req, res) => {
+    const { id, type } = req.params;
+    const { user_id } = req.body;
+
+    const config = DOC_CONFIG[type];
+    if (!config)
+      return res.status(400).json({ error: `Unknown document type: ${type}` });
+
+    try {
+      const vendor = await prisma.vendors.findUnique({
+        where: { id: Number(id) },
+        include: { Contacts: true },
+      });
+      if (!vendor) return res.status(404).json({ error: "Vendor not found" });
+
+      // Find the current (most recent, non-voided) document of this type
+      const oldRecord = await prisma.vendorComplianceDocuments.findFirst({
+        where: {
+          vendor_id: Number(id),
+          document_type: type.toUpperCase(),
+          status: { notIn: ["voided"] },
+        },
+        orderBy: { date_sent: "desc" },
+      });
+
+      // Get the token that can void the OLD doc (its workspace)
+      let voidToken = null,
+        authScheme = "Bearer";
+      if (oldRecord) {
+        const t = await config.voidToken(Number(user_id));
+        voidToken = t.token;
+        authScheme = t.authScheme;
+      }
+
+      const record = await sendNewCopy({
+        vendor,
+        oldRecord,
+        token: voidToken,
+        authScheme,
+        send: config.send,
+        user_id: Number(user_id),
+      });
+
+      res.status(201).json(record);
+    } catch (error) {
+      if (error.needsPandaDocAuth) {
+        return res.status(409).json({ needsPandaDocAuth: true });
+      }
+      console.error(`Error sending new ${type}:`, error);
+      res.status(500).json({ error: `Failed to send new ${type}` });
+    }
+  });
+
   // GET /api/vendors/:id/documents
   router.get("/:id/documents", async (req, res) => {
     const { id } = req.params;
@@ -555,6 +649,93 @@ export default function vendorsRouter(prisma) {
     } catch (error) {
       console.error("Error fetching documents:", error);
       res.status(500).json({ error: "Failed to fetch documents" });
+    }
+  });
+
+  // GET /api/vendors/:id/coi  — current COI (most recent) for display
+  router.get("/:id/coi", async (req, res) => {
+    const { id } = req.params;
+    try {
+      const coi = await prisma.vendorCOIs.findFirst({
+        where: { vendor_id: Number(id) },
+        orderBy: { created_at: "desc" },
+      });
+      res.json(coi); // null if none — the card handles that
+    } catch (error) {
+      console.error("Error fetching COI:", error);
+      res.status(500).json({ error: "Failed to fetch COI" });
+    }
+  });
+
+  // POST /api/vendors/:id/coi  — upload + verify + record
+  // multipart body: file (the PDF/image), expiration_date, additionally_insured_verified, user_id
+  router.post("/:id/coi", upload.single("file"), async (req, res) => {
+    const { id } = req.params;
+    const { expiration_date, additionally_insured_verified, user_id } =
+      req.body;
+
+    // Guards — enforce the same rules the UI does, server-side
+    if (!req.file) {
+      return res.status(400).json({ error: "No file provided" });
+    }
+    // add to the guards
+    const verifierId = Number(user_id);
+    if (!Number.isInteger(verifierId)) {
+      return res
+        .status(400)
+        .json({ error: "Valid verifying employee required" });
+    }
+    if (additionally_insured_verified !== "true") {
+      return res
+        .status(400)
+        .json({ error: "Must verify additionally insured" });
+    }
+    if (!expiration_date) {
+      return res.status(400).json({ error: "Expiration date required" });
+    }
+
+    try {
+      // Build a stable, unique blob path. Date.now() avoids collisions on re-upload.
+      const safeName = req.file.originalname.replace(/[^\w.\-]/g, "_");
+      const blobPath = `vendors/${id}/coi/${Date.now()}-${safeName}`;
+
+      // 1. Upload the bytes to blob (returns the URL)
+      const blobUrl = await uploadToBlob(
+        req.file.buffer,
+        blobPath,
+        req.file.mimetype,
+      );
+
+      // 2. Record it, transactionally with the activity log
+      const record = await prisma.$transaction(async (tx) => {
+        const coi = await tx.vendorCOIs.create({
+          data: {
+            vendor_id: Number(id),
+            blob_url: blobUrl,
+            file_name: req.file.originalname,
+            expiration_date: new Date(expiration_date),
+            additionally_insured_verified: true,
+            verified_by: verifierId, // required now — no `|| null` fallback
+          },
+        });
+
+        await logActivity(tx, {
+          entityTypeId: entity_type_id,
+          entityId: Number(id),
+          fieldChanged: "coi",
+          previousValue: null,
+          newValue: `Uploaded COI (exp ${new Date(expiration_date).toLocaleDateString()})`,
+          changedBy: Number(user_id) || null,
+          action: "CREATE",
+        });
+
+        return coi;
+      });
+
+      res.status(201).json(record);
+    } catch (error) {
+      console.error("COI upload error:", error);
+      res.status(500).json({ error: "Failed to upload COI" });
     }
   });
 
