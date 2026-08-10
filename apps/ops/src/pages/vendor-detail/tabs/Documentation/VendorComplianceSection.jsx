@@ -302,6 +302,7 @@ export default function VendorComplianceSection({ vendorId }) {
   const [busyType, setBusyType] = useState(null);
   const [confirmNew, setConfirmNew] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [coi, setCoi] = useState(null);
 
   const fetchDocuments = async () => {
     setLoading(true);
@@ -315,8 +316,21 @@ export default function VendorComplianceSection({ vendorId }) {
     }
   };
 
+  const fetchCoi = async () => {
+    setLoading(true);
+    try {
+      const { data } = await axios.get(`/api/vendors/${vendorId}/coi`);
+      setCoi(data);
+    } catch (e) {
+      console.error("Error fetching documents:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchDocuments();
+    fetchCoi();
   }, [vendorId]);
 
   // Group by type → { active: most recent, history: the rest } per type.
@@ -402,7 +416,12 @@ export default function VendorComplianceSection({ vendorId }) {
               onResend={resendDocument}
             />
           ))}
-          <VendorCoiCard />
+          <VendorCoiCard
+            vendorId={vendorId}
+            user={user}
+            onUploaded={fetchCoi}
+            coi={coi}
+          />
         </Box>
       )}
 

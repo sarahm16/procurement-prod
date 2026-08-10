@@ -36,6 +36,7 @@ const fmtDate = (iso) =>
 const isExpired = (coi) => !coi || new Date(coi.expiration_date) < new Date();
 
 export default function VendorCoiCard({ vendorId, coi, user, onUploaded }) {
+  console.log("coi card", coi);
   const theme = useTheme();
   const fileInputRef = useRef(null);
   const [menuAnchor, setMenuAnchor] = useState(null);
@@ -87,7 +88,7 @@ export default function VendorCoiCard({ vendorId, coi, user, onUploaded }) {
       form.append("file", selectedFile);
       form.append("expiration_date", expiration);
       form.append("additionally_insured_verified", "true");
-      form.append("user_id", user?.id ?? "");
+      form.append("user_id", user?.id);
 
       const { data } = await axios.post(`/api/vendors/${vendorId}/coi`, form, {
         headers: { "Content-Type": "multipart/form-data" },
