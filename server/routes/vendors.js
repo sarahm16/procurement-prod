@@ -652,6 +652,28 @@ export default function vendorsRouter(prisma) {
     }
   });
 
+  // GET /api/vendors/:id/notices
+  router.get("/:id/notices", async (req, res) => {
+    const { id } = req.params;
+
+    try {
+      // fetch the vendor WITH contacts (sendAch needs the primary contact's email)
+      const documents = await prisma.vendorWarnings.findMany({
+        where: { vendor_id: Number(id) },
+        include: {
+          SentBy: true,
+        },
+      });
+      if (!documents)
+        return res.status(404).json({ error: "Vendor not found" });
+
+      res.status(200).json(documents);
+    } catch (error) {
+      console.error("Error fetching documents:", error);
+      res.status(500).json({ error: "Failed to fetch documents" });
+    }
+  });
+
   // GET /api/vendors/:id/coi  — current COI (most recent) for display
   router.get("/:id/coi", async (req, res) => {
     const { id } = req.params;
@@ -749,3 +771,29 @@ export default function vendorsRouter(prisma) {
 
   return router;
 }
+
+// REGISTRY FOR VENDOR PANDA DOC DOCUMENTS
+// // tables that carry a pandadoc_id and need status updates
+// const PANDADOC_TABLES = [
+//   { delegate: prisma.vendorComplianceDocuments, name: "compliance" },
+//   { delegate: prisma.vendorNotices, name: "notice" },
+//   // { delegate: prisma.vendorExhibits, name: "exhibit" }, ← add later
+// ];
+
+// // in the loop:
+// let updated = false;
+// for (const { delegate } of PANDADOC_TABLES) {
+//   const record = await delegate.findFirst({ where: { pandadoc_id: pandadocId } });
+//   if (record) {
+//     await delegate.update({
+//       where: { id: record.id },
+//       data: {
+//         status: mapped.status,
+//         ...(mapped.completed ? { date_completed: new Date() } : {}),
+//       },
+//     });
+//     updated = true;
+//     break;
+//   }
+// }
+// if (!updated) console.warn(`PandaDoc webhook: no local record for ${pandadocId}`);

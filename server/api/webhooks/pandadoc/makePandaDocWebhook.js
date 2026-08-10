@@ -81,26 +81,47 @@ export function makePandaDocWebhook(workspaceKey) {
           continue;
         }
 
-        // Find our local record by pandadoc_id (works for any doc type)
-        const doc = await prisma.vendorComplianceDocuments.findFirst({
+        // Check compliance table first for panda doc id
+        const compliance = await prisma.vendorComplianceDocuments.findFirst({
           where: { pandadoc_id: pandadocId },
         });
 
-        if (!doc) {
-          console.warn(`PandaDoc webhook: no local record for ${pandadocId}`);
+        // if (!compliance) {
+        //   console.warn(`PandaDoc webhook: no local record for ${pandadocId}`);
+        //   continue;
+        // }
+
+        if (compliance) {
+          await prisma.$transaction(async (tx) => {
+            await tx.vendorComplianceDocuments.update({
+              where: { id: compliance.id },
+              data: {
+                status: mapped.status,
+                ...(mapped.completed ? { date_completed: new Date() } : {}),
+              },
+            });
+            // optionally logActivity(tx, { ...against doc.vendor_id... });
+          });
           continue;
         }
 
-        await prisma.$transaction(async (tx) => {
-          await tx.vendorComplianceDocuments.update({
-            where: { id: doc.id },
-            data: {
-              status: mapped.status,
-              ...(mapped.completed ? { date_completed: new Date() } : {}),
-            },
-          });
-          // optionally logActivity(tx, { ...against doc.vendor_id... });
+        // Find our local record by pandadoc_id (works for any doc type)
+        const notice = await prisma.vendorWarnings.findFirst({
+          where: { pandadoc_id: pandadocId },
         });
+
+        if (notice) {
+          await prisma.$transaction(async (tx) => {
+            await tx.vendorWarnings.update({
+              where: { id: notice.id },
+              data: {
+                status: mapped.status,
+                ...(mapped.completed ? { date_completed: new Date() } : {}),
+              },
+            });
+          });
+          continue;
+        }
       } catch (err) {
         console.error(`PandaDoc webhook (${workspaceKey}): event error`, err);
         // swallow — already 200'd; one bad event shouldn't stop the rest
