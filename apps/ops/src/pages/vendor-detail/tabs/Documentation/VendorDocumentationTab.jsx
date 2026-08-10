@@ -16,7 +16,8 @@ import WorkOutlineIcon from "@mui/icons-material/WorkOutline";
 import WarningAmberOutlinedIcon from "@mui/icons-material/WarningAmberOutlined";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 
-import VendorComplianceSection from "./VendorComplianceSection";
+import VendorComplianceSection from "./Tabs/Compliance/VendorComplianceSection";
+import VendorNoticesSection from "./Tabs/Notices/VendorNoticesSection";
 // import VendorExhibitsSection from "./VendorExhibitsSection";
 // import VendorExhibitsFormSection from "./VendorExhibitsFormSection";
 // import VendorWorkOrderMsaSection from "./VendorWorkOrderMsaSection";
@@ -76,8 +77,8 @@ export default function VendorDocumentationTab({ vendorId }) {
       //   return <VendorExhibitsFormSection vendorId={vendorId} />;
       // case "workOrderMsa":
       //   return <VendorWorkOrderMsaSection vendorId={vendorId} />;
-      // case "notices":
-      //   return <VendorNoticesSection vendorId={vendorId} />;
+      case "notices":
+        return <VendorNoticesSection vendorId={vendorId} />;
       default:
         return (
           <Box sx={{ py: 6, textAlign: "center" }}>

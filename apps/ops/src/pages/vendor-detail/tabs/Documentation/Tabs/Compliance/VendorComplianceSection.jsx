@@ -21,8 +21,8 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 
-import ConfirmDialog from "../../../../components/ConfirmDialog";
-import useAuthenticatedUser from "../../../../*/hooks/useAuthenticatedUser";
+import ConfirmDialog from "../../../../../../components/ConfirmDialog";
+import useAuthenticatedUser from "../../../../../../*/hooks/useAuthenticatedUser";
 import VendorCoiCard from "./VendorCoiCard";
 
 const COMPLIANCE_TYPES = [
