@@ -9,12 +9,14 @@ import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import Divider from "@mui/material/Divider";
+// import Button from "@mui/material/Button";
 
 // MUI Icons
 import TuneIcon from "@mui/icons-material/Tune";
 import SecurityOutlinedIcon from "@mui/icons-material/SecurityOutlined";
 import PeopleOutlineIcon from "@mui/icons-material/PeopleOutline";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
+import ConstructionOutlineIcon from "@mui/icons-material/ConstructionOutlined";
 
 // Components
 import GeneralPageLayout from "../../components/GeneralPageLayout";
@@ -25,6 +27,7 @@ import VendorStatusesAdmin from "./tables/VendorStatusesAdmin";
 import EmployeesAdmin from "./tables/EmployeesTable";
 import ContactRolesAdmin from "./tables/ContactRolesTable";
 import InternalRolesAdmin from "./tables/InternalRolesAdmin";
+import ServiceLinesManager from "./tables/ServiceLinesManager";
 // import { Button } from "@mui/material";
 // import fetchAndUpdateEmployees from "../../*/api/fetchCurrentEmployees";
 // import ServicesAdmin from "./tables/ServicesAdmin";  ← add yours here as you build them
@@ -36,6 +39,12 @@ const NAV_SECTIONS = [
     id: "constants",
     label: "Constants",
     icon: <TuneIcon fontSize="small" />,
+  },
+  {
+    id: "services",
+    label: "Services",
+    icon: <ConstructionOutlineIcon fontSize="small" />,
+    disabled: false,
   },
   {
     id: "permissions",
@@ -86,8 +95,30 @@ function ConstantsSection() {
       <SoftwaresAdmin />
       <ContactRolesAdmin />
       <TradesAdmin />
-      <ServiceLinesAdmin />
       <VendorStatusesAdmin />
+      {/* <ServicesAdmin /> */}
+      {/* Keep adding tables here */}
+    </Box>
+  );
+}
+
+function ServicesSection() {
+  return (
+    <Box
+      sx={{
+        // CSS columns give a true masonry layout — tables of different heights
+        // stack naturally without awkward whitespace.
+        columnCount: { xs: 1, md: 2, xl: 3 },
+        columnGap: 3,
+        "& > *": {
+          // Each child breaks out of the column flow on its own terms
+          breakInside: "avoid",
+          marginBottom: 3,
+          display: "block",
+        },
+      }}
+    >
+      <ServiceLinesAdmin />
       {/* <ServicesAdmin /> */}
       {/* Keep adding tables here */}
     </Box>
@@ -142,6 +173,7 @@ function InternalRolesSection() {
 // Maps nav ids to their content components.
 const SECTION_CONTENT = {
   constants: <ConstantsSection />,
+  services: <ServiceLinesManager />,
   // permissions: <PermissionsSection />,
   users: <UsersSection />,
   internalRoles: <InternalRolesSection />,
@@ -162,9 +194,7 @@ function Admin() {
       >
         {/* <Button
           onClick={async () => {
-            const response = await axios.post(
-              "https://sarlacc-server-htfaarfvczc0hrgv.westus2-01.azurewebsites.net/api/employees/sync",
-            );
+            const response = await axios.post("/api/employees/sync");
             console.log("Update employees response:", response);
           }}
         >
