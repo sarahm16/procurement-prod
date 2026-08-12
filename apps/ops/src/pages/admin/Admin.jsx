@@ -17,6 +17,7 @@ import SecurityOutlinedIcon from "@mui/icons-material/SecurityOutlined";
 import PeopleOutlineIcon from "@mui/icons-material/PeopleOutline";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import ConstructionOutlineIcon from "@mui/icons-material/ConstructionOutlined";
+import DescriptionOutlineIcon from "@mui/icons-material/DescriptionOutlined";
 
 // Components
 import GeneralPageLayout from "../../components/GeneralPageLayout";
@@ -28,6 +29,7 @@ import EmployeesAdmin from "./tables/EmployeesTable";
 import ContactRolesAdmin from "./tables/ContactRolesTable";
 import InternalRolesAdmin from "./tables/InternalRolesAdmin";
 import ServiceLinesManager from "./tables/ServiceLinesManager";
+import ClientScopesAdmin from "./tables/ClientScopesAdmin";
 // import { Button } from "@mui/material";
 // import fetchAndUpdateEmployees from "../../*/api/fetchCurrentEmployees";
 // import ServicesAdmin from "./tables/ServicesAdmin";  ← add yours here as you build them
@@ -44,6 +46,12 @@ const NAV_SECTIONS = [
     id: "services",
     label: "Services",
     icon: <ConstructionOutlineIcon fontSize="small" />,
+    disabled: false,
+  },
+  {
+    id: "scopes",
+    label: "Client SOWs",
+    icon: <DescriptionOutlineIcon fontSize="small" />,
     disabled: false,
   },
   {
@@ -102,28 +110,28 @@ function ConstantsSection() {
   );
 }
 
-function ServicesSection() {
-  return (
-    <Box
-      sx={{
-        // CSS columns give a true masonry layout — tables of different heights
-        // stack naturally without awkward whitespace.
-        columnCount: { xs: 1, md: 2, xl: 3 },
-        columnGap: 3,
-        "& > *": {
-          // Each child breaks out of the column flow on its own terms
-          breakInside: "avoid",
-          marginBottom: 3,
-          display: "block",
-        },
-      }}
-    >
-      <ServiceLinesAdmin />
-      {/* <ServicesAdmin /> */}
-      {/* Keep adding tables here */}
-    </Box>
-  );
-}
+// function ServicesSection() {
+//   return (
+//     <Box
+//       sx={{
+//         // CSS columns give a true masonry layout — tables of different heights
+//         // stack naturally without awkward whitespace.
+//         columnCount: { xs: 1, md: 2, xl: 3 },
+//         columnGap: 3,
+//         "& > *": {
+//           // Each child breaks out of the column flow on its own terms
+//           breakInside: "avoid",
+//           marginBottom: 3,
+//           display: "block",
+//         },
+//       }}
+//     >
+//       <ServiceLinesAdmin />
+//       {/* <ServicesAdmin /> */}
+//       {/* Keep adding tables here */}
+//     </Box>
+//   );
+// }
 
 function UsersSection() {
   return (
@@ -174,6 +182,7 @@ function InternalRolesSection() {
 const SECTION_CONTENT = {
   constants: <ConstantsSection />,
   services: <ServiceLinesManager />,
+  scopes: <ClientScopesAdmin />,
   // permissions: <PermissionsSection />,
   users: <UsersSection />,
   internalRoles: <InternalRolesSection />,
