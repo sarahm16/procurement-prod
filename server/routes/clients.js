@@ -88,6 +88,23 @@ function clientsRouter(prisma) {
     }
   });
 
+  // Fetch all scopes of work
+  // GET /api/clients/scopes
+  router.get("/scopes", async (req, res) => {
+    try {
+      const scopes = await prisma.clientServiceLineSOWs.findMany({
+        include: {
+          ServiceLine: true,
+          Client: true,
+        },
+      });
+      res.json(scopes);
+    } catch (e) {
+      console.error("Error loading scopes:", e);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // GET /api/clients/:id
   router.get("/:id", async (req, res) => {
     const { id } = req.params;
@@ -434,6 +451,53 @@ function clientsRouter(prisma) {
     } catch (error) {
       console.error("Error updating contract:", error);
       res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  // Fetch client scope of work by service line
+  // This is used in sending exhibits to the vendor
+  // GET /api/clients/:id/scopes/:sid
+  router.get("/:id/scopes/:sid", async (req, res) => {
+    const { id, sid } = req.params;
+    try {
+      const scope = await prisma.clientServiceLineSows.findUnique({
+        where: { service_line_id: Number(sid), client_id: Number(id) },
+      });
+      if (!scope) {
+        return res.status(404).json({ error: "Scope not found" });
+      }
+      res.json(scope);
+    } catch (e) {
+      console.error("Error loading scope:", e);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  router.post("/:id/scopes", async (req, res) => {
+    const { id } = req.params;
+    const { service_line_id, pandadoc_content_library_uuid } = req.body;
+    try {
+      const newScope = await prisma.clientServiceLineSOWs.upsert({
+        where: {
+          client_id_service_line_id: {
+            service_line_id: Number(service_line_id),
+            client_id: Number(id),
+          },
+        },
+        update: {
+          pandadoc_content_library_uuid,
+        },
+
+        create: {
+          client_id: Number(id),
+          service_line_id: Number(service_line_id),
+          pandadoc_content_library_uuid, // Panda Doc content library id
+        },
+      });
+      res.json(newScope);
+    } catch (e) {
+      console.error("Error creating scope:", e);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
