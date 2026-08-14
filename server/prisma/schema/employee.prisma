@@ -1,0 +1,68 @@
+model Employees {
+  id                            Int                 @id(map: "PK__Employee__3213E83F5DB792B8") @default(autoincrement())
+  ms_user_id                    String              @db.VarChar(100)  @unique
+  name                          String             @db.VarChar(100)
+  email                         String             @db.VarChar(100)
+  terminated                    Boolean             @default(false)
+
+  TaggedInNotes                 NoteTaggedUsers[]   @relation("NoteTaggedUser")
+  AuthoredNotes                 Notes[]             @relation("NoteAuthor")
+  ActivityLog                   ActivityLog[]
+  RoleAssignments               RoleAssignments[]   
+  PandaDocUserToken            PandaDocUserTokens?
+  VerifiedCOIs                  VendorCOIs[]
+  SentComplianceDocs            VendorComplianceDocuments[]
+  SentWarnings                  VendorWarnings[]
+  SentWorkOrderMSAs             WorkOrderMSAs[]
+} 
+
+model InternalRoles {
+  id            Int      @id @default(autoincrement())
+  name          String   @db.VarChar(100)   // "Account Manager", "Coordinator", "Sales"
+  description   String?  @db.VarChar(100)
+  // optionally: description, active flag
+
+  RoleAssignments  RoleAssignments[]
+  RoleEntityType   RoleEntityTypes[]
+}
+
+model RoleAssignments {
+  id              Int      @id @default(autoincrement())
+  employee_id     Int
+  
+  internal_role_id         Int
+  entity_type_id  Int      // which model: Clients, Sites, Contracts...
+  entity_id       Int      // which row of that model
+  created_at      DateTime @default(now())
+
+  Role            InternalRoles  @relation(fields: [internal_role_id], references: [id])
+  // employee is your synced Employees table
+  Employee        Employees      @relation(fields: [employee_id], references: [id])
+
+  @@index([entity_type_id, entity_id])   // "who's assigned to this client"
+  @@index([employee_id])                  // "what is this employee assigned to"
+}
+
+model PandaDocUserTokens {
+  id             Int       @id @default(autoincrement())
+  employee_id    Int       @unique   // one PandaDoc connection per employee
+  access_token   String    @db.VarChar(2000)  // tokens can be long
+  refresh_token  String    @db.VarChar(2000)
+  expires_at     DateTime
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  Employee       Employees @relation(fields: [employee_id], references: [id])
+}
+
+// Which roles are needed for which type of datasource
+// For example, a work order needs a project manager and a sales person
+model RoleEntityTypes {
+  id              Int      @id @default(autoincrement())
+  internal_role_id         Int
+  entity_type_id  Int
+
+  InternalRole            InternalRoles  @relation(fields: [internal_role_id], references: [id])
+
+  @@unique([internal_role_id, entity_type_id])   // a role applies to an entity type once
+}

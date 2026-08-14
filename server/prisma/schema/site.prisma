@@ -1,0 +1,40 @@
+
+
+model Sites {
+  created_at            DateTime                @default(now())
+
+  id                     Int                      @id(map: "PK__Sites__3213E83F412421E7") @default(autoincrement())
+  store                  String?                  @db.VarChar(100)
+  mailing_address        String?                  @db.VarChar(150)
+  mailing_address2       String?                  @db.VarChar(150)
+  mailing_city           String?                  @db.VarChar(100)
+  mailing_state          String?                  @db.VarChar(50)
+  mailing_zipcode        String?                  @db.VarChar(10)
+  lat                    Decimal?
+  lng                    Decimal?
+  client_id              Int
+  company_id             Int?
+  sandbox                Boolean                  @default(false)
+
+
+  Client                 Clients                  @relation(fields: [client_id], references: [id], onUpdate: NoAction, map: "FK__Sites__client_id__40F9A68C")
+  Company                Companies?               @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK__Sites__company_i__41EDCAC5")
+  WorkOrders             WorkOrders[]
+  ContractSites          ContractSites[]
+  Contacts               SiteContacts[]
+}
+
+model SiteContacts {
+  created_at            DateTime                @default(now())
+
+  id                   Int       @id @default(autoincrement())
+  name                 String   @db.VarChar(100)
+  email                String?  @db.VarChar(100)
+  phone                String?  @db.VarChar(100)
+  site_id              Int    
+  contact_role_id      Int
+
+  ContactRole        ContactRoles      @relation(fields: [contact_role_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  Site                Sites          @relation(fields: [site_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+}

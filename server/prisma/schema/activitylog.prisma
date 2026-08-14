@@ -1,0 +1,17 @@
+
+model ActivityLog {
+  id             Int         @id(map: "PK__Activity__3213E83F261F0A47") @default(autoincrement())
+  entity_type_id Int
+  entity_id      Int
+  action         String      @db.VarChar(50)   // CREATE, UPDATE, DELETE, ASSIGN, REMOVE
+  field_changed  String?     @db.VarChar(100)
+  previous_value String?     @db.NVarChar(500)
+  new_value      String?     @db.NVarChar(500)
+  changed_by     Int         // FK to Employee.id
+  changed_at     DateTime?   @default(now(), map: "DF__ActivityL__chang__6FB49575") @db.DateTime
+  
+  Employee       Employees    @relation(fields: [changed_by], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  EntityType     EntityTypes @relation(fields: [entity_type_id], references: [id], onUpdate: NoAction, map: "FK__ActivityL__entit__70A8B9AE")
+
+  @@index([entity_type_id, entity_id], map: "IX_ActivityLog_Entity")
+}

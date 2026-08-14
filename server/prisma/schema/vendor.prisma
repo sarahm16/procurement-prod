@@ -1,0 +1,176 @@
+
+
+model Vendors {
+  created_at            DateTime                @default(now())
+
+  id                     Int                      @id(map: "PK__Vendors__3213E83F06619C60") @default(autoincrement())
+  sarlaccId              String?                  @db.VarChar(50)
+  company                String                   @db.VarChar(100)
+  sandbox                Boolean                  @default(false)
+  contact_name           String?                  @db.VarChar(100)
+  contact_phone          String?                  @db.VarChar(20)
+  contact_phone2         String?                  @db.VarChar(20)
+  contact_email          String?                  @db.VarChar(100)
+  quickbooks_id          String?                  @db.VarChar(100)
+  mailing_address        String?                  @db.VarChar(150)
+  mailing_address2       String?                  @db.VarChar(150)
+  mailing_city           String?                  @db.VarChar(100)
+  mailing_state          String?                  @db.VarChar(50)
+  mailing_zipcode        String?                  @db.VarChar(10)
+  lat                    Decimal?
+  lng                    Decimal?
+  billing_address        String?                  @db.VarChar(150)
+  billing_address2       String?                  @db.VarChar(150)
+  billing_city           String?                  @db.VarChar(100)
+  billing_state          String?                  @db.VarChar(50)
+  billing_zipcode        String?                  @db.VarChar(10)
+
+  status_id              Int
+
+  VendorStatus           VendorStatuses           @relation(fields: [status_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK__Vendors__status___44CA3770")
+  
+  ContractSites          VendorContractSites[]
+  VendorTrades           VendorTrades[]
+  VendorServicePricing   VendorServicePricing[]
+  Contacts               VendorContacts[]
+  ComplianceDocuments    VendorComplianceDocuments[]
+  Exhibits               VendorExhibits[]
+  COIs                   VendorCOIs[]
+  Warnings               VendorWarnings[]
+  WorkOrders             WorkOrders[]
+}
+
+model VendorContacts {
+  created_at            DateTime                @default(now())
+
+  id                   Int       @id @default(autoincrement())
+  name                 String   @db.VarChar(100)
+  email                String?  @db.VarChar(100)
+  phone                String?  @db.VarChar(100)
+  vendor_id            Int    
+  contact_role_id      Int
+
+  ContactRole        ContactRoles      @relation(fields: [contact_role_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  Vendor             Vendors           @relation(fields: [vendor_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+}
+
+model VendorContractSites {
+  created_at            DateTime                @default(now())
+
+  id                Int       @id @default(autoincrement())
+  is_primary        Boolean   @default(false)
+  status_id         Int
+  vendor_id         Int
+  contract_site_id  Int
+
+  Vendor            Vendors            @relation(fields: [vendor_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  ContractSite      ContractSites      @relation(fields: [contract_site_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  VendorSiteStatus  VendorSiteStatuses @relation(fields: [status_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@index([contract_site_id])
+  @@index([vendor_id])
+}
+
+
+model VendorSiteStatuses {
+  id                     Int                      @id(map: "PK__VendorSi__3213E83F10849821") @default(autoincrement())
+  name                   String                   @db.VarChar(50)
+  category               String                   @db.VarChar(20)
+  description            String?                  @db.VarChar(200)
+
+  VendorContractSite     VendorContractSites[]
+}
+
+model VendorStatuses {
+  id          Int       @id(map: "PK__VendorSt__3213E83FAC107989") @default(autoincrement())
+  name        String    @db.VarChar(50)
+  color       String    @db.VarChar(50)
+  description String?   @db.VarChar(200)
+  Vendors     Vendors[]
+}
+
+
+model VendorTrades {
+  vendor_id Int
+  trade_id  Int
+  
+  Trade     Trades  @relation(fields: [trade_id], references: [id], onUpdate: NoAction, map: "FK__VendorTra__trade__5AB9788F")
+  Vendor    Vendors @relation(fields: [vendor_id], references: [id], onUpdate: NoAction, map: "FK__VendorTra__vendo__59C55456")
+
+  @@id([vendor_id, trade_id], map: "PK_VendorTrades")
+}
+
+model VendorServicePricing {
+  created_at            DateTime                @default(now())
+
+  id                          Int   @id @default(autoincrement())
+  vendor_price                Decimal
+
+  contract_site_service_id    Int   @unique
+  vendor_id                   Int
+
+  ContractSiteServices        ContractSiteServices    @relation(fields: [contract_site_service_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  Vendor                      Vendors                 @relation(fields: [vendor_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+}
+
+model VendorComplianceDocuments {
+  id             Int       @id @default(autoincrement())
+  vendor_id      Int
+  document_type  String    // "MSA", "ACH", "W9"  (or FK to a types table)
+  pandadoc_id    String?   // the actual document instance in PandaDoc
+  status         String    // sent, viewed, completed, declined
+  date_sent      DateTime?
+  sent_by        Int?        // employee who sent it
+  date_completed DateTime?
+  created_at     DateTime  @default(now())
+
+  Vendor         Vendors   @relation(fields: [vendor_id], references: [id])
+  SentBy         Employees? @relation(fields: [sent_by], references: [id])
+}
+
+model VendorExhibits {
+  id               Int       @id @default(autoincrement())
+  vendor_id        Int
+  service_line_id  Int?      // which service line this exhibit covers
+  pandadoc_id      String?
+  template_id      String?   // which PandaDoc exhibit template was used
+  is_work_order    Boolean   @default(false)  // work-order exhibit vs standard
+  status           String
+  date_sent        DateTime?
+  date_completed   DateTime?
+  created_at       DateTime  @default(now())
+
+  Vendor           Vendors   @relation(fields: [vendor_id], references: [id])
+  ServiceLine      ServiceLines? @relation(fields: [service_line_id], references: [id])
+}
+
+model VendorCOIs {
+  id                Int       @id @default(autoincrement())
+  vendor_id         Int
+  blob_url          String    @db.VarChar(500)
+  file_name         String    @db.VarChar(255)
+  expiration_date   DateTime
+  additionally_insured_verified  Boolean  @default(false)
+  verified_by       Int      // employee who verified
+  created_at        DateTime  @default(now())
+
+  Vendor            Vendors   @relation(fields: [vendor_id], references: [id])
+  VerifiedBy        Employees   @relation(fields: [verified_by], references: [id])
+}
+
+model VendorWarnings {
+  id             Int       @id @default(autoincrement())
+  vendor_id      Int
+  notice_type  String    // "Warning", "Termination", "Compliance"
+  pandadoc_id    String?   // the actual document instance in PandaDoc
+  status         String    // sent, viewed, completed, declined
+  date_sent      DateTime?
+  sent_by         Int
+  date_completed DateTime?
+  created_at     DateTime  @default(now())
+
+  Vendor         Vendors   @relation(fields: [vendor_id], references: [id])
+  SentBy          Employees @relation(fields: [sent_by], references: [id])
+}

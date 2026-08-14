@@ -1,0 +1,18 @@
+model ContactRoles {
+  created_at            DateTime                @default(now())
+
+  id                  Int       @id @default(autoincrement())
+  name                String    @db.VarChar(50)
+
+  ClientContacts      ClientContacts[]
+  SiteContacts        SiteContacts[]
+  VendorContacts      VendorContacts[]
+}
+
+model EntityTypes {
+  id            Int           @id(map: "PK__EntityTy__3213E83FE1719A23") @default(autoincrement())
+  name          String        @db.VarChar(50)
+
+  ActivityLog   ActivityLog[]
+  Notes         Notes[]
+}

@@ -1,0 +1,38 @@
+
+
+model Notes {
+    created_at            DateTime                @default(now())
+
+    id                          Int               @id @default(autoincrement())
+    body                        String            @db.VarChar(1000)
+    date                        DateTime          @default(now())
+    sarlaccId                   String?           @db.VarChar(50)
+    priority                    String            @db.VarChar(10) @default("Low")
+
+    author_id                   Int
+    entity_type_id              Int
+    entity_id                   Int
+    parent_note_id              Int?
+
+    Author                      Employees         @relation("NoteAuthor", fields: [author_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+    EntityType                  EntityTypes       @relation(fields: [entity_type_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+    ParentNote                  Notes?            @relation("NoteReplies", fields: [parent_note_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+    Replies                     Notes[]           @relation("NoteReplies")
+    NoteTaggedUsers             NoteTaggedUsers[]
+
+
+    @@index([entity_type_id, entity_id])
+}
+
+model NoteTaggedUsers {
+  id                          Int     @id @default(autoincrement())
+
+  note_id                     Int
+  tagged_user_id              Int
+
+  Note                        Notes       @relation(fields: [note_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  TaggedUser                  Employees   @relation("NoteTaggedUser", fields: [tagged_user_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@unique([note_id, tagged_user_id])
+  @@index([tagged_user_id])
+}

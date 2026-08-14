@@ -1,0 +1,42 @@
+model ServiceLines {
+  id                          Int                           @id(map: "PK__Service___3213E83F8FFD9AE8") @default(autoincrement())
+  name                        String                        @db.VarChar(100)
+  sarlaccId                   Int?                          @unique
+
+  ClientServiceLines          ClientServiceLines[]
+  ClientServiceLineSOWs       ClientServiceLineSOWs[]
+  ServiceLineExhibitTemplates ServiceLineExhibitTemplates[]
+  ServiceLineServices         ServiceLineServices[]
+  Contracts                   Contracts[]
+  Exhibits                    VendorExhibits[]
+}
+
+model ServiceLineServices {
+  id                          Int                           @id @default(autoincrement())
+  name                        String                        @db.VarChar(100)
+  service_line_id             Int
+  ServiceLine                 ServiceLines @relation(fields: [service_line_id], references: [id])                           
+
+  ContractSiteServices        ContractSiteServices[]
+
+}
+
+model ServiceLineExhibitTemplates {
+  id                   Int           @id(map: "PK__ServiceL__3213E83F2716E9C4") @default(autoincrement())
+  service_line_id      Int
+  pandadoc_template_id String        @db.VarChar(100)
+
+  ServiceLine          ServiceLines @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, map: "FK__ServiceLi__servi__690797E6")
+}
+
+
+
+model Trades {
+  id           Int            @id(map: "PK__Trades__3213E83FB5206A3D") @default(autoincrement())
+  name         String         @db.VarChar(100)
+  description  String?        @db.VarChar(200)
+  sarlaccId    Int?          
+
+  VendorTrades        VendorTrades[]
+  WorkOrderServices   WorkOrderServices[]
+}

@@ -1,0 +1,61 @@
+
+
+model WorkOrders {
+  created_at              DateTime                @default(now())
+  id                      Int                 @id(map: "PK__WorkOrde__3213E83FA1A0BFFC") @default(autoincrement())
+  work_order_number       String              @unique @db.VarChar(20) // Internal NFC work order id
+  created_by_email        String              @db.VarChar(100)
+
+  parent_work_order_id    Int?                // null = parent work order or stand alone
+  site_id                 Int
+  status_id               Int
+  vendor_id               Int?                // assigned vendor will be null when work order is created
+  msa_id                  Int?                // msa will also be null when work order is created
+
+  Parent                  WorkOrders?         @relation("WorkOrderChildren", fields: [parent_work_order_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  Children                WorkOrders[]        @relation("WorkOrderChildren")
+  Site                    Sites               @relation(fields: [site_id], references: [id], onUpdate: NoAction, map: "FK__WorkOrder__site___5E8A0973")
+  Status                  WorkOrderStatuses   @relation(fields: [status_id], references: [id])
+  Vendor                  Vendors?             @relation(fields: [vendor_id], references: [id])
+
+
+  MSAs                    WorkOrderMSAs[]     // Only one MSA is valid at a time, but multiple versions can be sent if pricing is changed, vendor is changed, etc
+  Services                WorkOrderServices[]
+}
+
+model WorkOrderStatuses {
+    id                     Int              @id @default(autoincrement())
+    name                   String           @db.VarChar(30)
+    description            String?          @db.VarChar(100)
+
+    WorkOrders             WorkOrders[]
+}
+
+model WorkOrderServices {
+  id                Int           @id(map: "PK__WorkOrde__3213E83FF413C92F") @default(autoincrement())
+  
+  work_order_id     Int
+  trade_id          Int          // Trades list doubles as work order services list
+
+  client_price      Decimal?      @db.Decimal(10, 2)
+  vendor_price      Decimal?      @db.Decimal(10, 2)
+  is_upsell         Boolean       @default(false, map: "DF__WorkOrder__is_up__634EBE90")
+  
+  WorkOrder         WorkOrders    @relation(fields: [work_order_id], references: [id], onUpdate: NoAction, map: "FK__WorkOrder__work___6442E2C9")
+  Service           Trades        @relation(fields: [trade_id], references: [id])                
+}
+
+model WorkOrderMSAs {
+  id             Int       @id @default(autoincrement())
+  work_order_id  Int       // the job this MSA is for
+
+  pandadoc_id    String?
+  status         String
+  date_sent      DateTime?
+  date_completed DateTime?
+  sent_by        Int
+  created_at     DateTime        @default(now())
+
+  WorkOrder      WorkOrders?     @relation(fields: [work_order_id], references: [id])
+  SentBy         Employees       @relation(fields: [sent_by], references: [id])
+}

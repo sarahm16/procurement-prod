@@ -1,0 +1,85 @@
+
+
+model Clients {
+  created_at            DateTime                @default(now())
+
+  id                    Int                     @id(map: "PK__Clients__3213E83F189F30A2") @default(autoincrement())
+  client                String                  @db.VarChar(100)
+  legal_name            String                  @db.VarChar(100)    // new
+  status                String                  @db.VarChar(20)
+  brand                 String                  @db.VarChar(4)      // new
+  sarlaccId             String?                 @db.VarChar(100)    // new
+  tax_treatment         String                  @db.VarChar(30)   @default("Billed separately")
+  sandbox               Boolean                @default(false)
+
+  mailing_address       String?                 @db.VarChar(150)
+  mailing_address2      String?                 @db.VarChar(150)
+  mailing_city          String?                 @db.VarChar(100)
+  mailing_state         String?                 @db.VarChar(50)
+  mailing_zipcode       String?                 @db.VarChar(10)
+  lat                   Decimal?
+  lng                   Decimal?
+  billing_address       String?                 @db.VarChar(150)
+  billing_address2      String?                 @db.VarChar(150)
+  billing_city          String?                 @db.VarChar(100)
+  billing_state         String?                 @db.VarChar(50)
+  billing_zipcode       String?                 @db.VarChar(10)
+
+  ClientServiceLines    ClientServiceLines[]
+  SOWs                  ClientServiceLineSOWs[]
+  Companies             Companies[]
+  Sites                 Sites[]
+  Contracts             Contracts[]
+  Contacts              ClientContacts[]
+}
+
+
+model Companies {
+  created_at            DateTime                @default(now())
+
+  id            Int      @id(map: "PK__Companie__3213E83FBC38A215") @default(autoincrement())
+  company       String   @db.VarChar(100)
+  client_id     Int?
+  Client        Clients? @relation(fields: [client_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK__Companies__clien__3E1D39E1")
+  Sites         Sites[]
+}
+
+model ClientContacts {
+  created_at            DateTime                @default(now())
+
+  id                  Int       @id @default(autoincrement())
+  name                 String   @db.VarChar(100)
+  email                String?  @db.VarChar(100)
+  phone                String?  @db.VarChar(100)
+  client_id            Int    
+  contact_role_id         Int
+
+  ContactRole        ContactRoles      @relation(fields: [contact_role_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  Client              Clients          @relation(fields: [client_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+}
+
+model ClientServiceLines {
+  created_at            DateTime                @default(now())
+
+  client_id       Int
+  service_line_id Int
+
+  Client          Clients       @relation(fields: [client_id], references: [id], onUpdate: NoAction, map: "FK__ClientSer__clien__47A6A41B")
+  ServiceLine     ServiceLines @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, map: "FK__ClientSer__servi__489AC854")
+
+  @@id([client_id, service_line_id], map: "PK_ClientServiceLines")
+}
+
+model ClientServiceLineSOWs {
+  created_at            DateTime                @default(now())
+
+  client_id                     Int
+  service_line_id               Int
+  pandadoc_content_library_uuid String        @db.VarChar(100)
+  description                   String?       @db.VarChar(200)
+
+  Client                        Clients       @relation(fields: [client_id], references: [id], onUpdate: NoAction, map: "FK__ClientSer__clien__6BE40491")
+  ServiceLine                   ServiceLines  @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, map: "FK__ClientSer__servi__6CD828CA")
+
+  @@id([client_id, service_line_id], map: "PK_ClientServiceLineSOWs")
+}
