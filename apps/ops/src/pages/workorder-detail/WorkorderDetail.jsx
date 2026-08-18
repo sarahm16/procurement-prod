@@ -1,66 +1,115 @@
+// Libraries
 import { useParams } from "react-router-dom";
-import { createContext, useEffect } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import axios from "axios";
 
-// Components
+// Local Components
 import DetailPageHeader from "../../components/DetailPageLayout/DetailPageHeader";
 import DetailPageLayout from "../../components/DetailPageLayout/DetailPageLayout";
 
-// Context
-const WorkorderDetailContext = createContext({
-  workorder: {},
-  updateWorkorder: () => {},
-});
+// Tabs
+// import WorkOrderDetailsTab from "./tabs/DetailsTab/WorkOrderDetailsTab";
+import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
+// import WorkOrderDocumentationTab from "./tabs/Documentation/WorkOrderDocumentationTab";
 
-function WorkorderDetail() {
-  // Get the work order ID from the URL parameters
+// Local Functions
+import { sendEmailFromHTML } from "../../*/api/microsoftApi";
+import { useWorkOrderStatuses } from "../../*/hooks/useWorkOrderStatuses";
+import useAuthenticatedUser from "../../*/hooks/useAuthenticatedUser";
+import {
+  useWorkOrderNotes,
+  useWorkOrderDetails,
+  useWorkOrderActions,
+  useWorkOrderActivity,
+  WorkOrderDetailProvider,
+  useWorkOrderSite,
+} from "./WorkOrderDetailProvider";
+import WorkOrderDetailsTab from "./tabs/DetailsTab/WorkOrderDetailsTab";
+
+function WorkOrderDetail() {
   const { id } = useParams();
-
-  // State
-  const [workorder, setWorkorder] = useState({});
-
-  const updateWorkorder = async (updates) => {
-    // Update the work order in the database
-
-    // Update the work order locally
-    setWorkorder((prev) => ({ ...prev, ...updates }));
-  };
-
-  // Fetch work order details using the ID (this is just a placeholder, replace with actual data fetching logic)
-  useEffect(() => {
-    console.log("Fetching details for work order ID:", id);
-  }, [id]);
-
   return (
-    <WorkorderDetailContext.Provider value={{ workorder, updateWorkorder }}>
-      <DetailPageLayout
-        header={
-          <DetailPageHeader
-            title={`Work Order #${id}`}
-            subtitle={`Details for Work Order #${id}`}
-            status="open"
-            statusOptions={[
-              "open",
-              "in progress",
-              "completed",
-              "cancelled",
-              "pending",
-            ]}
-            onStatusChange={(newStatus) =>
-              console.log("Status changed to:", newStatus)
-            }
-            breadcrumbs={[
-              { label: "Work Orders", href: "/workorders" },
-              { label: `Work Order #${id}` },
-            ]}
-            meta={[]}
-            address="123 Main St, Anytown, USA"
-            onBack={() => console.log("Back button clicked")}
-            actions={[]}
-          />
-        }
-      ></DetailPageLayout>
-    </WorkorderDetailContext.Provider>
+    <WorkOrderDetailProvider id={id}>
+      <WorkOrderDetailLayout id={id} />
+    </WorkOrderDetailProvider>
   );
 }
 
-export default WorkorderDetail;
+function WorkOrderDetailLayout({ id }) {
+  // Get the WorkOrder details from the WorkOrder context
+
+  // Hooks
+  const { data: WorkOrderStatuses = [] } = useWorkOrderStatuses();
+  const { user } = useAuthenticatedUser();
+
+  const notes = useWorkOrderNotes();
+  const details = useWorkOrderDetails();
+  const site = useWorkOrderSite();
+  const activity = useWorkOrderActivity();
+  const { updateStatus, addNote } = useWorkOrderActions();
+
+  return (
+    <DetailPageLayout
+      header={
+        <DetailPageHeader
+          title={details.work_order_number}
+          subtitle={`Details for Work Order ${details.work_order_number}`}
+          status={details?.status}
+          statusOptions={WorkOrderStatuses}
+          onStatusChange={updateStatus}
+          breadcrumbs={[
+            { label: "Work Orders", href: "/workorders" },
+            { label: `${details.work_order_number}` },
+          ]}
+          meta={[]}
+          address={`${site.mailing_address ?? ""}, ${site.mailing_city ?? ""}, ${site.mailing_state ?? ""} ${site.mailing_zipcode ?? ""}`}
+          onBack={() => console.log("Back button clicked")}
+          actions={[]}
+        />
+      }
+      tabs={[
+        {
+          label: "Details",
+          content: <WorkOrderDetailsTab />,
+        },
+        {
+          label: "Documents",
+          content: <></>,
+          // content: <VendorDocumentationTab vendorId={id} />,
+        },
+
+        {
+          label: "Activity",
+          content: (
+            <ActivityLog
+              entries={activity}
+              fieldLabels={{ status_id: "Status" }}
+              valueFormatters={{
+                status_id: (value) => {
+                  const status = WorkOrderStatuses.find(
+                    (s) => s.id === Number(value),
+                  );
+                  return status ? status.name : value;
+                },
+              }}
+            />
+          ),
+        },
+      ]}
+      notes={notes}
+      notesLoading={false}
+      onAddNote={addNote}
+      currentUser="Sarah Carter"
+      entityName={details.company}
+    />
+  );
+}
+
+export default WorkOrderDetail;
