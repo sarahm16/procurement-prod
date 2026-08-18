@@ -1,105 +1,63 @@
-// Libraries
-import { useContext, useEffect, useState } from "react";
-import axios from "axios";
+// workorder-details/tabs/DetailsTab/WorkOrderDetailsTab.jsx
 import { useParams } from "react-router-dom";
 
-// Local Components
-import InfoGrid, { FieldRow, InfoCard } from "../../../../components/InfoGrid";
-import { ChipSelectCard } from "../../../../components/ChipSelectCard";
-import AddressAutocomplete from "../../../../components/AddressAutocomplete";
+import InfoGrid from "../../../../components/InfoGrid";
 import RoleAssignment from "../../../../components/RoleAssignment";
-// import Contacts from "../../../../components/Contacts";
+import GeneralInfoCard from "./GeneralInfoCard";
+import WorkOrderSiteCard from "./WorkOrderSiteCard";
+import ServicesPricingCard from "./ServicesPricingCard";
 
-// Context
 import {
   useWorkOrderActions,
   useWorkOrderDetails,
+  useWorkOrderSite,
   useWorkOrderServices,
-  //   useWorkOrderContacts,
 } from "../../WorkOrderDetailProvider";
 
-// MUI Components
-import Typography from "@mui/material/Typography";
+const WORK_ORDER_ENTITY_TYPE_ID = 4; // confirm your actual id
 
-function WorkOrderDetailsTab() {
+export default function WorkOrderDetailsTab() {
   const { id } = useParams();
-  // Context
+
   const details = useWorkOrderDetails();
+  const site = useWorkOrderSite();
   const services = useWorkOrderServices();
-  //   const contacts = useWorkOrderContacts();
 
   const {
-    deleteService,
-    addService,
     updateDetails,
-    // addContact,
-    // updateContact,
-    // deleteContact,
+    addService,
+    updateService,
+    deleteService,
+    updateScope, // saves scope_of_work on the work order
   } = useWorkOrderActions();
 
-  // State
-  const [allServices, setAllServices] = useState([]);
-
-  useEffect(() => {
-    const fetchAllServices = async () => {
-      try {
-        const response = await axios.get("/api/trades");
-        setAllServices(response.data);
-      } catch (error) {
-        console.error("Error fetching trades:", error);
-      }
-    };
-    fetchAllServices();
-  }, []);
-
   return (
-    <>
-      <InfoGrid>
-        <RoleAssignment entity_type_id={4} entity_id={Number(id)} />
-        <InfoCard
-          title="Work Order Info"
-          icon={null}
-          collapsible
-          defaultOpen
-          editable
-          onSave={updateDetails}
-          actions={[]}
-          editValues={details}
-          span="half"
-        ></InfoCard>
+    <InfoGrid>
+      {/* Row 1: general info + who's assigned */}
+      <GeneralInfoCard details={details} onSave={updateDetails} />
+      <RoleAssignment
+        entity_type_id={WORK_ORDER_ENTITY_TYPE_ID}
+        entity_id={Number(id)}
+      />
 
-        <InfoCard
-          title="Work Order Mailing Address"
-          icon={null}
-          collapsible
-          defaultOpen
-          editable
-          onSave={updateDetails}
-          actions={[]}
-          editValues={details}
-          span="half"
-        ></InfoCard>
-        <InfoCard
-          title="Work Order Billing Address"
-          icon={null}
-          collapsible
-          defaultOpen
-          editable
-          onSave={updateDetails}
-          actions={[]}
-          editValues={details}
-          span="half"
-        ></InfoCard>
+      {/* Row 2: site */}
+      <WorkOrderSiteCard site={site} />
 
-        {/* <Contacts
-          contacts={contacts || []}
-          addContact={addContact}
-          updateContact={updateContact}
-          deleteContact={deleteContact}
-        /> */}
-      </InfoGrid>
-    </>
+      {/* Vendor assignment placeholder (logic later) */}
+      {/* <VendorAssignmentCard workOrderId={Number(id)} /> */}
+
+      {/* Full width: scope + services/pricing */}
+      <ServicesPricingCard
+        services={services || []}
+        scopeOfWork={details?.scope_of_work}
+        onAddService={addService}
+        onUpdateService={updateService}
+        onDeleteService={deleteService}
+        onSaveScope={updateScope}
+      />
+
+      {/* Attachments / pre-work images placeholder (logic later) */}
+      {/* <AttachmentsCard workOrderId={Number(id)} /> */}
+    </InfoGrid>
   );
 }
-
-export default WorkOrderDetailsTab;

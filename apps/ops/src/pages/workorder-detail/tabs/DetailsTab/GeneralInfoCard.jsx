@@ -1,0 +1,126 @@
+// workorder-details/tabs/DetailsTab/GeneralInfoCard.jsx
+import { InfoCard, FieldRow } from "../../../../components/InfoGrid";
+import TextField from "@mui/material/TextField";
+import Chip from "@mui/material/Chip";
+import Typography from "@mui/material/Typography";
+
+const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString() : "—");
+const toInputDate = (iso) =>
+  iso ? new Date(iso).toISOString().slice(0, 10) : "";
+
+export default function GeneralInfoCard({ details, onSave }) {
+  return (
+    <InfoCard
+      title="Work Order Info"
+      collapsible
+      defaultOpen
+      editable
+      onSave={onSave}
+      editValues={details}
+      span="half"
+    >
+      {/* Work order number — read only (system generated) */}
+      <FieldRow
+        label="WO #"
+        value={details?.work_order_number}
+        render={(value) => (
+          <Typography sx={{ fontSize: "0.85rem", fontWeight: 600 }}>
+            {value ?? "—"}
+          </Typography>
+        )}
+      />
+
+      {/* External ID — editable text field */}
+      <FieldRow
+        label="External ID"
+        fieldKey="external_id"
+        value={details?.external_id}
+        render={(value, editing, { onChange, fieldKey }) =>
+          editing ? (
+            <TextField
+              size="small"
+              value={value ?? ""}
+              onChange={(e) => onChange(fieldKey, e.target.value)}
+              placeholder="External reference"
+              fullWidth
+            />
+          ) : (
+            <Typography sx={{ fontSize: "0.85rem" }}>{value || "—"}</Typography>
+          )
+        }
+      />
+
+      {/* Type */}
+      <FieldRow
+        label="Type"
+        value={details?.type}
+        render={(value) =>
+          value ? (
+            <Chip
+              label={value}
+              size="small"
+              sx={{ height: 22, fontSize: "0.72rem" }}
+            />
+          ) : (
+            <Typography sx={{ fontSize: "0.85rem" }}>—</Typography>
+          )
+        }
+      />
+
+      {/* Date created — read only */}
+      <FieldRow
+        label="Created"
+        value={details?.created_at}
+        render={(value) => (
+          <Typography sx={{ fontSize: "0.85rem" }}>{fmtDate(value)}</Typography>
+        )}
+      />
+
+      {/* Start date — editable */}
+      <FieldRow
+        label="Start Date"
+        fieldKey="start_date"
+        value={details?.start_date}
+        render={(value, editing, { onChange, fieldKey }) =>
+          editing ? (
+            <TextField
+              size="small"
+              type="date"
+              value={toInputDate(value)}
+              onChange={(e) => onChange(fieldKey, e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+            />
+          ) : (
+            <Typography sx={{ fontSize: "0.85rem" }}>
+              {fmtDate(value)}
+            </Typography>
+          )
+        }
+      />
+
+      {/* Due date — editable */}
+      <FieldRow
+        label="Due Date"
+        fieldKey="due_date"
+        value={details?.due_date}
+        render={(value, editing, { onChange, fieldKey }) =>
+          editing ? (
+            <TextField
+              size="small"
+              type="date"
+              value={toInputDate(value)}
+              onChange={(e) => onChange(fieldKey, e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+            />
+          ) : (
+            <Typography sx={{ fontSize: "0.85rem" }}>
+              {fmtDate(value)}
+            </Typography>
+          )
+        }
+      />
+    </InfoCard>
+  );
+}
