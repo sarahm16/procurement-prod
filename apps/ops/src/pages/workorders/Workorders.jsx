@@ -20,6 +20,21 @@ import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import Chip from "@mui/material/Chip";
 import { useWorkOrderStatuses } from "../../*/hooks/useWorkOrderStatuses";
+import { workOrderPriorityConfig } from "../../*/constants/workOrderPriorityConfig";
+
+// helper for age (put near fmtDate)
+const ageInDays = (iso) => {
+  if (!iso) return null;
+  const created = new Date(iso);
+  const diffMs = Date.now() - created.getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+};
+const fmtAge = (iso) => {
+  const days = ageInDays(iso);
+  if (days == null) return "—";
+  if (days === 0) return "Today";
+  return `${days}d`;
+};
 
 const typeColor = (name) =>
   workOrderTypes.find((t) => t.name === name)?.color ?? "#6b7280";
@@ -62,10 +77,15 @@ function Workorders() {
   }, []);
 
   // Color lookup from the FETCHED statuses (each has name + color from the DB)
-  const statusColor = (name) => {
-    console.log("name", name);
-    return statuses.find((s) => s.name === name)?.color;
-  };
+  const statusColor = useMemo(
+    () => (name) => {
+      console.log("name", name);
+      return statuses.find((s) => s.name === name)?.color;
+    },
+    [statuses],
+  );
+
+  console.log("statuses in work orders", statuses);
 
   const statusOptions = useMemo(
     () =>
@@ -189,8 +209,56 @@ function Workorders() {
         minWidth: 110,
         valueGetter: (value, row) => fmtDate(row.due_date),
       },
+      {
+        field: "external_id",
+        headerName: "External ID",
+        flex: 0.9,
+        minWidth: 120,
+        valueGetter: (value, row) => row.external_id ?? "—",
+      },
+      {
+        field: "priority",
+        headerName: "Priority",
+        flex: 0.8,
+        minWidth: 100,
+        renderCell: (params) => {
+          const p = params.row.priority;
+          if (!p || !workOrderPriorityConfig[p]) return "—";
+          const cfg = workOrderPriorityConfig[p];
+          return (
+            <Chip
+              label={cfg.label}
+              size="small"
+              sx={{
+                backgroundColor: cfg.bg,
+                color: cfg.color,
+                border: `1px solid ${cfg.color}55`,
+                fontWeight: 600,
+                fontSize: "0.7rem",
+                height: 22,
+              }}
+            />
+          );
+        },
+      },
+      {
+        field: "created_at",
+        headerName: "Created",
+        flex: 0.8,
+        minWidth: 110,
+        valueGetter: (value, row) => fmtDate(row.created_at),
+      },
+      {
+        field: "age",
+        headerName: "Age",
+        flex: 0.5,
+        minWidth: 80,
+        // sortable by the numeric age, displayed as "5d"
+        valueGetter: (value, row) => ageInDays(row.created_at) ?? -1,
+        renderCell: (params) => fmtAge(params.row.created_at),
+      },
     ],
-    [],
+    [statusColor],
   );
 
   const onRowClick = (row) => navigate(`/workorders/${row.id}`);

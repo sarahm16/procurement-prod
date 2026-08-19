@@ -17,10 +17,10 @@ import { useClients } from "../../*/hooks/useClients";
 import { useTrades } from "../../*/hooks/useTrades";
 import { workOrderTypes } from "../../*/constants/workorderTypes";
 
-import { priorityConfig } from "../../*/constants/priorityConfig";
+import { workOrderPriorityConfig } from "../../*/constants/workOrderPriorityConfig";
 // you'll fetch softwares + work-order internal roles + employees
 
-const priorities = Object.keys(priorityConfig); // ["Low", "Normal", "High"]
+const priorities = Object.keys(workOrderPriorityConfig); // ["P-1", "P-2", ...rest]
 
 // Blank line item
 const emptyService = () => ({
@@ -229,11 +229,12 @@ function CreateWorkorderForm({ onSubmit, onClose, submitting = false }) {
                 width: 8,
                 height: 8,
                 borderRadius: "50%",
-                backgroundColor: priorityConfig[p].color,
+                backgroundColor: workOrderPriorityConfig[p].color,
                 mr: 1,
               }}
             />
-            {priorityConfig[p].label}
+            {workOrderPriorityConfig[p].label} -{" "}
+            {workOrderPriorityConfig[p].sla}
           </MenuItem>
         ))}
       </TextField>
