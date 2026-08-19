@@ -285,5 +285,29 @@ export default function workordersRouter(prisma) {
     }
   });
 
+  // PUT /api/workorders/:id/services/:sid
+  // edit a single work order service
+  router.put("/:id/services/:sid", async (req, res) => {
+    const { id, sid } = req.params;
+    const { user_id, changes } = req.body;
+    const data = changes;
+
+    try {
+      const updatedStatus = await prisma.$transaction(async (tx) => {
+        const updated = await tx.workOrderServices.update({
+          where: { work_order_id: Number(id), id: Number(sid) },
+          data,
+          include: {
+            Service: true,
+          },
+        });
+      });
+      res.json(updatedStatus);
+    } catch (error) {
+      console.error("Error updating service:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
   return router;
 }
