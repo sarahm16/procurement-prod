@@ -72,6 +72,21 @@ export function WorkOrderDetailProvider({ id, children }) {
     [id, user?.id],
   );
 
+  const updateService = useCallback(
+    async (sid, changes) => {
+      console.log("changes in detail provider", changes);
+      const { data } = await axios.put(
+        `/api/workorders/${id}/services/${sid}`,
+        {
+          user_id: user?.id,
+          changes: changes,
+        },
+      );
+      console.log("Updated service", data);
+    },
+    [id],
+  );
+
   //   // Contacts Actions
   //   const addContact = useCallback(
   //     async (form) => {
@@ -189,6 +204,7 @@ export function WorkOrderDetailProvider({ id, children }) {
       //   deleteContact,
       addService,
       deleteService,
+      updateService,
     }),
     [
       updateDetails,
@@ -199,6 +215,7 @@ export function WorkOrderDetailProvider({ id, children }) {
       deleteService,
       addNote,
       updateStatus,
+      updateService,
     ],
   );
 
