@@ -286,9 +286,7 @@ export default function ServicesPricingCard({
                 borderTop: `1px solid ${theme.palette.divider}`,
               }}
             >
-              <Typography sx={{ fontSize: "0.85rem" }}>
-                {serviceName(s.service_id)}
-              </Typography>
+              <Typography sx={{ fontSize: "0.85rem" }}>{s?.name}</Typography>
 
               {isEditing ? (
                 <>

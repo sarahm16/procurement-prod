@@ -19,6 +19,7 @@ import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import Chip from "@mui/material/Chip";
+import { useWorkOrderStatuses } from "../../*/hooks/useWorkOrderStatuses";
 
 const typeColor = (name) =>
   workOrderTypes.find((t) => t.name === name)?.color ?? "#6b7280";
@@ -37,20 +38,18 @@ function Workorders() {
   const [typeFilter, setTypeFilter] = useState("all");
 
   const [workorders, setWorkorders] = useState([]);
-  const [statuses, setStatuses] = useState([]); // from the DB
   const [loading, setLoading] = useState(false);
+
+  const { data: statuses = [] } = useWorkOrderStatuses();
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const [woRes, statusRes] = await Promise.all([
         axios.get("/api/workorders"),
-        axios.get("/api/workorders/statuses"),
       ]);
       console.log("workorders", woRes.data);
-      console.log("statuses", statusRes.data);
       setWorkorders(woRes.data);
-      setStatuses(statusRes.data);
     } catch (error) {
       console.error("Error fetching work orders:", error);
     } finally {
@@ -63,15 +62,9 @@ function Workorders() {
   }, []);
 
   // Color lookup from the FETCHED statuses (each has name + color from the DB)
-  const statusColorMap = useMemo(() => {
-    const map = {};
-    for (const s of statuses) map[s.name] = s.color;
-    return map;
-  }, [statuses]);
-
-  const onCreated = (created) => {
-    setWorkorders((prev) => [created, ...prev]);
-    setFormOpen(false);
+  const statusColor = (name) => {
+    console.log("name", name);
+    return statuses.find((s) => s.name === name)?.color;
   };
 
   const statusOptions = useMemo(
@@ -165,7 +158,7 @@ function Workorders() {
         renderCell: (params) => {
           const name = params.row.Status?.name;
           if (!name) return "—";
-          const c = statusColorMap[name] ?? "#6b7280";
+          const c = statusColor(name) ?? "#6b7280";
           return (
             <Chip
               label={name}
@@ -202,6 +195,45 @@ function Workorders() {
 
   const onRowClick = (row) => navigate(`/workorders/${row.id}`);
 
+  const onSubmit = async (form, services, roleAssignments) => {
+    setSubmitting(true);
+    try {
+      const payload = {
+        site_id: Number(form.site_id),
+        type: form.type,
+        external_id: form.external_id || null,
+        software_id: form.software_id ? Number(form.software_id) : null,
+        priority: form.priority,
+        start_date: form.start_date || null,
+        due_date: form.due_date || null,
+        user_id: user?.id,
+        services: services
+          .filter((s) => s.service_id)
+          .map((s) => ({
+            service_id: Number(s.service_id),
+            client_price: s.client_price === "" ? null : Number(s.client_price),
+            vendor_price: s.vendor_price === "" ? null : Number(s.vendor_price),
+          })),
+        role_assignments: Object.entries(roleAssignments || {}).flatMap(
+          ([roleId, empIds]) =>
+            empIds.map((employee_id) => ({
+              internal_role_id: Number(roleId),
+              employee_id: Number(employee_id),
+            })),
+        ),
+        created_by_email: user?.email,
+      };
+
+      const { data } = await axios.post("/api/workorders", payload);
+      setWorkorders((prev) => [data, ...prev]);
+      setFormOpen(false);
+    } catch (e) {
+      console.error("Error creating work order:", e);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <>
       <SlideOutPanel
@@ -213,7 +245,7 @@ function Workorders() {
           user={user}
           submitting={submitting}
           onClose={() => setFormOpen(false)}
-          onCreated={onCreated}
+          onSubmit={onSubmit}
         />
       </SlideOutPanel>
 

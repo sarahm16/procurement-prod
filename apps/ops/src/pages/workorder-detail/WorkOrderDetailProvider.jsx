@@ -6,7 +6,6 @@ import {
   useContext,
   useEffect,
 } from "react";
-import useParams from "react";
 
 import useAuthenticatedUser from "../../*/hooks/useAuthenticatedUser";
 import axios from "axios";
@@ -38,16 +37,13 @@ export function WorkOrderDetailProvider({ id, children }) {
       setDetails({
         status: data.status,
         work_order_number: data.work_order_number,
+        external_id: data?.external_id,
         company: data.company,
-        mailing_address: data.mailing_address,
-        mailing_address2: data.mailing_address2,
-        mailing_city: data.mailing_city,
-        mailing_state: data.mailing_state,
-        mailing_zipcode: data.mailing_zipcode,
-        contact_name: data.contact_name,
-        contact_email: data.contact_email,
-        contact_phone: data.contact_phone,
-        contact_phone2: data.contact_phone2,
+        software: data?.software,
+        type: data?.type,
+        created_at: data.created_at,
+        due_date: data.due_date,
+        start_date: data?.start_date,
       });
       setActivity(data.activity_log);
       setNotes(data.notes);

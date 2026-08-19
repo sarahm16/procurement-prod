@@ -17,6 +17,11 @@ import { useClients } from "../../*/hooks/useClients";
 import { useTrades } from "../../*/hooks/useTrades";
 import { workOrderTypes } from "../../*/constants/workorderTypes";
 
+import { priorityConfig } from "../../*/constants/priorityConfig";
+// you'll fetch softwares + work-order internal roles + employees
+
+const priorities = Object.keys(priorityConfig); // ["Low", "Normal", "High"]
+
 // Blank line item
 const emptyService = () => ({
   key: crypto.randomUUID(),
@@ -24,6 +29,8 @@ const emptyService = () => ({
   client_price: "",
   vendor_price: "",
 });
+
+const entity_type_id = 4;
 
 function CreateWorkorderForm({ onSubmit, onClose, submitting = false }) {
   const { data: clients = [] } = useClients();
@@ -35,11 +42,33 @@ function CreateWorkorderForm({ onSubmit, onClose, submitting = false }) {
     type: "",
     start_date: "",
     due_date: "",
+    external_id: "",
+    software_id: "",
+    priority: "Normal",
   });
   const [services, setServices] = useState([emptyService()]);
   const [sites, setSites] = useState([]);
   const [sitesLoading, setSitesLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const [softwares, setSoftwares] = useState([]);
+  const [roles, setRoles] = useState([]); // internal roles applicable to work orders
+  const [employees, setEmployees] = useState([]);
+  const [roleAssignments, setRoleAssignments] = useState({}); // { [role_id]: [employee_id, ...] }
+
+  useEffect(() => {
+    Promise.all([
+      axios.get("/api/softwares"),
+      axios.get(`/api/roleEntityTypes/${entity_type_id}`), // roles for work orders
+      axios.get("/api/employees"),
+    ])
+      .then(([sw, r, emp]) => {
+        setSoftwares(sw.data);
+        setRoles(r.data);
+        setEmployees(emp.data.filter((e) => !e.terminated)); // active only for assignment
+      })
+      .catch((e) => console.error("Error loading form refs:", e));
+  }, []);
 
   // Fetch sites for the selected client only (not all sites).
   useEffect(() => {
@@ -91,7 +120,7 @@ function CreateWorkorderForm({ onSubmit, onClose, submitting = false }) {
 
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
-    await onSubmit(form, services);
+    await onSubmit(form, services, roleAssignments);
   };
 
   return (
@@ -150,6 +179,61 @@ function CreateWorkorderForm({ onSubmit, onClose, submitting = false }) {
         {workOrderTypes.map((t) => (
           <MenuItem key={t.name} value={t.name}>
             {t.name}
+          </MenuItem>
+        ))}
+      </TextField>
+
+      {/* External ID */}
+      <TextField
+        label="External ID"
+        size="small"
+        value={form.external_id}
+        onChange={setField("external_id")}
+        fullWidth
+      />
+
+      {/* Software */}
+      <TextField
+        select
+        label="Software"
+        size="small"
+        value={form.software_id}
+        onChange={setField("software_id")}
+        fullWidth
+      >
+        <MenuItem value="">
+          <em>None</em>
+        </MenuItem>
+        {softwares.map((sw) => (
+          <MenuItem key={sw.id} value={sw.id}>
+            {sw.name}
+          </MenuItem>
+        ))}
+      </TextField>
+
+      {/* Priority */}
+      <TextField
+        select
+        label="Priority"
+        size="small"
+        value={form.priority}
+        onChange={setField("priority")}
+        fullWidth
+      >
+        {priorities.map((p) => (
+          <MenuItem key={p} value={p}>
+            <Box
+              component="span"
+              sx={{
+                display: "inline-block",
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                backgroundColor: priorityConfig[p].color,
+                mr: 1,
+              }}
+            />
+            {priorityConfig[p].label}
           </MenuItem>
         ))}
       </TextField>
@@ -263,6 +347,47 @@ function CreateWorkorderForm({ onSubmit, onClose, submitting = false }) {
         <Typography sx={{ fontSize: "0.68rem", color: "text.disabled", mt: 1 }}>
           Prices are optional and can be added later.
         </Typography>
+      </Box>
+
+      <Divider />
+      <Box>
+        <Typography
+          sx={{
+            fontSize: "0.72rem",
+            fontWeight: 600,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: "text.secondary",
+            mb: 1,
+          }}
+        >
+          Role Assignments
+        </Typography>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+          {roles.map((role) => (
+            <TextField
+              key={role.id}
+              select
+              SelectProps={{ multiple: true }}
+              label={role.InternalRole?.name ?? role.name}
+              size="small"
+              value={roleAssignments[role.internal_role_id ?? role.id] ?? []}
+              onChange={(e) =>
+                setRoleAssignments((prev) => ({
+                  ...prev,
+                  [role.internal_role_id ?? role.id]: e.target.value,
+                }))
+              }
+              fullWidth
+            >
+              {employees.map((emp) => (
+                <MenuItem key={emp.id} value={emp.id}>
+                  {emp.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          ))}
+        </Box>
       </Box>
 
       {error && (
