@@ -2,21 +2,29 @@
 
 model WorkOrders {
   created_at              DateTime                @default(now())
+  start_date              DateTime?
+  due_date                DateTime            @default(now())
   id                      Int                 @id(map: "PK__WorkOrde__3213E83FA1A0BFFC") @default(autoincrement())
   work_order_number       String              @unique @db.VarChar(20) // Internal NFC work order id
   created_by_email        String              @db.VarChar(100)
+  type                    String              @db.VarChar(50)
+  external_id             String?             @db.VarChar(50)
+  scope_of_work           String?             @db.VarChar(1000)
+  priority                String?              @db.VarChar(50)
 
   parent_work_order_id    Int?                // null = parent work order or stand alone
   site_id                 Int
   status_id               Int
   vendor_id               Int?                // assigned vendor will be null when work order is created
   msa_id                  Int?                // msa will also be null when work order is created
+  software_id             Int?
 
   Parent                  WorkOrders?         @relation("WorkOrderChildren", fields: [parent_work_order_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   Children                WorkOrders[]        @relation("WorkOrderChildren")
   Site                    Sites               @relation(fields: [site_id], references: [id], onUpdate: NoAction, map: "FK__WorkOrder__site___5E8A0973")
   Status                  WorkOrderStatuses   @relation(fields: [status_id], references: [id])
   Vendor                  Vendors?             @relation(fields: [vendor_id], references: [id])
+  Software                Softwares?           @relation(fields: [software_id], references: [id])
 
 
   MSAs                    WorkOrderMSAs[]     // Only one MSA is valid at a time, but multiple versions can be sent if pricing is changed, vendor is changed, etc
@@ -27,6 +35,7 @@ model WorkOrderStatuses {
     id                     Int              @id @default(autoincrement())
     name                   String           @db.VarChar(30)
     description            String?          @db.VarChar(100)
+    color                  String?          @db.VarChar(8)
 
     WorkOrders             WorkOrders[]
 }

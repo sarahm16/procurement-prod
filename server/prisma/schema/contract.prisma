@@ -24,15 +24,6 @@ model Contracts {
   ContractSites           ContractSites[]
 }
 
-model Softwares {
-  id            Int     @id @default(autoincrement())
-  name          String  @db.VarChar(50)
-
-  Contracts     Contracts[]
-}
-
-
-
 model ServiceTypes {
   id                      Int       @id @default(autoincrement())
   name                    String    @db.VarChar(100)

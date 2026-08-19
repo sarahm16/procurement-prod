@@ -15,7 +15,7 @@ export default function notesRouter(prisma) {
           Replies: {
             include: {
               Author: true,
-              TaggedUsers: { include: { TaggedUser: true } },
+              NoteTaggedUsers: { select: { TaggedUser: true } },
             },
           },
         },

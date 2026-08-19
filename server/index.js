@@ -28,6 +28,7 @@ import internalRolesRouter from "./routes/internalRoles.js";
 import roleEntityTypesRouter from "./routes/roleEntityTypes.js";
 import roleAssignmentsRouter from "./routes/roleAssignments.js";
 import pandadocRouter from "./routes/pandadoc.js";
+import workordersRouter from "./routes/workorders.js";
 
 import prisma from "./db.js";
 
@@ -66,6 +67,7 @@ app.use("/api/sites", sitesRouter(prisma));
 app.use("/api/internalRoles", internalRolesRouter(prisma));
 app.use("/api/roleEntityTypes", roleEntityTypesRouter(prisma));
 app.use("/api/roleAssignments", roleAssignmentsRouter(prisma));
+app.use("/api/workorders", workordersRouter(prisma));
 app.use("/api/pandadoc", pandadocRouter);
 
 // Catch-all LAST — hands everything else to React Router

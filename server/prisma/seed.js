@@ -9,6 +9,7 @@ import seedEntityTypes from "./seeds/entityTypesSeed.js";
 import seedContactRoles from "./seeds/contactRolesSeed.js";
 import seedServiceTypes from "./seeds/serviceTypes.js";
 import seedInternalRoles from "./seeds/internalRolesSeed.js";
+import seedWorkorderStatuses from "./seeds/seedWorkorderStatuses.js";
 
 const prisma = new PrismaClient();
 
@@ -21,11 +22,13 @@ async function main() {
 
   /*   await seedRoles(prisma);
    */
-  await seedEntityTypes(prisma);
+  // await seedEntityTypes(prisma);
   // await seedContactRoles(prisma);
 
   // await seedServiceTypes(prisma);
   // await seedInternalRoles(prisma);
+
+  await seedWorkorderStatuses(prisma);
 }
 
 main()

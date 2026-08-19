@@ -40,3 +40,11 @@ model Trades {
   VendorTrades        VendorTrades[]
   WorkOrderServices   WorkOrderServices[]
 }
+
+model Softwares {
+  id            Int     @id @default(autoincrement())
+  name          String  @db.VarChar(50)
+
+  Contracts     Contracts[]
+  WorkOrders    WorkOrders[]
+}
