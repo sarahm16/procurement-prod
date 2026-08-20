@@ -45,6 +45,7 @@ function CreateWorkorderForm({ onSubmit, onClose, submitting = false }) {
     external_id: "",
     software_id: "",
     priority: "Normal",
+    scope_of_work: "",
   });
   const [services, setServices] = useState([emptyService()]);
   const [sites, setSites] = useState([]);
@@ -262,6 +263,14 @@ function CreateWorkorderForm({ onSubmit, onClose, submitting = false }) {
       </Box>
 
       <Divider />
+
+      <TextField
+        label="Full Scope of Work"
+        value={form.scope_of_work}
+        onChange={setField("scope_of_work")}
+        fullWidth
+        multiline
+      />
 
       {/* Services (line items) */}
       <Box>

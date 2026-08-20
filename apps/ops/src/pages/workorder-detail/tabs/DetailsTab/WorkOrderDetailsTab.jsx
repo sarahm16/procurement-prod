@@ -53,7 +53,7 @@ export default function WorkOrderDetailsTab() {
         onAddService={addService}
         onUpdateService={updateService}
         onDeleteService={deleteService}
-        onSaveScope={updateScope}
+        onSaveScope={updateDetails}
       />
 
       {/* Attachments / pre-work images placeholder (logic later) */}

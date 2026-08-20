@@ -115,8 +115,8 @@ export default function GeneralInfoCard({ details, onSave }) {
       {/* Software — editable dropdown */}
       <FieldRow
         label="Software"
-        fieldKey="software"
-        value={details?.software}
+        fieldKey="software_id"
+        value={details?.software_id}
         render={(value, editing, { onChange, fieldKey }) =>
           editing ? (
             <TextField
@@ -137,7 +137,8 @@ export default function GeneralInfoCard({ details, onSave }) {
             </TextField>
           ) : (
             <Typography sx={{ fontSize: "0.85rem" }}>
-              {details?.software?.name || "—"}
+              {details?.software?.name || "—"}{" "}
+              {/* display still uses the object */}
             </Typography>
           )
         }

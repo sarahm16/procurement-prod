@@ -290,6 +290,7 @@ function Workorders() {
             })),
         ),
         created_by_email: user?.email,
+        scope_of_work: form?.scope_of_work,
       };
 
       const { data } = await axios.post("/api/workorders", payload);

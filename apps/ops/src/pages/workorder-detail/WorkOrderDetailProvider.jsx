@@ -40,10 +40,12 @@ export function WorkOrderDetailProvider({ id, children }) {
         external_id: data?.external_id,
         company: data.company,
         software: data?.software,
+        software_id: data?.software_id,
         type: data?.type,
         created_at: data.created_at,
         due_date: data.due_date,
         start_date: data?.start_date,
+        scope_of_work: data?.scope_of_work,
       });
       setActivity(data.activity_log);
       setNotes(data.notes);
@@ -59,15 +61,19 @@ export function WorkOrderDetailProvider({ id, children }) {
     };
   }, [id]);
 
-  // Details Actions
   const updateDetails = useCallback(
     async (draft) => {
       const { data } = await axios.put(`/api/workorders/${id}`, {
         user_id: user?.id,
         changes: draft,
       });
-      console.log("Update response data:", data);
-      setDetails((prev) => ({ ...prev, ...draft }));
+      // use the server response so the software OBJECT (and id) stay in sync
+      setDetails((prev) => ({
+        ...prev,
+        ...draft, // the scalar edits (external_id, dates, software_id)
+        software: data?.Software ?? prev.software, // fresh software object
+        software_id: data?.software_id ?? prev.software_id,
+      }));
     },
     [id, user?.id],
   );

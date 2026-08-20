@@ -176,7 +176,8 @@ export default function ServicesPricingCard({
                 <IconButton
                   size="small"
                   onClick={async () => {
-                    await onSaveScope?.(scopeDraft);
+                    console.log("scopeDraft", scopeDraft);
+                    await onSaveScope?.({ scope_of_work: scopeDraft });
                     setEditingScope(false);
                   }}
                   sx={{ color: "success.main" }}
