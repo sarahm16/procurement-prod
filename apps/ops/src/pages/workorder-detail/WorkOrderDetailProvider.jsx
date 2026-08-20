@@ -134,15 +134,15 @@ export function WorkOrderDetailProvider({ id, children }) {
 
   // TO DO: Update this function for work orders, create endpoint
   const deleteService = useCallback(
-    async (serviceToDelete) => {
+    async (serviceToDeleteId) => {
       const deleteResponse = await axios.delete(
-        `/api/workorders/${id}/services/${serviceToDelete.id}`,
+        `/api/workorders/${id}/services/${serviceToDeleteId}`,
         {
           data: { user_id: user?.id },
         },
       );
       setServices((prevServices) =>
-        prevServices.filter((service) => service.id !== serviceToDelete.id),
+        prevServices.filter((service) => service.id !== serviceToDeleteId),
       );
     },
     [id, user?.id],
@@ -151,12 +151,11 @@ export function WorkOrderDetailProvider({ id, children }) {
   // TO DO: Also update this function
   const addService = useCallback(
     async (serviceToAdd) => {
-      const addResponse = await axios.post(
-        `/api/workorders/${id}/services/${serviceToAdd.id}`,
-        {
-          user_id: user?.id,
-        },
-      );
+      console.log("serviceToAdd work order detail provider", serviceToAdd);
+      const addResponse = await axios.post(`/api/workorders/${id}/services`, {
+        user_id: user?.id,
+        ...serviceToAdd,
+      });
       console.log("Add association response:", addResponse.data);
       setServices((prevServices) => [...prevServices, serviceToAdd]);
     },
