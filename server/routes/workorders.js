@@ -189,6 +189,83 @@ export default function workordersRouter(prisma) {
     }
   });
 
+  // POST /api/workorders/:id/services
+  // Add work order service
+  router.post("/:id/services", async (req, res) => {
+    const { id } = req.params;
+    const { user_id, ...body } = req.body;
+
+    const service = {
+      work_order_id: Number(id),
+      trade_id: Number(body.service_id),
+      client_price: body?.client_price ?? null,
+      vendor_price: body?.vendor_price ?? null,
+    };
+
+    console.log("workorders router service to add", service);
+
+    try {
+      const createdService = await prisma.$transaction(async (tx) => {
+        const created = await tx.workOrderServices.create({
+          data: service,
+          include: {
+            Service: true,
+          },
+        });
+
+        console.log("created service", created);
+        return created;
+      });
+
+      res.json(createdService);
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError) {
+        console.error("Prisma error fetching vendors:", error);
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        console.error("Error fetching vendors:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    }
+  });
+
+  // DELETE /api/workorders/:id/statuses/:sid
+  // Remove work order service
+  router.delete("/:id/services/:sid", async (req, res) => {
+    const { id, sid } = req.params;
+    const { user_id } = req.body;
+
+    try {
+      const deletedService = await prisma.$transaction(async (tx) => {
+        const deleted = await tx.workOrderServices?.delete({
+          where: { work_order_id: Number(id), id: Number(sid) },
+          include: {
+            Service: true,
+          },
+        });
+
+        return deleted;
+      });
+      res.json(deletedService);
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError) {
+        console.error("Prisma error deleting service:", error);
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        console.error("Error deleting service:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    }
+  });
+
   // GET /api/workorders/statuses
   router.get("/statuses", async (req, res) => {
     try {
