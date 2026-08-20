@@ -1,14 +1,24 @@
 // workorder-details/tabs/DetailsTab/GeneralInfoCard.jsx
-import { InfoCard, FieldRow } from "../../../../components/InfoGrid";
+// MUI Components
 import TextField from "@mui/material/TextField";
 import Chip from "@mui/material/Chip";
 import Typography from "@mui/material/Typography";
+import MenuItem from "@mui/material/MenuItem";
+
+// Hooks
+import { useSoftwares } from "../../../../*/hooks/useSoftwares";
+
+// Local Components
+import { InfoCard, FieldRow } from "../../../../components/InfoGrid";
 
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString() : "—");
 const toInputDate = (iso) =>
   iso ? new Date(iso).toISOString().slice(0, 10) : "";
 
 export default function GeneralInfoCard({ details, onSave }) {
+  const { data: softwares = [] } = useSoftwares();
+
+  console.log("details", details);
   return (
     <InfoCard
       title="Work Order Info"
@@ -28,26 +38,6 @@ export default function GeneralInfoCard({ details, onSave }) {
             {value ?? "—"}
           </Typography>
         )}
-      />
-
-      {/* External ID — editable text field */}
-      <FieldRow
-        label="External ID"
-        fieldKey="external_id"
-        value={details?.external_id}
-        render={(value, editing, { onChange, fieldKey }) =>
-          editing ? (
-            <TextField
-              size="small"
-              value={value ?? ""}
-              onChange={(e) => onChange(fieldKey, e.target.value)}
-              placeholder="External reference"
-              fullWidth
-            />
-          ) : (
-            <Typography sx={{ fontSize: "0.85rem" }}>{value || "—"}</Typography>
-          )
-        }
       />
 
       {/* Type */}
@@ -118,6 +108,57 @@ export default function GeneralInfoCard({ details, onSave }) {
             <Typography sx={{ fontSize: "0.85rem" }}>
               {fmtDate(value)}
             </Typography>
+          )
+        }
+      />
+
+      {/* Software — editable dropdown */}
+      <FieldRow
+        label="Software"
+        fieldKey="software"
+        value={details?.software}
+        render={(value, editing, { onChange, fieldKey }) =>
+          editing ? (
+            <TextField
+              select
+              size="small"
+              value={value ?? ""}
+              onChange={(e) => onChange(fieldKey, e.target.value)}
+              fullWidth
+            >
+              <MenuItem value="">
+                <em>None</em>
+              </MenuItem>
+              {softwares.map((sw) => (
+                <MenuItem key={sw.id} value={sw.id}>
+                  {sw.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          ) : (
+            <Typography sx={{ fontSize: "0.85rem" }}>
+              {details?.software?.name || "—"}
+            </Typography>
+          )
+        }
+      />
+
+      {/* External ID — editable text field */}
+      <FieldRow
+        label="External ID"
+        fieldKey="external_id"
+        value={details?.external_id}
+        render={(value, editing, { onChange, fieldKey }) =>
+          editing ? (
+            <TextField
+              size="small"
+              value={value ?? ""}
+              onChange={(e) => onChange(fieldKey, e.target.value)}
+              placeholder="External reference"
+              fullWidth
+            />
+          ) : (
+            <Typography sx={{ fontSize: "0.85rem" }}>{value || "—"}</Typography>
           )
         }
       />
