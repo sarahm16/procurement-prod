@@ -46,6 +46,7 @@ export function WorkOrderDetailProvider({ id, children }) {
         vendor: data?.vendor,
         vendor_id: data?.vendor?.id,
         msa: data?.msa ?? null,
+        vendor_compliance: data?.vendor?.compliance,
       });
       setActivity(data.activity_log);
       setNotes(data.notes);

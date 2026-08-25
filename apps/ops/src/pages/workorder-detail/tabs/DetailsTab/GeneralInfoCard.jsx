@@ -11,6 +11,10 @@ import { useSoftwares } from "../../../../*/hooks/useSoftwares";
 // Local Components
 import { InfoCard, FieldRow } from "../../../../components/InfoGrid";
 
+// Local Constants
+import { workOrderTypes } from "../../../../*/constants/workorderTypes";
+import { workOrderPriorityConfig } from "../../../../*/constants/workOrderPriorityConfig";
+
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString() : "—");
 const toInputDate = (iso) =>
   iso ? new Date(iso).toISOString().slice(0, 10) : "";
@@ -19,6 +23,13 @@ export default function GeneralInfoCard({ details, onSave }) {
   const { data: softwares = [] } = useSoftwares();
 
   console.log("details", details);
+
+  const typeColor =
+    workOrderTypes.find((t) => t.name === details?.type)?.color ?? "#6b7280";
+  console.log("type color", typeColor);
+
+  const cfg = workOrderPriorityConfig[details?.priority];
+
   return (
     <InfoCard
       title="Work Order Info"
@@ -49,7 +60,37 @@ export default function GeneralInfoCard({ details, onSave }) {
             <Chip
               label={value}
               size="small"
-              sx={{ height: 22, fontSize: "0.72rem" }}
+              sx={{
+                height: 22,
+                fontSize: "0.72rem",
+                backgroundColor: typeColor + "22",
+                color: typeColor,
+                border: `1px solid ${typeColor}55`,
+              }}
+            />
+          ) : (
+            <Typography sx={{ fontSize: "0.85rem" }}>—</Typography>
+          )
+        }
+      />
+
+      {/* Priority */}
+      <FieldRow
+        label="Priority"
+        value={details?.priority}
+        render={(value) =>
+          value ? (
+            <Chip
+              label={cfg.label}
+              size="small"
+              sx={{
+                backgroundColor: cfg.bg,
+                color: cfg.color,
+                border: `1px solid ${cfg.color}55`,
+                fontWeight: 600,
+                fontSize: "0.7rem",
+                height: 22,
+              }}
             />
           ) : (
             <Typography sx={{ fontSize: "0.85rem" }}>—</Typography>
