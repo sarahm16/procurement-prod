@@ -28,6 +28,8 @@ export default function WorkOrderDetailsTab() {
   const site = useWorkOrderSite();
   const services = useWorkOrderServices();
 
+  console.log("work order site", site);
+
   const {
     updateDetails,
     addService,
