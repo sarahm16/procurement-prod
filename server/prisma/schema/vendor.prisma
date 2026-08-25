@@ -38,6 +38,7 @@ model Vendors {
   COIs                   VendorCOIs[]
   Warnings               VendorWarnings[]
   WorkOrders             WorkOrders[]
+  WorkOrderMSAs          WorkOrderMSAs[]
 }
 
 model VendorContacts {

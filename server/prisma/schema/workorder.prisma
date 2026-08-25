@@ -57,6 +57,7 @@ model WorkOrderServices {
 model WorkOrderMSAs {
   id             Int       @id @default(autoincrement())
   work_order_id  Int       // the job this MSA is for
+  vendor_id      Int       // the vendor the msa was sent to
 
   pandadoc_id    String?
   status         String
@@ -67,4 +68,5 @@ model WorkOrderMSAs {
 
   WorkOrder      WorkOrders?     @relation(fields: [work_order_id], references: [id])
   SentBy         Employees       @relation(fields: [sent_by], references: [id])
+  Vendor         Vendors         @relation(fields: [vendor_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
 }
