@@ -26,6 +26,7 @@ import BusinessOutlinedIcon from "@mui/icons-material/BusinessOutlined";
 import {
   useWorkOrderDetails,
   useWorkOrderActions,
+  useWorkOrderServices,
 } from "../../WorkOrderDetailProvider";
 
 const initials = (name) =>
@@ -40,6 +41,13 @@ function AssignedVendorCard({ span = "half" }) {
   const theme = useTheme();
   const details = useWorkOrderDetails();
   const { updateDetails, sendMSA } = useWorkOrderActions();
+  const services = useWorkOrderServices();
+
+  const sendMsaDisabled =
+    !services?.length ||
+    !services.every((s) => s.vendor_price && s.client_price);
+
+  console.log("msa sending is disabled", sendMsaDisabled);
 
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [vendors, setVendors] = useState([]);
@@ -297,39 +305,29 @@ function AssignedVendorCard({ span = "half" }) {
             </Typography>
             {msa ? (
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                {msa.pandadoc_url ? (
-                  <Link
-                    href={msa.pandadoc_url}
-                    target="_blank"
-                    rel="noopener"
-                    sx={{
-                      fontSize: "0.8rem",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 0.25,
-                    }}
-                  >
-                    {msa.date_sent
-                      ? new Date(msa.date_sent).toLocaleDateString()
-                      : "Sent"}{" "}
-                    — {msa.status}
-                    <OpenInNewIcon sx={{ fontSize: 12 }} />
-                  </Link>
-                ) : (
-                  <Typography
-                    sx={{ fontSize: "0.8rem", color: "text.secondary" }}
-                  >
-                    {msa.date_sent
-                      ? new Date(msa.date_sent).toLocaleDateString()
-                      : ""}{" "}
-                    — {msa.status}
-                  </Typography>
-                )}
+                <Link
+                  href={`https://app.pandadoc.com/a/#/documents/${msa.pandadoc_id}`}
+                  target="_blank"
+                  rel="noopener"
+                  sx={{
+                    fontSize: "0.8rem",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 0.25,
+                  }}
+                >
+                  {msa.date_sent
+                    ? new Date(msa.date_sent).toLocaleDateString()
+                    : "Sent"}{" "}
+                  — {msa.status}
+                  <OpenInNewIcon sx={{ fontSize: 12 }} />
+                </Link>
               </Box>
             ) : (
               <Button
                 size="small"
                 variant="outlined"
+                disabled={sendMsaDisabled}
                 startIcon={
                   sendingMsa ? (
                     <CircularProgress size={13} color="inherit" />
