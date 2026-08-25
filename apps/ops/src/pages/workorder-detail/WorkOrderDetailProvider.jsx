@@ -13,7 +13,6 @@ import axios from "axios";
 const WorkOrderDetailsContext = createContext();
 const ActivityContext = createContext();
 const NotesContext = createContext();
-// const ContactsContext = createContext();
 const ActionsContext = createContext();
 const ServicesContext = createContext();
 const SiteContext = createContext();
@@ -24,7 +23,6 @@ export function WorkOrderDetailProvider({ id, children }) {
   const [details, setDetails] = useState({});
   const [notes, setNotes] = useState([]);
   const [activity, setActivity] = useState([]);
-  //   const [contacts, setContacts] = useState([]);
   const [services, setServices] = useState([]);
   const [site, setSite] = useState({});
 
@@ -32,28 +30,27 @@ export function WorkOrderDetailProvider({ id, children }) {
     let active = true;
 
     axios.get(`/api/workorders/${id}`).then(({ data }) => {
-      console.log(data);
       if (!active) return;
       setDetails({
         status: data.status,
         work_order_number: data.work_order_number,
         external_id: data?.external_id,
-        company: data.company,
         software: data?.software,
         software_id: data?.software_id,
         type: data?.type,
+        priority: data?.priority,
         created_at: data.created_at,
         due_date: data.due_date,
         start_date: data?.start_date,
         scope_of_work: data?.scope_of_work,
+        vendor: data?.vendor,
+        vendor_id: data?.vendor?.id,
+        msa: data?.msa ?? null,
       });
       setActivity(data.activity_log);
       setNotes(data.notes);
       setSite(data.site);
-      //   setContacts(data.contacts);
       setServices(data.services);
-      //   setSites(data.sites);
-      //   setWorkorders(data.workorders || []);
     });
 
     return () => {
@@ -67,12 +64,15 @@ export function WorkOrderDetailProvider({ id, children }) {
         user_id: user?.id,
         changes: draft,
       });
-      // use the server response so the software OBJECT (and id) stay in sync
       setDetails((prev) => ({
         ...prev,
-        ...draft, // the scalar edits (external_id, dates, software_id)
-        software: data?.Software ?? prev.software, // fresh software object
+        ...draft,
+        software: data?.Software ?? prev.software,
         software_id: data?.software_id ?? prev.software_id,
+        vendor: data?.vendor ?? (draft.vendor_id === null ? null : prev.vendor),
+        vendor_id:
+          data?.vendor?.id ??
+          (draft.vendor_id === null ? null : prev.vendor_id),
       }));
     },
     [id, user?.id],
@@ -80,147 +80,115 @@ export function WorkOrderDetailProvider({ id, children }) {
 
   const updateService = useCallback(
     async (sid, changes) => {
-      console.log("changes in detail provider", changes);
       const { data } = await axios.put(
         `/api/workorders/${id}/services/${sid}`,
-        {
-          user_id: user?.id,
-          changes: changes,
-        },
+        { user_id: user?.id, changes },
       );
-      console.log("Updated service", data);
+      setServices((prev) =>
+        prev.map((s) => (s.id === sid ? { ...s, ...data } : s)),
+      );
     },
-    [id],
+    [id, user?.id],
   );
 
-  //   // Contacts Actions
-  //   const addContact = useCallback(
-  //     async (form) => {
-  //       const { data } = await axios.post(`/api/vendors/${id}/contacts`, {
-  //         user_id: user?.id,
-  //         ...form,
-  //       });
-  //       setContacts((prev) => [...prev, data]);
-  //       return data; // Return the newly created contact
-  //     },
-  //     [id, user?.id],
-  //   );
-
-  //   const updateContact = useCallback(
-  //     async (contactId, draft) => {
-  //       const { data } = await axios.put(
-  //         `/api/vendors/${id}/contacts/${contactId}`,
-  //         {
-  //           user_id: user?.id,
-  //           changes: draft,
-  //         },
-  //       );
-  //       setContacts((prev) =>
-  //         prev.map((contact) =>
-  //           contact.id === contactId ? { ...contact, ...draft } : contact,
-  //         ),
-  //       );
-  //     },
-  //     [id, user?.id],
-  //   );
-
-  //   const deleteContact = useCallback(
-  //     async (contactId) => {
-  //       const { data } = await axios.delete(
-  //         `/api/vendors/${id}/contacts/${contactId}`,
-  //         {
-  //           data: { user_id: user?.id },
-  //         },
-  //       );
-  //       setContacts((prev) => prev.filter((contact) => contact.id !== contactId));
-  //       return data;
-  //     },
-  //     [id, user?.id],
-  //   );
-
-  // TO DO: Update this function for work orders, create endpoint
   const deleteService = useCallback(
     async (serviceToDeleteId) => {
-      const deleteResponse = await axios.delete(
+      await axios.delete(
         `/api/workorders/${id}/services/${serviceToDeleteId}`,
         {
           data: { user_id: user?.id },
         },
       );
-      setServices((prevServices) =>
-        prevServices.filter((service) => service.id !== serviceToDeleteId),
-      );
+      setServices((prev) => prev.filter((s) => s.id !== serviceToDeleteId));
     },
     [id, user?.id],
   );
 
-  // TO DO: Also update this function
   const addService = useCallback(
     async (serviceToAdd) => {
-      console.log("serviceToAdd work order detail provider", serviceToAdd);
-      const addResponse = await axios.post(`/api/workorders/${id}/services`, {
+      const { data } = await axios.post(`/api/workorders/${id}/services`, {
         user_id: user?.id,
         ...serviceToAdd,
       });
-      console.log("Add association response:", addResponse.data);
-      setServices((prevServices) => [...prevServices, serviceToAdd]);
+      setServices((prev) => [...prev, data]);
     },
     [id, user?.id],
   );
 
   const addNote = useCallback(async (payload) => {
-    console.log("payload in addNote:", payload);
-    // Save note to database here
     const { data } = await axios.post(`/api/notes`, payload);
-
-    // Update local state
-    setNotes((prevNotes) => [...prevNotes, data]);
+    setNotes((prev) => [...prev, data]);
   }, []);
 
-  // TO DO: Also update this
-  const updateStatus = async (newStatus) => {
+  const updateStatus = useCallback(
+    async (newStatus) => {
+      try {
+        const { data } = await axios.put(`/api/workorders/${id}`, {
+          changes: { status_id: Number(newStatus?.id) },
+          user_id: user?.id,
+        });
+        setDetails((prev) => ({
+          ...prev,
+          status: data?.Status?.name ?? prev.status,
+        }));
+      } catch (error) {
+        console.error("Error updating status:", error);
+      }
+    },
+    [id, user?.id],
+  );
+
+  const updateScope = useCallback(
+    async (scope_of_work) => {
+      await axios.put(`/api/workorders/${id}`, {
+        user_id: user?.id,
+        changes: { scope_of_work },
+      });
+      setDetails((prev) => ({ ...prev, scope_of_work }));
+    },
+    [id, user?.id],
+  );
+
+  const sendMSA = useCallback(async () => {
     try {
-      const response = await axios.put(`/api/workorders/${id}`, {
-        changes: {
-          status_id: Number(newStatus?.id),
-        },
+      const { data } = await axios.post(`/api/workorders/${id}/msa`, {
         user_id: user?.id,
       });
-      console.log("Update status response:", response.data);
-
-      // Use server response rather than the local newStatus object
-      setDetails((prev) => ({
-        ...prev,
-        status_id: response.data.status_id,
-        status: response.data.VendorStatus, // ← from include
-      }));
-    } catch (error) {
-      console.error("Error updating status:", error);
+      // reflect the sent MSA in details so the card flips to the sent state
+      setDetails((prev) => ({ ...prev, msa: data }));
+      return data;
+    } catch (err) {
+      if (
+        err.response?.status === 409 &&
+        err.response.data?.needsPandaDocAuth
+      ) {
+        window.location.href = "/api/pandadoc/oauth/initiate";
+      } else {
+        console.error("Error sending MSA:", err);
+      }
     }
-  };
+  }, [id, user?.id]);
 
   const actions = useMemo(
     () => ({
       updateDetails,
+      updateService,
+      deleteService,
+      addService,
       addNote,
       updateStatus,
-      //   addContact,
-      //   updateContact,
-      //   deleteContact,
-      addService,
-      deleteService,
-      updateService,
+      updateScope,
+      sendMSA,
     }),
     [
       updateDetails,
-      //   addContact,
-      //   updateContact,
-      //   deleteContact,
-      addService,
+      updateService,
       deleteService,
+      addService,
       addNote,
       updateStatus,
-      updateService,
+      updateScope,
+      sendMSA,
     ],
   );
 
@@ -255,8 +223,6 @@ export const useWorkOrderActivity = () =>
   useCtx(ActivityContext, "useWorkOrderActivity");
 export const useWorkOrderNotes = () =>
   useCtx(NotesContext, "useWorkOrderNotes");
-// export const useWorkOrderContacts = () =>
-//   useCtx(ContactsContext, "useWorkOrderContacts");
 export const useWorkOrderActions = () =>
   useCtx(ActionsContext, "useWorkOrderActions");
 export const useWorkOrderServices = () =>

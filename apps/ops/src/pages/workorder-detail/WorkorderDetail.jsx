@@ -32,6 +32,8 @@ import {
   useWorkOrderSite,
 } from "./WorkOrderDetailProvider";
 import WorkOrderDetailsTab from "./tabs/DetailsTab/WorkOrderDetailsTab";
+import FieldActivityTab from "./tabs/FieldActivityTab/FieldActivityTab";
+import AttachmentsTab from "./tabs/AttachmentsTab/AttachmentsTab";
 
 function WorkOrderDetail() {
   const { id } = useParams();
@@ -80,9 +82,12 @@ function WorkOrderDetailLayout({ id }) {
           content: <WorkOrderDetailsTab />,
         },
         {
-          label: "Documents",
-          content: <></>,
-          // content: <VendorDocumentationTab vendorId={id} />,
+          label: "Field Activity",
+          content: <FieldActivityTab />,
+        },
+        {
+          label: "Attachments",
+          content: <AttachmentsTab />,
         },
 
         {

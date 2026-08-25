@@ -1,7 +1,11 @@
 // workorder-details/tabs/DetailsTab/WorkOrderDetailsTab.jsx
 import { useParams } from "react-router-dom";
 
+// Local Components
 import InfoGrid from "../../../../components/InfoGrid";
+
+// Cards
+import AssignedVendorCard from "./AssignedVendorCard";
 import RoleAssignment from "../../../../components/RoleAssignment";
 import GeneralInfoCard from "./GeneralInfoCard";
 import WorkOrderSiteCard from "./WorkOrderSiteCard";
@@ -13,6 +17,7 @@ import {
   useWorkOrderSite,
   useWorkOrderServices,
 } from "../../WorkOrderDetailProvider";
+import VendorOnboardingCard from "./VendorOnboardingCard";
 
 const WORK_ORDER_ENTITY_TYPE_ID = 4; // confirm your actual id
 
@@ -44,7 +49,8 @@ export default function WorkOrderDetailsTab() {
       <WorkOrderSiteCard site={site} />
 
       {/* Vendor assignment placeholder (logic later) */}
-      {/* <VendorAssignmentCard workOrderId={Number(id)} /> */}
+      <AssignedVendorCard />
+      <VendorOnboardingCard />
 
       {/* Full width: scope + services/pricing */}
       <ServicesPricingCard
