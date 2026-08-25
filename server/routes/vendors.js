@@ -25,6 +25,9 @@ const upload = multer({
   limits: { fileSize: 15 * 1024 * 1024 }, // 15MB cap — COIs are small
 });
 
+const getPrimaryContact = (contacts = []) =>
+  contacts.find((c) => c.contact_role_id === 1) ?? contacts[0] ?? null;
+
 const serializeReply = (reply) => {
   return {
     id: reply.id,
@@ -49,14 +52,15 @@ const serializeNote = (note) => {
 };
 
 const serializeVendor = (vendor, notes, activityLog) => {
+  const primary = getPrimaryContact(vendor.Contacts);
+
   return {
     id: vendor.id,
     company: vendor.company,
+    primary_contact_name: primary?.name ?? null,
+    primary_contact_email: primary?.email ?? null,
+    primary_contact_phone: primary?.phone ?? null,
     status: vendor.VendorStatus,
-    contact_name: vendor.contact_name,
-    contact_email: vendor.contact_email,
-    contact_phone: vendor.contact_phone,
-    contact_phone2: vendor.contact_phone2,
     mailing_address: vendor.mailing_address,
     mailing_address2: vendor.mailing_address2,
     mailing_city: vendor.mailing_city,
@@ -113,6 +117,7 @@ export default function vendorsRouter(prisma) {
           VendorTrades: {
             include: { Trade: true },
           },
+          Contacts: true,
         },
       });
       const roleAssignments = await prisma.roleAssignments.findMany({

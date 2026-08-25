@@ -11,21 +11,35 @@ const entity_type_id = 4;
 const getPrimaryContact = (contacts = []) =>
   contacts.find((c) => c.contact_role_id === 1) ?? contacts[0] ?? null;
 
-const COMPLIANCE_TYPES = ["ACH", "W9", "MSA"];
+const COMPLIANCE_TYPES = ["ACH", "W9"]; // standard MSA not required for work orders
 
 const serializeVendor = (vendor) => {
   if (!vendor) return null;
   const primary = getPrimaryContact(vendor.Contacts);
   const docs = vendor.ComplianceDocuments ?? [];
+  const cois = vendor.COIs ?? [];
 
-  const hasValid = (type) =>
+  // PandaDoc-sent docs are valid when completed
+  const hasValidDoc = (type) =>
     docs.some(
       (doc) => doc.document_type === type && doc.status === "completed",
     );
 
-  const compliance = Object.fromEntries(
-    COMPLIANCE_TYPES.map((type) => [type, hasValid(type)]),
+  // COI is valid when a record exists that is verified AND not expired
+  const now = new Date();
+  const hasValidCOI = cois.some(
+    (coi) =>
+      coi.additionally_insured_verified &&
+      coi.expiration_date &&
+      new Date(coi.expiration_date) > now,
   );
+
+  const compliance = {
+    ...Object.fromEntries(
+      COMPLIANCE_TYPES.map((type) => [type, hasValidDoc(type)]),
+    ),
+    COI: hasValidCOI,
+  };
 
   return {
     id: vendor.id,
@@ -33,7 +47,7 @@ const serializeVendor = (vendor) => {
     primary_contact_name: primary?.name ?? null,
     email: primary?.email ?? null,
     phone: primary?.phone ?? null,
-    compliance: compliance, // { ACH: true, W9: false, MSA: true }
+    compliance, // { ACH: bool, W9: bool, COI: bool }
   };
 };
 
@@ -310,13 +324,14 @@ export default function workordersRouter(prisma) {
             Software: true,
             Site: {
               select: {
+                id: true,
                 store: true,
                 mailing_address: true,
                 mailing_address2: true,
                 mailing_city: true,
                 mailing_state: true,
                 mailing_zipcode: true,
-                Client: { select: { client: true } },
+                Client: { select: { client: true, id: true } },
                 Contacts: true,
               },
             },
@@ -324,6 +339,7 @@ export default function workordersRouter(prisma) {
               include: {
                 ComplianceDocuments: true,
                 Contacts: true,
+                COIs: true,
               },
             },
             MSAs: true,
