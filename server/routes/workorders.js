@@ -11,15 +11,29 @@ const entity_type_id = 4;
 const getPrimaryContact = (contacts = []) =>
   contacts.find((c) => c.contact_role_id === 1) ?? contacts[0] ?? null;
 
+const COMPLIANCE_TYPES = ["ACH", "W9", "MSA"];
+
 const serializeVendor = (vendor) => {
   if (!vendor) return null;
   const primary = getPrimaryContact(vendor.Contacts);
+  const docs = vendor.ComplianceDocuments ?? [];
+
+  const hasValid = (type) =>
+    docs.some(
+      (doc) => doc.document_type === type && doc.status === "completed",
+    );
+
+  const compliance = Object.fromEntries(
+    COMPLIANCE_TYPES.map((type) => [type, hasValid(type)]),
+  );
+
   return {
     id: vendor.id,
     company: vendor.company,
     primary_contact_name: primary?.name ?? null,
     email: primary?.email ?? null,
     phone: primary?.phone ?? null,
+    compliance: compliance, // { ACH: true, W9: false, MSA: true }
   };
 };
 
