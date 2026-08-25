@@ -122,6 +122,23 @@ export function makePandaDocWebhook(workspaceKey) {
           });
           continue;
         }
+
+        const workOrderMSA = await prisma.workOrderMSAs.findFirst({
+          where: { pandadoc_id: pandadocId },
+        });
+
+        if (workOrderMSA) {
+          await prisma.$transaction(async (tx) => {
+            await tx.workOrderMSAs.update({
+              where: { id: workOrderMSA.id },
+              data: {
+                status: mapped.status,
+                ...(mapped.completed ? { date_completed: new Date() } : {}),
+              },
+            });
+          });
+          continue;
+        }
       } catch (err) {
         console.error(`PandaDoc webhook (${workspaceKey}): event error`, err);
         // swallow — already 200'd; one bad event shouldn't stop the rest
