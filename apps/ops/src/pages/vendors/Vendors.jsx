@@ -25,8 +25,27 @@ const VENDOR_ENTITY_TYPE_ID = 1;
 
 const baseColumns = [
   { field: "company", headerName: "Company", flex: 1.5, minWidth: 180 },
-  { field: "contact_name", headerName: "Contact", flex: 1, minWidth: 140 },
-  { field: "contact_phone", headerName: "Phone", flex: 1, minWidth: 130 },
+  {
+    field: "primary_contact_name",
+    headerName: "Contact",
+    flex: 1,
+    minWidth: 140,
+    valueGetter: (value, row) => row.primary_contact_name ?? "—",
+  },
+  {
+    field: "primary_contact_email",
+    headerName: "Email",
+    flex: 1.2,
+    minWidth: 180,
+    valueGetter: (value, row) => row.primary_contact_email ?? "—",
+  },
+  {
+    field: "primary_contact_phone",
+    headerName: "Phone",
+    flex: 0.9,
+    minWidth: 130,
+    valueGetter: (value, row) => row.primary_contact_phone ?? "—",
+  },
   {
     field: "location",
     headerName: "Location",
