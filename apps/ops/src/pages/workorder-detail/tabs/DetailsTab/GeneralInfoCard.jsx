@@ -28,7 +28,7 @@ export default function GeneralInfoCard({ details, onSave }) {
     workOrderTypes.find((t) => t.name === details?.type)?.color ?? "#6b7280";
   console.log("type color", typeColor);
 
-  const cfg = workOrderPriorityConfig[details?.priority];
+  const cfg = workOrderPriorityConfig?.[details?.priority];
 
   return (
     <InfoCard
@@ -79,9 +79,9 @@ export default function GeneralInfoCard({ details, onSave }) {
         label="Priority"
         value={details?.priority}
         render={(value) =>
-          value ? (
+          cfg ? (
             <Chip
-              label={cfg.label}
+              label={cfg?.label}
               size="small"
               sx={{
                 backgroundColor: cfg.bg,
