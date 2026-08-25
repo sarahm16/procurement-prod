@@ -222,10 +222,22 @@ function AssignedVendorCard({ span = "half" }) {
             >
               {initials(vendor.company)}
             </Avatar>
-            <Box sx={{ minWidth: 0 }}>
-              <Typography sx={{ fontWeight: 700, fontSize: "0.95rem" }}>
-                {vendor.company}
-              </Typography>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Typography sx={{ fontWeight: 700, fontSize: "0.95rem" }}>
+                  {vendor.company}
+                </Typography>
+                <IconButton
+                  size="small"
+                  component="a"
+                  href={`/vendors/${vendor.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  sx={{ p: 0.25, color: "text.secondary" }}
+                >
+                  <OpenInNewIcon sx={{ fontSize: 15 }} />
+                </IconButton>
+              </Box>
               {vendor.primary_contact_name && (
                 <Typography
                   sx={{ fontSize: "0.8rem", color: "text.secondary" }}
