@@ -39,6 +39,8 @@ model Vendors {
   Warnings               VendorWarnings[]
   WorkOrders             WorkOrders[]
   WorkOrderMSAs          WorkOrderMSAs[]
+  WorkOrderUpdates       WorkOrderVendorUpdates[]
+  WorkOrderCommunications WorkOrderCommunications[]
 }
 
 model VendorContacts {

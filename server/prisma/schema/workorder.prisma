@@ -11,6 +11,7 @@ model WorkOrders {
   external_id             String?             @db.VarChar(50)
   scope_of_work           String?             @db.VarChar(1000)
   priority                String?              @db.VarChar(50)
+  phase                   String?             @db.VarChar(10) @default("ops")
 
   parent_work_order_id    Int?                // null = parent work order or stand alone
   site_id                 Int
@@ -29,6 +30,9 @@ model WorkOrders {
 
   MSAs                    WorkOrderMSAs[]     // Only one MSA is valid at a time, but multiple versions can be sent if pricing is changed, vendor is changed, etc
   Services                WorkOrderServices[]
+  Attachments             WorkOrderAttachments[]
+  VendorUpdates           WorkOrderVendorUpdates[]     // work order will not have a vendor update on creation, and it may have multiple if a vendor is replaced with another vendor
+  VendorCommunications    WorkOrderCommunications[]
 }
 
 model WorkOrderStatuses {
@@ -69,4 +73,51 @@ model WorkOrderMSAs {
   WorkOrder      WorkOrders?     @relation(fields: [work_order_id], references: [id])
   SentBy         Employees       @relation(fields: [sent_by], references: [id])
   Vendor         Vendors         @relation(fields: [vendor_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+}
+
+model WorkOrderAttachments {
+  id             Int       @id @default(autoincrement())
+  work_order_id  Int
+  category       String    // "pre_work" | "vendor_before" | "vendor_after" | "attachment"
+  blob_url       String    @db.VarChar(500)
+  file_name      String    @db.VarChar(255)
+  content_type   String?   @db.VarChar(100)
+  uploaded_by    Int?      // employee (null if vendor-uploaded via portal)
+  uploaded_by_vendor Boolean @default(false)
+  created_at     DateTime  @default(now())
+
+  WorkOrder      WorkOrders @relation(fields: [work_order_id], references: [id])
+}
+
+model WorkOrderVendorUpdates {
+  id                Int           @id @default(autoincrement())
+  created_at        DateTime      @default(now())
+  check_in          DateTime?
+  check_in_notes    String?       @db.VarChar(1000)
+  check_out         DateTime? 
+  check_out_notes   String?       @db.VarChar(1000)
+
+  vendor_id         Int
+  work_order_id     Int
+
+  Vendor            Vendors         @relation(fields: [vendor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  WorkOrder         WorkOrders      @relation(fields: [work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([work_order_id, vendor_id])    // One check in and one check out per vendor per work order
+}
+
+model WorkOrderCommunications {
+  id             Int        @id @default(autoincrement())
+  work_order_id  Int
+  content        String     @db.VarChar(2000)
+  sender_type    String     // "internal" | "vendor"
+  employee_id    Int?       // set when sender_type = internal (who on our team)
+  vendor_id      Int?       // set when sender_type = vendor
+  created_at     DateTime   @default(now())
+
+  WorkOrder      WorkOrders @relation(fields: [work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Employee       Employees? @relation(fields: [employee_id], references: [id])
+  Vendor         Vendors?   @relation(fields: [vendor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([work_order_id])
 }
