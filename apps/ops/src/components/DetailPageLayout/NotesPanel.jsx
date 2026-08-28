@@ -63,8 +63,6 @@ export default function NotesPanel({
 
   const { user, error } = useAuthenticatedUser();
 
-  console.log("authenticated user", user);
-
   // Employees for the tagging autocomplete:
   const { data: employees = [] } = useEmployees();
 
