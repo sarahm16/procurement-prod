@@ -728,6 +728,7 @@ export default function vendorsRouter(prisma) {
 
       // 1. Upload the bytes to blob (returns the URL)
       const blobUrl = await uploadToBlob(
+        "vendor-documents",
         req.file.buffer,
         blobPath,
         req.file.mimetype,

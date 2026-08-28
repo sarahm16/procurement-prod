@@ -3,9 +3,24 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { logActivity } from "../utils/logActivity.js";
 import serializeActivityLogEntry from "../serializer/activityLogSerializer.js";
 import serializeNote from "../serializer/noteSerializer.js";
-import { sendWorkOrderMsa } from "../services/pandadoc/send/sendWorkOrderMsa.js"; // adjust path to where sendMsa.js lives
+import { sendWorkOrderMsa } from "../services/pandadoc/send/sendWorkOrderMsa.js";
+import multer from "multer";
+import { uploadToBlob } from "../services/blob/uploadToBlob.js";
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+});
 
 const entity_type_id = 4;
+
+const WORKORDER_ATTACHMENTS_CONTAINER = "workorder-attachments";
+const VALID_CATEGORIES = [
+  "pre_work",
+  "vendor_before",
+  "vendor_after",
+  "attachment",
+];
 
 // Primary contact rule — aligned with the ACH/MSA convention (contact_role_id === 1)
 const getPrimaryContact = (contacts = []) =>
@@ -62,6 +77,28 @@ const serializeService = (service) => ({
   name: service.Service?.name,
 });
 
+const serializeVendorUpdate = (u) => ({
+  id: u.id,
+  vendor_id: u.vendor_id,
+  check_in: u.check_in,
+  check_in_notes: u.check_in_notes,
+  check_out: u.check_out,
+  check_out_notes: u.check_out_notes,
+  created_at: u.created_at,
+  vendor_company: u?.Vendor?.company ?? null,
+});
+
+const serializeCommunication = (c) => ({
+  id: c.id,
+  content: c.content,
+  sender_type: c.sender_type,
+  employee_id: c.employee_id,
+  vendor_id: c.vendor_id,
+  employee_name: c.Employee?.name ?? null, // who on our team, if internal
+  created_at: c.created_at,
+  vendor_company: c?.Vendor?.company ?? null,
+});
+
 const serializeWorkorderById = (workorder, notes, activityLog) => {
   return {
     client: workorder?.Site?.Client?.client,
@@ -82,6 +119,13 @@ const serializeWorkorderById = (workorder, notes, activityLog) => {
     scope_of_work: workorder?.scope_of_work,
     vendor: serializeVendor(workorder?.Vendor),
     msa: (workorder?.MSAs ?? [])[0] ?? null, // most recent MSA if present
+    phase: workorder?.phase ?? "ops",
+    attachments: workorder?.Attachments,
+    vendor_updates: (workorder?.VendorUpdates ?? []).map(serializeVendorUpdate),
+    communications: (workorder?.VendorCommunications ?? [])
+      .slice()
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)) // chronological
+      .map(serializeCommunication),
   };
 };
 
@@ -343,6 +387,18 @@ export default function workordersRouter(prisma) {
               },
             },
             MSAs: true,
+            Attachments: true,
+            VendorUpdates: {
+              include: {
+                Vendor: true,
+              },
+            },
+            VendorCommunications: {
+              include: {
+                Employee: true,
+                Vendor: true,
+              },
+            },
           },
         }),
         prisma.notes.findMany({
@@ -394,6 +450,7 @@ export default function workordersRouter(prisma) {
       "due_date",
       "scope_of_work",
       "vendor_id",
+      "phase",
     ];
 
     const data = {};
@@ -527,6 +584,184 @@ export default function workordersRouter(prisma) {
       }
       console.error("Error sending work order MSA:", error);
       res.status(500).json({ error: "Failed to send MSA" });
+    }
+  });
+
+  // GET /api/workorders/:id/attachments  (optionally ?category=vendor_after)
+  router.get("/:id/attachments", async (req, res) => {
+    const { id } = req.params;
+    const { category } = req.query;
+    try {
+      const attachments = await prisma.workOrderAttachments.findMany({
+        where: {
+          work_order_id: Number(id),
+          ...(category ? { category } : {}),
+        },
+        orderBy: { created_at: "desc" },
+      });
+      res.json(attachments);
+    } catch (error) {
+      console.error("Error fetching attachments:", error);
+      res.status(500).json({ error: "Failed to fetch attachments" });
+    }
+  });
+
+  // POST /api/workorders/:id/attachments
+  // multipart: files[] (one or many), category, user_id
+  router.post("/:id/attachments", upload.array("files"), async (req, res) => {
+    const { id } = req.params;
+    const { category, user_id, uploaded_by_vendor } = req.body;
+
+    if (!VALID_CATEGORIES.includes(category)) {
+      return res.status(400).json({ error: `Invalid category: ${category}` });
+    }
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: "No files provided" });
+    }
+
+    try {
+      const created = [];
+
+      for (const file of req.files) {
+        const safeName = file.originalname.replace(/[^\w.\-]/g, "_");
+        const blobPath = `workorders/${id}/${category}/${Date.now()}-${safeName}`;
+
+        const blobUrl = await uploadToBlob(
+          WORKORDER_ATTACHMENTS_CONTAINER,
+          file.buffer,
+          blobPath,
+          file.mimetype,
+        );
+
+        const record = await prisma.workOrderAttachments.create({
+          data: {
+            work_order_id: Number(id),
+            category,
+            blob_url: blobUrl,
+            file_name: file.originalname,
+            content_type: file.mimetype,
+            uploaded_by: user_id ? Number(user_id) : null,
+            uploaded_by_vendor: uploaded_by_vendor === "true",
+          },
+        });
+        created.push(record);
+      }
+
+      // log once for the batch
+      await logActivity(prisma, {
+        entityTypeId: entity_type_id,
+        entityId: Number(id),
+        fieldChanged: "attachment",
+        previousValue: null,
+        newValue: `Uploaded ${created.length} ${category} file(s)`,
+        changedBy: user_id ? Number(user_id) : null,
+        action: "CREATE",
+      });
+
+      res.status(201).json(created);
+    } catch (error) {
+      console.error("Error uploading attachments:", error);
+      res.status(500).json({ error: "Failed to upload attachments" });
+    }
+  });
+
+  // DELETE /api/workorders/:id/attachments/:attachmentId
+  router.delete("/:id/attachments/:attachmentId", async (req, res) => {
+    const { attachmentId } = req.params;
+    try {
+      // NOTE: this removes the DB record; deleting the blob itself is optional
+      await prisma.workOrderAttachments.delete({
+        where: { id: Number(attachmentId) },
+      });
+      res.status(204).end();
+    } catch (error) {
+      console.error("Error deleting attachment:", error);
+      res.status(500).json({ error: "Failed to delete attachment" });
+    }
+  });
+
+  // POST /api/workorders/:id/communications
+  router.post("/:id/communications", async (req, res) => {
+    const { id } = req.params;
+    const { content, sender_type, user_id, vendor_id } = req.body;
+
+    if (!content?.trim())
+      return res.status(400).json({ error: "Content required" });
+    if (!["internal", "vendor"].includes(sender_type)) {
+      return res.status(400).json({ error: "Invalid sender_type" });
+    }
+
+    try {
+      const created = await prisma.$transaction(async (tx) => {
+        const message = await tx.workOrderCommunications.create({
+          data: {
+            work_order_id: Number(id),
+            content: content.trim(),
+            sender_type,
+            employee_id:
+              sender_type === "internal" ? Number(user_id) || null : null,
+            vendor_id:
+              sender_type === "vendor" ? Number(vendor_id) || null : null,
+          },
+          include: { Employee: true },
+        });
+        return message;
+      });
+
+      res.status(201).json({
+        id: created.id,
+        content: created.content,
+        sender_type: created.sender_type,
+        employee_id: created.employee_id,
+        vendor_id: created.vendor_id,
+        employee_name: created.Employee?.name ?? null,
+        created_at: created.created_at,
+      });
+    } catch (error) {
+      console.error("Error adding communication:", error);
+      res.status(500).json({ error: "Failed to add communication" });
+    }
+  });
+
+  // PUT /api/workorders/:id/vendor-update
+  // body: { vendor_id, check_in?, check_in_notes?, check_out?, check_out_notes? }
+  router.put("/:id/vendor-update", async (req, res) => {
+    const { id } = req.params;
+    const { vendor_id, check_in, check_in_notes, check_out, check_out_notes } =
+      req.body;
+
+    if (!vendor_id)
+      return res.status(400).json({ error: "vendor_id required" });
+
+    // only include fields actually sent (so check-in doesn't wipe check-out, etc.)
+    const fields = {};
+    if (check_in !== undefined)
+      fields.check_in = check_in ? new Date(check_in) : null;
+    if (check_in_notes !== undefined) fields.check_in_notes = check_in_notes;
+    if (check_out !== undefined)
+      fields.check_out = check_out ? new Date(check_out) : null;
+    if (check_out_notes !== undefined) fields.check_out_notes = check_out_notes;
+
+    try {
+      const update = await prisma.workOrderVendorUpdates.upsert({
+        where: {
+          work_order_id_vendor_id: {
+            // composite unique key
+            work_order_id: Number(id),
+            vendor_id: Number(vendor_id),
+          },
+        },
+        update: fields,
+        create: {
+          work_order_id: Number(id),
+          vendor_id: Number(vendor_id),
+          ...fields,
+        },
+      });
+      res.json(update);
+    } catch (error) {
+      console.error("Error updating vendor update:", error);
+      res.status(500).json({ error: "Failed to update vendor update" });
     }
   });
 
