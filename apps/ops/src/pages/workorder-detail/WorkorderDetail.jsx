@@ -82,12 +82,12 @@ function WorkOrderDetailLayout({ id }) {
           content: <WorkOrderDetailsTab />,
         },
         {
-          label: "Field Activity",
-          content: <FieldActivityTab />,
-        },
-        {
           label: "Attachments",
           content: <AttachmentsTab />,
+        },
+        {
+          label: "Field Activity",
+          content: <FieldActivityTab />,
         },
 
         {
