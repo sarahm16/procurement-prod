@@ -14,8 +14,9 @@ import SendIcon from "@mui/icons-material/Send";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 
 import {
-  useWorkOrderDetails,
   useWorkOrderActions,
+  useFieldActivity,
+  useWorkOrderDetails,
 } from "../../WorkOrderDetailProvider";
 
 const initials = (name) =>
@@ -114,10 +115,12 @@ function MessageBubble({ message, theme }) {
 
 export default function CommunicationsThread() {
   const theme = useTheme();
+  const fieldActivity = useFieldActivity();
   const details = useWorkOrderDetails();
   const { addCommunication } = useWorkOrderActions();
 
-  const messages = details?.communications ?? [];
+  const messages = fieldActivity?.communications ?? [];
+  const vendor_id = details?.vendor_id;
 
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -134,7 +137,7 @@ export default function CommunicationsThread() {
     setSending(true);
     try {
       // our team is sending, so sender_type = internal
-      await addCommunication?.({ content, sender_type: "internal" });
+      await addCommunication?.({ content, sender_type: "internal", vendor_id });
       setDraft("");
     } catch (e) {
       console.error("Error sending message:", e);

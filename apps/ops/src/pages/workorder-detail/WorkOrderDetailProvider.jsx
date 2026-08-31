@@ -16,6 +16,7 @@ const NotesContext = createContext();
 const ActionsContext = createContext();
 const ServicesContext = createContext();
 const SiteContext = createContext();
+const FieldActivityContext = createContext();
 
 export function WorkOrderDetailProvider({ id, children }) {
   const { user } = useAuthenticatedUser();
@@ -25,6 +26,7 @@ export function WorkOrderDetailProvider({ id, children }) {
   const [activity, setActivity] = useState([]);
   const [services, setServices] = useState([]);
   const [site, setSite] = useState({});
+  const [fieldActivity, setFieldActivity] = useState({});
 
   useEffect(() => {
     let active = true;
@@ -52,6 +54,10 @@ export function WorkOrderDetailProvider({ id, children }) {
       setNotes(data.notes);
       setSite(data.site);
       setServices(data.services);
+      setFieldActivity({
+        communications: data?.communications,
+        vendor_updates: data?.vendor_updates,
+      });
     });
 
     return () => {
@@ -170,6 +176,28 @@ export function WorkOrderDetailProvider({ id, children }) {
     }
   }, [id, user?.id]);
 
+  const addCommunication = useCallback(
+    async (payload) => {
+      try {
+        const { data } = await axios.post(
+          `/api/workorders/${id}/communications`,
+          {
+            ...payload,
+            user_id: user?.id,
+          },
+        );
+        console.log("saved communication", data);
+        setFieldActivity((prev) => ({
+          ...prev,
+          communications: [...prev.communications, data],
+        }));
+      } catch (error) {
+        console.error("error saving communication", error);
+      }
+    },
+    [id, user?.id],
+  );
+
   const actions = useMemo(
     () => ({
       updateDetails,
@@ -180,6 +208,7 @@ export function WorkOrderDetailProvider({ id, children }) {
       updateStatus,
       updateScope,
       sendMSA,
+      addCommunication,
     }),
     [
       updateDetails,
@@ -190,6 +219,7 @@ export function WorkOrderDetailProvider({ id, children }) {
       updateStatus,
       updateScope,
       sendMSA,
+      addCommunication,
     ],
   );
 
@@ -199,9 +229,11 @@ export function WorkOrderDetailProvider({ id, children }) {
         <ActivityContext.Provider value={activity}>
           <NotesContext.Provider value={notes}>
             <SiteContext.Provider value={site}>
-              <ServicesContext.Provider value={services}>
-                {children}
-              </ServicesContext.Provider>
+              <FieldActivityContext value={fieldActivity}>
+                <ServicesContext.Provider value={services}>
+                  {children}
+                </ServicesContext.Provider>
+              </FieldActivityContext>
             </SiteContext.Provider>
           </NotesContext.Provider>
         </ActivityContext.Provider>
@@ -228,3 +260,5 @@ export const useWorkOrderActions = () =>
   useCtx(ActionsContext, "useWorkOrderActions");
 export const useWorkOrderServices = () =>
   useCtx(ServicesContext, "useWorkOrderServices");
+export const useFieldActivity = () =>
+  useCtx(FieldActivityContext, "useFieldActivity");

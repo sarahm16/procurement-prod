@@ -19,8 +19,9 @@ import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 
 import {
-  useWorkOrderDetails,
   useWorkOrderActions,
+  useFieldActivity,
+  useWorkOrderDetails,
 } from "../../WorkOrderDetailProvider";
 
 const fmtDateTime = (iso) =>
@@ -141,14 +142,16 @@ export default function CheckInOutCard() {
   const theme = useTheme();
   const { id } = useParams();
   const details = useWorkOrderDetails();
+  const fieldActivity = useFieldActivity();
   const { checkInOut } = useWorkOrderActions(); // provider action (see note)
 
   const vendorId = details?.vendor?.id ?? details?.vendor_id;
 
   // the update record for the current vendor
   const update =
-    (details?.vendor_updates ?? []).find((u) => u.vendor_id === vendorId) ??
-    null;
+    (fieldActivity?.vendor_updates ?? []).find(
+      (u) => u.vendor_id === vendorId,
+    ) ?? null;
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
