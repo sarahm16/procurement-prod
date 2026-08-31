@@ -32,13 +32,15 @@ const serializeSiteById = (site, notes, activityLog, contacts) => ({
   notes: notes.map(serializeNote),
   activity_log: (activityLog || []).map(serializeActivityLogEntry),
   contacts: contacts.map(serializeContact),
-  attachments: (site.Attachments ?? []).map(serializeAttachment), // ← add
+  attachments: (site.Attachments ?? []).map(serializeAttachment),
+  status: site?.Status,
 });
 
 const serializeSite = (site) => ({
   ...site,
   service_lines: serializeServiceLines(site.ContractSites),
   client: serializeClient(site.Client),
+  status: site?.Status,
 });
 
 const serializeClient = (client) => client.client;
@@ -86,6 +88,7 @@ export default function sitesRouter(prisma) {
               },
             },
           },
+          Status: true,
         },
       });
       res.json(sites.map(serializeSite));
@@ -99,6 +102,25 @@ export default function sitesRouter(prisma) {
         });
       } else {
         console.error("Error fetching sites:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    }
+  });
+
+  router.get("/statuses", async (req, res) => {
+    try {
+      const statuses = await prisma.siteStatuses?.findMany();
+      res.json(statuses);
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError) {
+        console.error("Prisma error fetching statuses:", error);
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        console.error("Error fetching workorder statuses:", error);
         res.status(500).json({ error: "Internal Server Error" });
       }
     }
@@ -137,6 +159,7 @@ export default function sitesRouter(prisma) {
                 ContactRole: true,
               },
             },
+            Status: true,
           },
         }),
         prisma.notes.findMany({
@@ -205,7 +228,6 @@ export default function sitesRouter(prisma) {
     }
   });
 
-  // POST /api/sites/:id/attachments
   // GET /api/sites/:id/attachments
   router.get("/:id/attachments", async (req, res) => {
     const { id } = req.params;
@@ -284,6 +306,59 @@ export default function sitesRouter(prisma) {
     } catch (error) {
       console.error("Error deleting site attachment:", error);
       res.status(500).json({ error: "Failed to delete attachment" });
+    }
+  });
+
+  // PUT /api/sites/:id/status
+  router.put("/:id/status", async (req, res) => {
+    const { id } = req.params;
+    const { status_id, user_id } = req.body;
+
+    if (status_id == null) {
+      return res.status(400).json({ error: "status_id is required" });
+    }
+
+    try {
+      const updated = await prisma.$transaction(async (tx) => {
+        // fetch the current status first, for the activity log's previous value
+        const current = await tx.Sites.findUnique({
+          where: { id: Number(id) },
+          include: { Status: true },
+        });
+
+        const site = await tx.Sites.update({
+          where: { id: Number(id) },
+          data: { status_id: Number(status_id) },
+          include: { Status: true },
+        });
+
+        await logActivity(tx, {
+          entityTypeId: entity_type_id,
+          entityId: Number(id),
+          fieldChanged: "status",
+          previousValue: current?.Status?.name ?? null,
+          newValue: site.Status?.name ?? null,
+          changedBy: user_id ?? null,
+          action: "UPDATE",
+        });
+
+        return site;
+      });
+
+      // return the serialized status name (matches how the client reads it)
+      res.json({ status: updated.Status, status_id: updated.status_id });
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError) {
+        console.error("Prisma error updating site status:", error);
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        console.error("Error updating site status:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
     }
   });
 
