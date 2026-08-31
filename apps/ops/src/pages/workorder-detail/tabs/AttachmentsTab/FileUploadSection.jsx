@@ -279,6 +279,10 @@ export default function FileUploadSection({
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))",
               gap: 1,
+              maxHeight: 340, // ~3 rows of thumbnails, then scrolls
+              overflowY: "auto",
+              // subtle scrollbar styling (optional)
+              pr: 0.5,
             }}
           >
             {items.map((img) => (
