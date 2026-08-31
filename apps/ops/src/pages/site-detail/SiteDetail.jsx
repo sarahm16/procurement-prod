@@ -11,12 +11,14 @@ import {
   useSiteDetails,
   useSiteNotes,
   useSiteActivity,
+  useSiteActions,
 } from "./SiteDetailProvider";
 
 // Tabs
 import SiteDetailsTab from "./tabs/SiteDetailsTab/SiteDetailsTab";
 import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
 import SiteAttachmentsTab from "./tabs/AttachmentsTab/AttachmentsTab";
+import axios from "axios";
 
 function SiteDetail() {
   const { id } = useParams();
@@ -31,6 +33,19 @@ function SiteDetailLayout() {
   const details = useSiteDetails();
   const notes = useSiteNotes();
   const activity = useSiteActivity();
+  const [statusOptions, setStatusOptions] = useState([]);
+
+  const { updateStatus } = useSiteActions();
+
+  const fetchSiteStatuses = async () => {
+    const response = await axios.get(`/api/sites/statuses`);
+    console.log("fetched statuses", response.data);
+    setStatusOptions(response.data);
+  };
+
+  useEffect(() => {
+    fetchSiteStatuses();
+  }, []);
 
   return (
     <DetailPageLayout
@@ -39,7 +54,8 @@ function SiteDetailLayout() {
           title={`Site ${details?.store ?? ""}`}
           subtitle={`Details for ${details?.store ?? ""}`}
           status={details?.status}
-          onStatusChange={() => {}}
+          statusOptions={statusOptions}
+          onStatusChange={updateStatus}
           breadcrumbs={[
             { label: "Sites", href: "/sites" },
             { label: details?.store },

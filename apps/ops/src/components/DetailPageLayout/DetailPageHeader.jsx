@@ -215,6 +215,8 @@ export default function DetailPageHeader({
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
 
+  console.log("status", status);
+
   return (
     <Box
       sx={{

@@ -33,7 +33,14 @@ export function SiteDetailProvider({ id, children }) {
     axios.get(`/api/sites/${id}`).then(({ data }) => {
       console.log(data);
       if (!active) return;
-      setDetails(data);
+      setDetails({
+        ...data,
+        status: data?.status || {
+          name: "Active",
+          id: 1,
+          description: "",
+        },
+      });
       setActivity(data.activity_log);
       setNotes(data.notes);
       setContacts(data.contacts);
@@ -53,6 +60,26 @@ export function SiteDetailProvider({ id, children }) {
         changes: draft,
       });
       setDetails((prev) => ({ ...prev, ...draft }));
+    },
+    [id, user?.id],
+  );
+
+  const updateStatus = useCallback(
+    async (newStatus) => {
+      try {
+        const { data } = await axios.put(`/api/sites/${id}/status`, {
+          status_id: newStatus.id,
+          user_id: user?.id,
+        });
+        console.log("status update response", data);
+
+        setDetails((prev) => ({
+          ...prev,
+          ...data,
+        }));
+      } catch (error) {
+        console.error("Error updating status:", error);
+      }
     },
     [id, user?.id],
   );
@@ -108,8 +135,9 @@ export function SiteDetailProvider({ id, children }) {
       addContact,
       updateContact,
       deleteContact,
+      updateStatus,
     }),
-    [updateDetails, addContact, updateContact, deleteContact],
+    [updateDetails, addContact, updateContact, deleteContact, updateStatus],
   );
 
   return (
