@@ -9,12 +9,13 @@ import {
 import useParams from "react";
 
 import useAuthenticatedUser from "../../*/hooks/useAuthenticatedUser";
-import axios from "axios";
+import axios, { create } from "axios";
 
 const SiteDetailsContext = createContext();
 const ActivityContext = createContext();
 const NotesContext = createContext();
 const SiteContactsContext = createContext();
+const AttachmentsContext = createContext();
 const ActionsContext = createContext();
 
 export function SiteDetailProvider({ id, children }) {
@@ -24,6 +25,7 @@ export function SiteDetailProvider({ id, children }) {
   const [notes, setNotes] = useState([]);
   const [activity, setActivity] = useState([]);
   const [contacts, setContacts] = useState([]);
+  const [attachments, setAttachments] = useState([]);
 
   useEffect(() => {
     let active = true;
@@ -35,6 +37,7 @@ export function SiteDetailProvider({ id, children }) {
       setActivity(data.activity_log);
       setNotes(data.notes);
       setContacts(data.contacts);
+      setAttachments(data?.attachments);
     });
 
     return () => {
@@ -115,7 +118,9 @@ export function SiteDetailProvider({ id, children }) {
         <ActivityContext.Provider value={activity}>
           <NotesContext.Provider value={notes}>
             <SiteContactsContext.Provider value={contacts}>
-              {children}
+              <AttachmentsContext.Provider value={attachments}>
+                {children}
+              </AttachmentsContext.Provider>
             </SiteContactsContext.Provider>
           </NotesContext.Provider>
         </ActivityContext.Provider>
@@ -138,3 +143,5 @@ export const useSiteNotes = () => useCtx(NotesContext, "useSiteNotes");
 export const useSiteContacts = () =>
   useCtx(SiteContactsContext, "useSiteContacts");
 export const useSiteActions = () => useCtx(ActionsContext, "useSiteActions");
+export const useAttachments = () =>
+  useCtx(AttachmentsContext, "useAttachments");

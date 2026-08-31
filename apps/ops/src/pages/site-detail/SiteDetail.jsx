@@ -16,6 +16,7 @@ import {
 // Tabs
 import SiteDetailsTab from "./tabs/SiteDetailsTab";
 import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
+import SiteAttachmentsTab from "./tabs/AttachmentsTab/AttachmentsTab";
 
 function SiteDetail() {
   const { id } = useParams();
@@ -57,7 +58,7 @@ function SiteDetailLayout() {
             </>
           ),
         },
-        { label: "Documentation", content: <></> },
+        { label: "Attachments", content: <SiteAttachmentsTab /> },
         {
           label: "Activity",
           content: (
