@@ -14,7 +14,7 @@ import {
 } from "./SiteDetailProvider";
 
 // Tabs
-import SiteDetailsTab from "./tabs/SiteDetailsTab";
+import SiteDetailsTab from "./tabs/SiteDetailsTab/SiteDetailsTab";
 import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
 import SiteAttachmentsTab from "./tabs/AttachmentsTab/AttachmentsTab";
 

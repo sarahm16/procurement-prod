@@ -3,11 +3,14 @@ import { useContext, useEffect, useState } from "react";
 import axios from "axios";
 
 // Local Components
-import InfoGrid, { FieldRow, InfoCard } from "../../../components/InfoGrid";
-import { ChipSelectCard } from "../../../components/ChipSelectCard";
-import AddressAutocomplete from "../../../components/AddressAutocomplete";
-import ContactFormModal from "../../../components/Forms/ContactFormModal";
-import ConfirmDialog from "../../../components/ConfirmDialog";
+import InfoGrid, { FieldRow, InfoCard } from "../../../../components/InfoGrid";
+import { ChipSelectCard } from "../../../../components/ChipSelectCard";
+import AddressAutocomplete from "../../../../components/AddressAutocomplete";
+import ContactFormModal from "../../../../components/Forms/ContactFormModal";
+import ConfirmDialog from "../../../../components/ConfirmDialog";
+import Contacts from "../../../../components/Contacts";
+import RoleAssignment from "../../../../components/RoleAssignment";
+import SiteServiceLinesCard from "./SiteServiceLinesCard";
 
 // MUI Components
 import Typography from "@mui/material/Typography";
@@ -19,14 +22,13 @@ import AddIcon from "@mui/icons-material/Add";
 import Box from "@mui/material/Box";
 
 // Hooks
-import useAuthenticatedUser from "../../../*/hooks/useAuthenticatedUser";
+import useAuthenticatedUser from "../../../../*/hooks/useAuthenticatedUser";
 
 import {
   useSiteContacts,
   useSiteDetails,
   useSiteActions,
-} from "../SiteDetailProvider";
-import Contacts from "../../../components/Contacts";
+} from "../../SiteDetailProvider";
 
 function SiteDetailsTab() {
   // Context
@@ -36,21 +38,7 @@ function SiteDetailsTab() {
     useSiteActions();
 
   const { user } = useAuthenticatedUser();
-
-  const [allServiceLines, setAllServiceLines] = useState([]);
-
-  useEffect(() => {
-    const fetchAllServiceLines = async () => {
-      try {
-        const response = await axios.get("/api/serviceLines");
-        console.log("All service lines response:", response.data);
-        setAllServiceLines(response.data);
-      } catch (error) {
-        console.error("Error fetching service lines:", error);
-      }
-    };
-    fetchAllServiceLines();
-  }, []);
+  const id = details?.id;
 
   return (
     <>
@@ -90,6 +78,11 @@ function SiteDetailsTab() {
           />
         </InfoCard>
 
+        <SiteServiceLinesCard
+          serviceLines={details.service_lines}
+          span="half"
+        />
+
         {/* <ChipSelectCard
           title="Service Lines"
           options={allServiceLines}
@@ -104,6 +97,15 @@ function SiteDetailsTab() {
           }}
         /> */}
 
+        <RoleAssignment entity_type_id={2} entity_id={Number(id)} />
+
+        {/* Reusable Contacts Component */}
+        <Contacts
+          contacts={contacts}
+          updateContact={updateContact}
+          addContact={addContact}
+          deleteContact={deleteContact}
+        />
         <InfoCard
           title="Site Mailing Address"
           icon={null}
@@ -270,15 +272,6 @@ function SiteDetailsTab() {
             editable
           />
         </InfoCard>
-
-        {/* Reusable Contacts Component */}
-
-        <Contacts
-          contacts={contacts}
-          updateContact={updateContact}
-          addContact={addContact}
-          deleteContact={deleteContact}
-        />
       </InfoGrid>
     </>
   );
