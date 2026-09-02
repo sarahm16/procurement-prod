@@ -29,6 +29,8 @@ export default function roleAssignmentsRouter(prisma) {
   // GET /api/roleAssignments/:etid/:id
   router.get("/:etid/:id", async (req, res) => {
     const { etid, id } = req.params;
+
+    console.log("entity_id in roleassignments", id);
     try {
       const roleAssignments = await prisma.roleAssignments.findMany({
         where: { entity_type_id: Number(etid), entity_id: Number(id) },
@@ -88,13 +90,11 @@ export default function roleAssignmentsRouter(prisma) {
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         console.error("Prisma error creating role assignment:", error);
-        res
-          .status(400)
-          .json({
-            error: "Database Error",
-            code: error.code,
-            message: error.message,
-          });
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
       } else {
         console.error("Error creating role assignment:", error);
         res.status(500).json({ error: "Internal Server Error" });
@@ -142,13 +142,11 @@ export default function roleAssignmentsRouter(prisma) {
       }
       if (error instanceof PrismaClientKnownRequestError) {
         console.error("Prisma error deleting role assignment:", error);
-        res
-          .status(400)
-          .json({
-            error: "Database Error",
-            code: error.code,
-            message: error.message,
-          });
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
       } else {
         console.error("Error deleting role assignment:", error);
         res.status(500).json({ error: "Internal Server Error" });

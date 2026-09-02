@@ -45,11 +45,14 @@ const serializeSite = (site) => ({
 
 const serializeClient = (client) => client.client;
 
-const serializeServiceLines = (contractSites) => {
-  return contractSites.map(
-    (contractSite) => contractSite.Contract.ServiceLine.name,
-  );
-};
+const serializeServiceLines = (contractSites) =>
+  contractSites.map((cs) => ({
+    contract_site_id: cs.id,
+    service_line: cs.Contract.ServiceLine.name,
+    status_id: cs.status_id, // ← for marking current in the menu
+    status: cs.Status?.name ?? null,
+    status_color: cs.Status?.color ?? null,
+  }));
 
 const entity_type_id = 2; // Site entity type
 
@@ -109,7 +112,7 @@ export default function sitesRouter(prisma) {
 
   router.get("/statuses", async (req, res) => {
     try {
-      const statuses = await prisma.siteStatuses?.findMany();
+      const statuses = await prisma.siteStatuses.findMany();
       res.json(statuses);
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
@@ -152,6 +155,8 @@ export default function sitesRouter(prisma) {
                     },
                   },
                 },
+                Status: true,
+                id: true,
               },
             },
             Contacts: {
@@ -357,6 +362,73 @@ export default function sitesRouter(prisma) {
         });
       } else {
         console.error("Error updating site status:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    }
+  });
+
+  // PUT /api/sites/:id/contract-sites/:contractSiteId/status
+  router.put("/:id/contract-sites/:contractSiteId/status", async (req, res) => {
+    const { id, contractSiteId } = req.params;
+    const { status_id, user_id } = req.body;
+
+    if (status_id == null) {
+      return res.status(400).json({ error: "status_id is required" });
+    }
+
+    try {
+      const updated = await prisma.$transaction(async (tx) => {
+        // current status (for the activity log's previous value)
+        const current = await tx.contractSites.findUnique({
+          where: { id: Number(contractSiteId) },
+          include: {
+            Status: true,
+            Contract: { include: { ServiceLine: true } },
+          },
+        });
+
+        const contractSite = await tx.contractSites.update({
+          where: { id: Number(contractSiteId) },
+          data: { status_id: Number(status_id) },
+          include: {
+            Status: true,
+            Contract: { include: { ServiceLine: true } },
+          },
+        });
+
+        // log against the SITE, so it shows in the site's activity feed
+        const serviceLineName =
+          contractSite.Contract?.ServiceLine?.name ?? "service line";
+        await logActivity(tx, {
+          entityTypeId: entity_type_id, // 2 = Site
+          entityId: Number(id),
+          fieldChanged: "service_line_status",
+          previousValue: current?.Status?.name ?? null,
+          newValue: `${serviceLineName}: ${contractSite.Status?.name ?? ""}`,
+          changedBy: user_id ?? null,
+          action: "UPDATE",
+        });
+
+        return contractSite;
+      });
+
+      // return the shape the card's local-state update expects
+      res.json({
+        contract_site_id: updated.id,
+        status_id: updated.status_id,
+        status: updated.Status?.name ?? null,
+        status_color: updated.Status?.color ?? null,
+      });
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError) {
+        console.error("Prisma error updating contract site status:", error);
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        console.error("Error updating contract site status:", error);
         res.status(500).json({ error: "Internal Server Error" });
       }
     }
