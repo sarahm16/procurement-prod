@@ -129,6 +129,31 @@ export function SiteDetailProvider({ id, children }) {
     [id, user?.id],
   );
 
+  const updateServiceLineStatus = useCallback(
+    async (contractSiteId, statusId) => {
+      const { data } = await axios.put(
+        `/api/sites/${id}/contract-sites/${contractSiteId}/status`,
+        { status_id: statusId, user_id: user?.id },
+      );
+      console.log("update service line status", data);
+      // update local state — find the service line by contract_site_id, update its status
+      setDetails((prev) => ({
+        ...prev,
+        service_lines: prev.service_lines?.map((line) =>
+          line.contract_site_id === contractSiteId
+            ? {
+                ...line,
+                status: data.status,
+                status_id: data.status_id,
+                status_color: data.status_color,
+              }
+            : line,
+        ),
+      }));
+    },
+    [id, user?.id],
+  );
+
   const actions = useMemo(
     () => ({
       updateDetails,
@@ -136,8 +161,16 @@ export function SiteDetailProvider({ id, children }) {
       updateContact,
       deleteContact,
       updateStatus,
+      updateServiceLineStatus,
     }),
-    [updateDetails, addContact, updateContact, deleteContact, updateStatus],
+    [
+      updateDetails,
+      addContact,
+      updateContact,
+      deleteContact,
+      updateStatus,
+      updateServiceLineStatus,
+    ],
   );
 
   return (

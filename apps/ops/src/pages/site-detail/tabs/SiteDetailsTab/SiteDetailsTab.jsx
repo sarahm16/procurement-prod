@@ -1,5 +1,6 @@
 // Libraries
 import { useContext, useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import axios from "axios";
 
 // Local Components
@@ -31,6 +32,7 @@ import {
 } from "../../SiteDetailProvider";
 
 function SiteDetailsTab() {
+  const { id } = useParams();
   // Context
   const details = useSiteDetails();
   const contacts = useSiteContacts();
@@ -38,7 +40,6 @@ function SiteDetailsTab() {
     useSiteActions();
 
   const { user } = useAuthenticatedUser();
-  const id = details?.id;
 
   return (
     <>
