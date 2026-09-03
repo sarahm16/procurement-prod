@@ -16,6 +16,32 @@ const upload = multer({
 
 const SITE_ATTACHMENTS_CONTAINER = "site-attachments"; // or reuse a shared container
 
+const entity_type_id = 2; // Site entity type
+
+/**
+ * Shared `include` for the ContractSites relation.
+ *
+ * The list and detail endpoints MUST select the same fields, because both feed
+ * `serializeServiceLines`, which reads cs.id, cs.status_id and cs.Status. When
+ * the list query omitted them, every service-line chip on the sites grid came
+ * back with contract_site_id: undefined and a null status/colour.
+ */
+const CONTRACT_SITES_SELECT = {
+  id: true,
+  status_id: true,
+  Status: true,
+  Contract: {
+    select: {
+      ServiceLine: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  },
+};
+
 const serializeAttachment = (a) => ({
   id: a.id,
   file_name: a.file_name,
@@ -25,36 +51,46 @@ const serializeAttachment = (a) => ({
   uploaded_by: a.uploaded_by,
 });
 
-const serializeSiteById = (site, notes, activityLog, contacts) => ({
+// Always returns a plain string (or null) — never a Prisma object, so the
+// client can render it directly.
+const serializeClient = (client) => client?.client ?? null;
+
+// Always returns an array of flat objects with primitive values.
+const serializeServiceLines = (contractSites) =>
+  (contractSites ?? []).map((cs) => ({
+    contract_site_id: cs.id ?? null,
+    service_line: cs.Contract?.ServiceLine?.name ?? null,
+    service_line_id: cs.Contract?.ServiceLine?.id ?? null,
+    status_id: cs.status_id ?? null, // ← for marking current in the menu
+    status: cs.Status?.name ?? null,
+    status_color: cs.Status?.color ?? null,
+  }));
+
+const serializeSiteById = (site, notes, activityLog) => ({
   ...site,
   service_lines: serializeServiceLines(site.ContractSites),
   client: serializeClient(site.Client),
-  notes: notes.map(serializeNote),
-  activity_log: (activityLog || []).map(serializeActivityLogEntry),
-  contacts: contacts.map(serializeContact),
+  notes: (notes ?? []).map(serializeNote),
+  activity_log: (activityLog ?? []).map(serializeActivityLogEntry),
+  contacts: (site.Contacts ?? []).map(serializeContact),
   attachments: (site.Attachments ?? []).map(serializeAttachment),
-  status: site?.Status,
+  // NOTE: this is the full status OBJECT ({ id, name, color, ... }), not a
+  // string. Anything on the site profile that renders it must read
+  // `site.status.name` — rendering `site.status` directly will throw
+  // "Objects are not valid as a React child".
+  status: site?.Status ?? null,
+  status_name: site?.Status?.name ?? null,
+  status_color: site?.Status?.color ?? null,
 });
 
 const serializeSite = (site) => ({
   ...site,
   service_lines: serializeServiceLines(site.ContractSites),
   client: serializeClient(site.Client),
-  status: site?.Status,
+  status: site?.Status ?? null,
+  status_name: site?.Status?.name ?? null,
+  status_color: site?.Status?.color ?? null,
 });
-
-const serializeClient = (client) => client.client;
-
-const serializeServiceLines = (contractSites) =>
-  contractSites.map((cs) => ({
-    contract_site_id: cs.id,
-    service_line: cs.Contract.ServiceLine.name,
-    status_id: cs.status_id, // ← for marking current in the menu
-    status: cs.Status?.name ?? null,
-    status_color: cs.Status?.color ?? null,
-  }));
-
-const entity_type_id = 2; // Site entity type
 
 // Treat null / undefined / "" as the same, and trim strings so Char(50)
 // padding (mailing_state!) doesn't register as a change.
@@ -78,18 +114,7 @@ export default function sitesRouter(prisma) {
             },
           },
           ContractSites: {
-            select: {
-              Contract: {
-                select: {
-                  ServiceLine: {
-                    select: {
-                      id: true,
-                      name: true,
-                    },
-                  },
-                },
-              },
-            },
+            select: CONTRACT_SITES_SELECT,
           },
           Status: true,
         },
@@ -144,20 +169,7 @@ export default function sitesRouter(prisma) {
               },
             },
             ContractSites: {
-              select: {
-                Contract: {
-                  select: {
-                    ServiceLine: {
-                      select: {
-                        id: true,
-                        name: true,
-                      },
-                    },
-                  },
-                },
-                Status: true,
-                id: true,
-              },
+              select: CONTRACT_SITES_SELECT,
             },
             Contacts: {
               include: {
@@ -193,7 +205,13 @@ export default function sitesRouter(prisma) {
           },
         }),
       ]);
-      res.json(serializeSiteById(site, notes, activityLog, site.Contacts));
+
+      // Without this, a bad id spread `null` and then threw on site.Contacts.
+      if (!site) {
+        return res.status(404).json({ error: "Site not found" });
+      }
+
+      res.json(serializeSiteById(site, notes, activityLog));
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         console.error("Prisma error fetching site:", error);
@@ -211,12 +229,24 @@ export default function sitesRouter(prisma) {
 
   // POST /api/sites
   router.post("/", async (req, res) => {
-    console.log("Body", req.body);
     try {
+      // The create must include the same relations the serializer reads,
+      // otherwise serializeSite receives a bare row and blows up.
       const site = await prisma.Sites.create({
         data: req.body,
+        include: {
+          Client: {
+            select: {
+              id: true,
+              client: true,
+            },
+          },
+          ContractSites: {
+            select: CONTRACT_SITES_SELECT,
+          },
+          Status: true,
+        },
       });
-      console.log("Site created:", site);
       res.status(201).json(serializeSite(site));
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
@@ -241,7 +271,7 @@ export default function sitesRouter(prisma) {
         where: { site_id: Number(id) },
         orderBy: { created_at: "desc" },
       });
-      res.json(attachments);
+      res.json(attachments.map(serializeAttachment));
     } catch (error) {
       console.error("Error fetching site attachments:", error);
       res.status(500).json({ error: "Failed to fetch attachments" });
@@ -293,7 +323,7 @@ export default function sitesRouter(prisma) {
         action: "CREATE",
       });
 
-      res.status(201).json(created);
+      res.status(201).json(created.map(serializeAttachment));
     } catch (error) {
       console.error("Error uploading site attachments:", error);
       res.status(500).json({ error: "Failed to upload attachments" });
@@ -350,8 +380,12 @@ export default function sitesRouter(prisma) {
         return site;
       });
 
-      // return the serialized status name (matches how the client reads it)
-      res.json({ status: updated.Status, status_id: updated.status_id });
+      res.json({
+        status: updated.Status ?? null,
+        status_id: updated.status_id,
+        status_name: updated.Status?.name ?? null,
+        status_color: updated.Status?.color ?? null,
+      });
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         console.error("Prisma error updating site status:", error);
@@ -412,9 +446,12 @@ export default function sitesRouter(prisma) {
         return contractSite;
       });
 
-      // return the shape the card's local-state update expects
+      // Matches one element of `service_lines` so the card can patch local
+      // state without a refetch.
       res.json({
         contract_site_id: updated.id,
+        service_line: updated.Contract?.ServiceLine?.name ?? null,
+        service_line_id: updated.Contract?.ServiceLine?.id ?? null,
         status_id: updated.status_id,
         status: updated.Status?.name ?? null,
         status_color: updated.Status?.color ?? null,
