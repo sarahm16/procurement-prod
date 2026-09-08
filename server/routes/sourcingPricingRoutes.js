@@ -50,7 +50,10 @@ async function currentAssignment(prisma, contractSiteId, assignmentId) {
     });
   }
   return prisma.vendorContractSites.findFirst({
-    where: { contract_site_id: contractSiteId },
+    where: {
+      contract_site_id: contractSiteId,
+      VendorSiteStatus: { category: { not: "closed" } },
+    },
     orderBy: [{ is_primary: "desc" }, { created_at: "desc" }],
     include: { Vendor: { select: { id: true, company: true } } },
   });
@@ -232,13 +235,11 @@ export function registerPricingRoutes(router, prisma, serializeGridRow) {
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         console.error("Prisma error saving pricing:", error);
-        res
-          .status(400)
-          .json({
-            error: "Database Error",
-            code: error.code,
-            message: error.message,
-          });
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
       } else {
         console.error("Error saving pricing:", error);
         res.status(500).json({ error: "Internal Server Error" });

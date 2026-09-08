@@ -229,6 +229,16 @@ export default function sourcingRouter(prisma) {
     try {
       const created = await prisma.$transaction(async (tx) => {
         const out = [];
+
+        const sourcingStatus = await tx.vendorSiteStatuses.findFirst({
+          where: { category: "sourcing" },
+          orderBy: { id: "asc" },
+        });
+        if (!sourcingStatus) {
+          throw new Error(
+            "No VendorSiteStatuses row with category 'sourcing' — seed the table",
+          );
+        }
         for (const csId of contract_site_ids) {
           const contractSite = await tx.contractSites.findUnique({
             where: { id: Number(csId) },
@@ -240,7 +250,7 @@ export default function sourcingRouter(prisma) {
             data: {
               vendor_id: Number(vendor_id),
               contract_site_id: Number(csId),
-              status_id: Number(status_id),
+              status_id: Number(status_id) || sourcingStatus.id,
             },
             include: { Vendor: true },
           });
