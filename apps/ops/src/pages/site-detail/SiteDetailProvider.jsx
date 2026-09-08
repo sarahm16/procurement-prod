@@ -5,17 +5,18 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
 } from "react";
-import useParams from "react";
 
 import useAuthenticatedUser from "../../*/hooks/useAuthenticatedUser";
-import axios, { create } from "axios";
+import axios from "axios";
 
 const SiteDetailsContext = createContext();
 const ActivityContext = createContext();
 const NotesContext = createContext();
 const SiteContactsContext = createContext();
 const AttachmentsContext = createContext();
+const SourcingContext = createContext();
 const ActionsContext = createContext();
 
 export function SiteDetailProvider({ id, children }) {
@@ -26,6 +27,9 @@ export function SiteDetailProvider({ id, children }) {
   const [activity, setActivity] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [attachments, setAttachments] = useState([]);
+  const loadedRef = useRef(false);
+  const [sourcing, setSourcing] = useState(null); // null = never loaded
+  const [sourcingLoading, setSourcingLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -51,6 +55,45 @@ export function SiteDetailProvider({ id, children }) {
       active = false;
     };
   }, [id]);
+
+  const loadSourcing = useCallback(
+    async ({ force = false } = {}) => {
+      if (loadedRef.current && !force) return;
+      loadedRef.current = true;
+      setSourcingLoading(true);
+      try {
+        const { data } = await axios.get(`/api/sites/${id}/sourcing`);
+        console.log("fetched sourcing data", data);
+        setSourcing(data);
+      } catch (e) {
+        loadedRef.current = false; // let it retry
+        console.error("Error fetching sourcing:", e);
+      } finally {
+        setSourcingLoading(false);
+      }
+    },
+    [id],
+  );
+
+  const sourcingValue = useMemo(
+    () => ({ sourcing, sourcingLoading }),
+    [sourcing, sourcingLoading],
+  );
+
+  const assignVendor = useCallback(async (contractSiteId, vendorId) => {
+    const { data } = await axios.post(
+      `/api/contract-sites/${contractSiteId}/vendors`,
+      { vendor_id: vendorId },
+    );
+    setSourcing(
+      (prev) =>
+        prev?.map((cs) =>
+          cs.contract_site_id === contractSiteId
+            ? { ...cs, vendors: [...cs.vendors, data] }
+            : cs,
+        ) ?? prev,
+    );
+  }, []);
 
   // Details Actions
   const updateDetails = useCallback(
@@ -162,6 +205,8 @@ export function SiteDetailProvider({ id, children }) {
       deleteContact,
       updateStatus,
       updateServiceLineStatus,
+      loadSourcing,
+      assignVendor,
     }),
     [
       updateDetails,
@@ -170,6 +215,8 @@ export function SiteDetailProvider({ id, children }) {
       deleteContact,
       updateStatus,
       updateServiceLineStatus,
+      loadSourcing,
+      assignVendor,
     ],
   );
 
@@ -180,7 +227,9 @@ export function SiteDetailProvider({ id, children }) {
           <NotesContext.Provider value={notes}>
             <SiteContactsContext.Provider value={contacts}>
               <AttachmentsContext.Provider value={attachments}>
-                {children}
+                <SourcingContext.Provider value={sourcingValue}>
+                  {children}
+                </SourcingContext.Provider>
               </AttachmentsContext.Provider>
             </SiteContactsContext.Provider>
           </NotesContext.Provider>
@@ -206,3 +255,4 @@ export const useSiteContacts = () =>
 export const useSiteActions = () => useCtx(ActionsContext, "useSiteActions");
 export const useAttachments = () =>
   useCtx(AttachmentsContext, "useAttachments");
+const useSiteSourcing = () => useCtx(SourcingContext, "useSiteSourcing");

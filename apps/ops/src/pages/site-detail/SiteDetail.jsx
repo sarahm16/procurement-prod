@@ -1,5 +1,6 @@
 import { useParams } from "react-router-dom";
 import { createContext, useEffect, useState } from "react";
+import axios from "axios";
 
 // Layout Components
 import DetailPageHeader from "../../components/DetailPageLayout/DetailPageHeader";
@@ -17,8 +18,8 @@ import {
 // Tabs
 import SiteDetailsTab from "./tabs/SiteDetailsTab/SiteDetailsTab";
 import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
+import SourcingTab from "./tabs/SourcingTab/SourcingTab";
 import SiteAttachmentsTab from "./tabs/AttachmentsTab/AttachmentsTab";
-import axios from "axios";
 
 function SiteDetail() {
   const { id } = useParams();
@@ -75,6 +76,10 @@ function SiteDetailLayout() {
           ),
         },
         { label: "Attachments", content: <SiteAttachmentsTab /> },
+        {
+          label: "Sourcing",
+          content: <SourcingTab />,
+        },
         {
           label: "Activity",
           content: (

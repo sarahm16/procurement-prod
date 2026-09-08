@@ -30,8 +30,6 @@ export default function SiteServiceLinesCard({
 }) {
   const theme = useTheme();
 
-  console.log("card service lines", serviceLines);
-
   const [menu, setMenu] = useState({ anchor: null, contractSiteId: null });
   const [savingId, setSavingId] = useState(null);
   const [statusOptions, setStatusOptions] = useState([]);
