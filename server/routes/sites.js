@@ -18,6 +18,81 @@ const SITE_ATTACHMENTS_CONTAINER = "site-attachments"; // or reuse a shared cont
 
 const entity_type_id = 2; // Site entity type
 
+// ─── Sourcing ────────────────────────────────────────────────────────────────
+
+// Prisma returns Decimal instances, which JSON-stringify to strings. Convert
+// for the client so it isn't doing arithmetic on "1250.0000".
+const toNumber = (v) => (v == null ? null : Number(v));
+
+const serializeAssignmentPricing = (p) => {
+  const vendor_price = toNumber(p.vendor_price);
+  const client_price = toNumber(p.ContractSiteServices?.client_price);
+  return {
+    id: p.id,
+    contract_site_service_id: p.contract_site_service_id,
+    vendor_price,
+    client_price,
+    margin:
+      vendor_price != null && client_price != null
+        ? Number((client_price - vendor_price).toFixed(4))
+        : null,
+    created_at: p.created_at,
+  };
+};
+
+// One row of the sourcing tab: a vendor assigned to a contract site.
+// `id` is the VendorContractSites id — the handle every mutation uses.
+const serializeVendorAssignment = (vcs) => {
+  const pricing = (vcs.ServicePricing ?? []).map(serializeAssignmentPricing);
+  return {
+    id: vcs.id,
+    is_primary: vcs.is_primary,
+    created_at: vcs.created_at,
+
+    // assignment status (VendorSiteStatuses)
+    status_id: vcs.status_id ?? null,
+    status: vcs.VendorSiteStatus?.name ?? null,
+    status_category: vcs.VendorSiteStatus?.category ?? null,
+
+    // vendor
+    vendor_id: vcs.Vendor?.id ?? null,
+    company: vcs.Vendor?.company ?? null,
+    contact_name: vcs.Vendor?.contact_name ?? null,
+    contact_email: vcs.Vendor?.contact_email ?? null,
+    contact_phone: vcs.Vendor?.contact_phone ?? null,
+    lat: toNumber(vcs.Vendor?.lat),
+    lng: toNumber(vcs.Vendor?.lng),
+
+    // company-level status — the eligibility gate, distinct from `status` above
+    vendor_status: vcs.Vendor?.VendorStatus?.name ?? null,
+    vendor_status_color: vcs.Vendor?.VendorStatus?.color ?? null,
+
+    trades: (vcs.Vendor?.VendorTrades ?? [])
+      .map((vt) => vt.Trade?.name)
+      .filter(Boolean),
+
+    pricing,
+    priced_service_count: pricing.length,
+  };
+};
+
+const serializeSiteSourcing = (contractSites) =>
+  (contractSites ?? []).map((cs) => {
+    const vendors = (cs.VendorContractSites ?? []).map(
+      serializeVendorAssignment,
+    );
+    return {
+      contract_site_id: cs.id,
+      service_line: cs.Contract?.ServiceLine?.name ?? null,
+      service_line_id: cs.Contract?.ServiceLine?.id ?? null,
+      status: cs.Status?.name ?? null,
+      status_color: cs.Status?.color ?? null,
+      service_count: cs._count?.ContractSiteServices ?? 0,
+      vendors,
+      vendor_count: vendors.length,
+    };
+  });
+
 /**
  * Shared `include` for the ContractSites relation.
  *
@@ -149,6 +224,79 @@ export default function sitesRouter(prisma) {
         });
       } else {
         console.error("Error fetching workorder statuses:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    }
+  });
+
+  // GET /api/sites/:id/sourcing
+  router.get("/:id/sourcing", async (req, res) => {
+    const { id } = req.params;
+    try {
+      const contractSites = await prisma.contractSites.findMany({
+        where: { site_id: Number(id) },
+        select: {
+          id: true,
+          Status: true,
+          _count: { select: { ContractSiteServices: true } },
+          Contract: {
+            select: { ServiceLine: { select: { id: true, name: true } } },
+          },
+          VendorContractSites: {
+            select: {
+              id: true,
+              is_primary: true,
+              status_id: true,
+              created_at: true,
+              VendorSiteStatus: {
+                select: { id: true, name: true, category: true },
+              },
+              Vendor: {
+                select: {
+                  id: true,
+                  company: true,
+                  lat: true,
+                  lng: true,
+                  contact_name: true,
+                  contact_email: true,
+                  contact_phone: true,
+                  VendorStatus: {
+                    select: { id: true, name: true, color: true },
+                  },
+                  VendorTrades: {
+                    select: { Trade: { select: { id: true, name: true } } },
+                  },
+                },
+              },
+              ServicePricing: {
+                select: {
+                  id: true,
+                  vendor_price: true,
+                  contract_site_service_id: true,
+                  created_at: true,
+                  ContractSiteServices: {
+                    select: { id: true, client_price: true },
+                  },
+                },
+              },
+            },
+            orderBy: [{ is_primary: "desc" }, { created_at: "asc" }],
+          },
+        },
+        orderBy: { id: "asc" },
+      });
+
+      res.json(serializeSiteSourcing(contractSites));
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError) {
+        console.error("Prisma error fetching site sourcing:", error);
+        res.status(400).json({
+          error: "Database Error",
+          code: error.code,
+          message: error.message,
+        });
+      } else {
+        console.error("Error fetching site sourcing:", error);
         res.status(500).json({ error: "Internal Server Error" });
       }
     }

@@ -1,64 +1,58 @@
 model Contracts {
-  created_at            DateTime                @default(now())
-
-  id                      Int         @id @default(autoincrement())
-  start_date              DateTime    @default(now()) @db.DateTime
-  end_date                DateTime?   @db.DateTime
-  auto_renew              Boolean     @default(false)
-  annual_increase_percent Decimal?        
-  value                   Decimal
-  project_name            String
-
-
+  id                      Int             @id @default(autoincrement())
+  start_date              DateTime        @default(now()) @db.DateTime
+  end_date                DateTime?       @db.DateTime
+  auto_renew              Boolean         @default(false)
+  annual_increase_percent Decimal?
   client_id               Int
   service_line_id         Int
-  software_id             Int?  
+  software_id             Int?
+  project_name            String
+  value                   Decimal
+  created_at              DateTime        @default(now())
   service_type_id         Int?
 
-  ServiceLine             ServiceLines    @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  Client                  Clients         @relation(fields: [client_id], references: [id], onUpdate: NoAction, onDelete: NoAction)            
-  Software                Softwares?      @relation(fields: [software_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  ServiceType             ServiceTypes?          @relation(fields: [service_type_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-
-
+  Client                  Clients         @relation(fields: [client_id], references: [id], onUpdate: NoAction)
+  ServiceLine             ServiceLines    @relation(fields: [service_line_id], references: [id], onUpdate: NoAction)
+  ServiceType             ServiceTypes?   @relation(fields: [service_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Software                Softwares?      @relation(fields: [software_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  
   ContractSites           ContractSites[]
 }
 
 model ServiceTypes {
-  id                      Int       @id @default(autoincrement())
-  name                    String    @db.VarChar(100)
-  description             String?   @db.VarChar(300)
-  
-  Contracts               Contracts[]
+  id          Int         @id @default(autoincrement())
+  name        String      @db.VarChar(100)
+  description String?     @db.VarChar(300)
+  Contracts   Contracts[]
 }
 
 model ContractSites {
-  created_at            DateTime                @default(now())
+  id                   Int                    @id @default(autoincrement())
+  high_risk            Boolean                @default(false)
+  site_id              Int
+  contract_id          Int
+  created_at           DateTime               @default(now())
+  status_id            Int                    @default(1)
 
-  id              Int       @id @default(autoincrement())
-  high_risk       Boolean   @default(false)
-  site_id         Int
-  contract_id     Int
-
-  Site                    Sites                   @relation(fields: [site_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  Contract                Contracts               @relation(fields: [contract_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  Contract             Contracts              @relation(fields: [contract_id], references: [id], onUpdate: NoAction)
+  Site                 Sites                  @relation(fields: [site_id], references: [id], onUpdate: NoAction)
+  Status               SiteStatuses           @relation(fields: [status_id], references: [id])
   
-  ContractSiteServices    ContractSiteServices[]  
+  ContractSiteServices ContractSiteServices[]
+  VendorContractSites  VendorContractSites[]
 
   @@unique([contract_id, site_id])
-  VendorContractSites     VendorContractSites[]
 }
 
 model ContractSiteServices {
-  id                        Int       @id @default(autoincrement())
-  client_price              Decimal   @default(0)
-
-  contract_site_id          Int
-  service_type_id           Int
-  service_line_service_id   Int
-
-  ContractSite              ContractSites         @relation(fields: [contract_site_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  ServiceLineService        ServiceLineServices   @relation(fields: [service_line_service_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-    
-  VendorServicePricing      VendorServicePricing?
+  id                      Int                   @id @default(autoincrement())
+  client_price            Decimal               @db.Decimal(19, 4) @default(0)
+  contract_site_id        Int
+  service_type_id         Int
+  service_line_service_id Int
+  ContractSite            ContractSites         @relation(fields: [contract_site_id], references: [id], onUpdate: NoAction)
+  ServiceLineService      ServiceLineServices   @relation(fields: [service_line_service_id], references: [id], onUpdate: NoAction)
+  VendorServicePricing    VendorServicePricing[]
 }
+

@@ -17,6 +17,7 @@ import { sendNewCopy } from "../services/pandadoc/sendNewCopy.js";
 import { getAccountingToken } from "../services/pandadoc/tokens/accountingToken.js";
 import { getValidUserToken } from "../services/pandadoc/tokens/getValidUserToken.js";
 import { sendMsa } from "../services/pandadoc/send/sendMsa.js";
+import { registerAssignableVendorsRoute } from "./vendorAssignableRoute.js";
 
 // Use MEMORY storage — the file stays in RAM as a Buffer, we hand it straight
 // to blob storage, nothing touches local disk (which is ephemeral on Azure anyway).
@@ -107,6 +108,7 @@ const DOC_CONFIG = {
 
 export default function vendorsRouter(prisma) {
   const router = Router();
+  registerAssignableVendorsRoute(router, prisma);
 
   // GET /api/vendors
   router.get("/", async (req, res) => {
@@ -313,6 +315,8 @@ export default function vendorsRouter(prisma) {
       Object.entries(changes).filter(([key]) => ALLOWED_FIELDS.has(key)),
     );
 
+    console.log("fields requested to update", requested);
+
     if (Object.keys(requested).length === 0) {
       return res.status(400).json({ error: "No valid fields to update" });
     }
@@ -332,6 +336,8 @@ export default function vendorsRouter(prisma) {
       const changedFields = Object.entries(requested).filter(
         ([key, value]) => norm(existing[key]) !== norm(value),
       );
+
+      console.log("Changed vendor fields", changedFields);
 
       if (changedFields.length === 0) {
         return res.json(existing); // nothing really changed — skip update + log

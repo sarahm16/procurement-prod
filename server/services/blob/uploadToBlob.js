@@ -4,19 +4,18 @@ import { DefaultAzureCredential } from "@azure/identity";
 
 // The storage account name (e.g. "sarlaccstorage") — set as an app setting.
 const ACCOUNT = "nfcaccountstorage";
-const CONTAINER = "vendor-documents";
 
 // One client for the process — DefaultAzureCredential resolves to the Web App's
 // managed identity in prod, and your `az login` locally (same pattern as Key Vault).
 let containerClient = null;
 
-function getContainerClient() {
+function getContainerClient(containerName) {
   if (containerClient) return containerClient;
   const blobService = new BlobServiceClient(
     `https://${ACCOUNT}.blob.core.windows.net`,
     new DefaultAzureCredential(),
   );
-  containerClient = blobService.getContainerClient(CONTAINER);
+  containerClient = blobService.getContainerClient(containerName);
   return containerClient;
 }
 
@@ -27,8 +26,13 @@ function getContainerClient() {
  * @param {string} contentType - MIME type, so the browser renders it correctly on open
  * @returns {string} the blob URL
  */
-export async function uploadToBlob(buffer, blobPath, contentType) {
-  const container = getContainerClient();
+export async function uploadToBlob(
+  containerName,
+  buffer,
+  blobPath,
+  contentType,
+) {
+  const container = getContainerClient(containerName);
   const blockBlob = container.getBlockBlobClient(blobPath);
 
   await blockBlob.uploadData(buffer, {
