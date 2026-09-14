@@ -3,6 +3,7 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { logActivity } from "../utils/logActivity.js";
 import { registerPricingRoutes } from "./sourcingPricingRoutes.js";
 import { registerReplaceRoute } from "./sourcingReplaceRoute.js";
+import { registerAssignRoute } from "./sourcingAssignRoute.js";
 
 const SITE_ENTITY_TYPE_ID = 2;
 
@@ -104,6 +105,7 @@ export default function sourcingRouter(prisma) {
   const router = Router();
   registerPricingRoutes(router, prisma, serializeGridRow);
   registerReplaceRoute(router, prisma, serializeGridRow);
+  registerAssignRoute(router, prisma, serializeGridRow);
 
   // GET /api/sourcing
   //   ?q=              free text over site, client, vendor
