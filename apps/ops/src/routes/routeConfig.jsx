@@ -7,6 +7,7 @@ import Vendors from "../pages/vendors/Vendors";
 import Workorders from "../pages/workorders/Workorders";
 import Dashboard from "../pages/dashboard/Dashboard";
 import Admin from "../pages/admin/Admin";
+import Sourcing from "../pages/sourcing/Sourcing";
 
 // Detail Pages
 import ClientDetail from "../pages/client-detail/ClientDetail";
@@ -21,6 +22,7 @@ import DashboardIcon from "@mui/icons-material/Dashboard";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import HandymanIcon from "@mui/icons-material/Handyman";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
+import HandshakeIcon from "@mui/icons-material/Handshake";
 
 // Define routes
 const routesConfig = [
@@ -36,6 +38,13 @@ const routesConfig = [
     path: "/dashboard",
     element: <Dashboard />,
     icon: <DashboardIcon />,
+    showInLayout: true,
+  },
+  {
+    title: "Sourcing",
+    path: "/sourcing",
+    element: <Sourcing />,
+    icon: <HandshakeIcon />,
     showInLayout: true,
   },
   // Client routes

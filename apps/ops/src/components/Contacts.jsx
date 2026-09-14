@@ -1,5 +1,5 @@
 // components/Contacts.jsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Box,
   Typography,
@@ -20,6 +20,7 @@ import PhoneOutlinedIcon from "@mui/icons-material/PhoneOutlined";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import PeopleOutlineIcon from "@mui/icons-material/PeopleOutline";
+import axios from "axios";
 
 const initials = (name) =>
   (name ?? "")
@@ -32,9 +33,15 @@ const initials = (name) =>
 // primary convention — contact_role_id === 1 (matches the app's convention)
 const isPrimary = (c) => c.contact_role_id === 1 || c.is_primary;
 
-const emptyDraft = { name: "", email: "", phone: "" };
+const emptyDraft = { name: "", email: "", phone: "", contact_role_id: "" };
 
-function ContactCard({ contact, onUpdate, onDelete, theme }) {
+function ContactCard({
+  contact,
+  contactRoles = [],
+  onUpdate,
+  onDelete,
+  theme,
+}) {
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({
@@ -278,14 +285,32 @@ export default function Contacts({
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
 
+  const [contactRoles, setContactRoles] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+
+    axios
+      .get(`/api/contactRoles`)
+      .then((res) => {
+        console.log("contact roles response", res.data);
+        if (!active) return;
+
+        setContactRoles(res.data);
+      })
+      .catch((error) => console.error("error fetching contact roles", errro));
+
+    return () => (active = true);
+  }, []);
+
   // primary first, then the rest
   const sorted = [...contacts].sort(
     (a, b) => (isPrimary(b) ? 1 : 0) - (isPrimary(a) ? 1 : 0),
   );
 
   const submitNew = async () => {
-    if (!draft.name.trim()) return;
-    await addContact?.(draft);
+    if (!draft.name.trim() || !draft.contact_role_id) return; // ← require role
+    await addContact?.(draft); // draft now includes contact_role_id
     setDraft(emptyDraft);
     setAdding(false);
   };
@@ -372,7 +397,11 @@ export default function Contacts({
             New Contact
           </Typography>
           <Box
-            sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}
+            sx={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1fr 1fr",
+              gap: 1,
+            }}
           >
             <TextField
               size="small"
@@ -382,6 +411,21 @@ export default function Contacts({
                 setDraft((d) => ({ ...d, name: e.target.value }))
               }
             />
+            <TextField
+              select
+              size="small"
+              label="Role"
+              value={draft.contact_role_id}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, contact_role_id: e.target.value }))
+              }
+            >
+              {contactRoles.map((r) => (
+                <MenuItem key={r.id} value={r.id}>
+                  {r.name}
+                </MenuItem>
+              ))}
+            </TextField>
             <TextField
               size="small"
               label="Email"
@@ -455,6 +499,7 @@ export default function Contacts({
             <ContactCard
               key={contact.id}
               contact={contact}
+              contactRoles={contactRoles}
               onUpdate={updateContact}
               onDelete={deleteContact}
               theme={theme}

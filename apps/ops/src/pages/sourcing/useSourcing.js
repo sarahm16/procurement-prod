@@ -121,8 +121,12 @@ export function useServiceLines() {
  *
  * Expected row shape from GET /api/vendors/assignable:
  *   { id, company, contact_name, contact_email, contact_phone,
- *     lat, lng, trades: ["Snow", ...], status, assignment_count,
+ *     lat, lng, city, state, trades: ["Snow", ...], status, assignment_count,
  *     compliance: { w9: bool, coi: bool|"warn", msa: bool, ach: bool } }
+ *
+ * Returns { vendors, error, refresh }:
+ *   vendors === null  → still loading
+ *   error !== null    → the fetch failed; NOT the same as "no vendors match"
  */
 let vendorsPromise = null;
 
@@ -132,25 +136,38 @@ export function invalidateAssignableVendors() {
 
 export function useAssignableVendors() {
   const [vendors, setVendors] = useState(null);
+  const [error, setError] = useState(null);
+  const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
     if (!vendorsPromise) {
       vendorsPromise = axios.get("/api/vendors/assignable").then((r) => r.data);
     }
     let active = true;
+    setError(null);
     vendorsPromise
       .then((d) => active && setVendors(d))
       .catch((e) => {
         vendorsPromise = null; // let the next mount retry
         console.error("Error fetching assignable vendors:", e);
-        if (active) setVendors([]);
+        if (active) {
+          setVendors([]);
+          setError("Couldn't load the vendor list.");
+        }
       });
     return () => {
       active = false;
     };
+  }, [nonce]);
+
+  /** Drop the cache and refetch — call after creating a vendor. */
+  const refresh = useCallback(() => {
+    vendorsPromise = null;
+    setVendors(null);
+    setNonce((n) => n + 1);
   }, []);
 
-  return vendors;
+  return { vendors, error, refresh };
 }
 
 /** Straight-line miles. Good enough for a proximity sort; not driving distance. */

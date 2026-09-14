@@ -140,12 +140,14 @@ WITH base AS (
     -- closed assignments, so a terminated vendor stops reading as current:
     --     JOIN VendorSiteStatuses vss ON vss.id = vcs.status_id
     --     AND vss.category <> 'closed'
-    OUTER APPLY (
-        SELECT TOP 1 vcs.*
-          FROM VendorContractSites vcs
-         WHERE vcs.contract_site_id = cs.id
-         ORDER BY vcs.is_primary DESC, vcs.created_at DESC
-    ) a
+OUTER APPLY (
+    SELECT TOP 1 vcs.*
+      FROM VendorContractSites vcs
+      JOIN VendorSiteStatuses vss ON vss.id = vcs.status_id
+     WHERE vcs.contract_site_id = cs.id
+       AND vss.category <> 'closed'
+     ORDER BY vcs.is_primary DESC, vcs.created_at DESC
+) a
 
     LEFT JOIN Vendors v ON v.id = a.vendor_id
 )

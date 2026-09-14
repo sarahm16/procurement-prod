@@ -37,22 +37,8 @@ function ClientDetailsTab() {
   const [addingContact, setAddingContact] = useState(false);
   const [savingContact, setSavingContact] = useState(false);
 
-  const [contactRoles, setContactRoles] = useState([]);
   const [contactToDelete, setContactToDelete] = useState(null);
   const [deletingContact, setDeletingContact] = useState(false);
-
-  const fetchAllContactRoles = async () => {
-    try {
-      const response = await axios.get("/api/contactRoles");
-      console.log("All contact roles response:", response.data);
-      setContactRoles(response.data);
-    } catch (error) {
-      console.error("Error fetching contact roles:", error);
-    }
-  };
-  useEffect(() => {
-    fetchAllContactRoles();
-  }, []);
 
   const handleAddContact = async (form) => {
     setSavingContact(true);
