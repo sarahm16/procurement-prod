@@ -24,6 +24,7 @@ import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import ConfirmDialog from "../../../../../../components/ConfirmDialog";
 import useAuthenticatedUser from "../../../../../../*/hooks/useAuthenticatedUser";
 import VendorCoiCard from "./VendorCoiCard";
+import { fmtDate } from "../../../../../../utils/date";
 
 const COMPLIANCE_TYPES = [
   { type: "MSA", label: "MSA", endpoint: "msa" },
@@ -39,15 +40,6 @@ const STATUS_COLORS = {
   declined: "#dc2626",
   voided: "#6b7280",
 };
-
-const fmtDate = (iso) =>
-  iso
-    ? new Date(iso).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })
-    : "—";
 
 // Compact card for one document TYPE — shows the active doc + history.
 function DocumentCard({

@@ -18,8 +18,8 @@ import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 
 import { useClients } from "../../*/hooks/useClients";
 import { useTrades } from "../../*/hooks/useTrades";
-import { workOrderPriorityConfig } from "../../*/constants/workOrderPriorityConfig";
 import { workOrderTypes } from "../../*/constants/workorderTypes";
+import { workOrderPriorityConfig } from "../../*/constants/workOrderPriorityConfig";
 
 const priorities = Object.keys(workOrderPriorityConfig);
 
@@ -51,28 +51,40 @@ const woVendorName = (w) => w?.vendor ?? w?.Vendor?.company ?? null;
 
 const toDateInput = (v) => (v ? String(v).slice(0, 10) : "");
 
+/**
+ * Starting values. When the parent is fixed up front — adding another vendor
+ * to a job from the work order detail page — the child inherits everything
+ * that describes the job and leaves the rest blank. External ID is
+ * deliberately not inherited: each work order carries its own.
+ */
+const seedForm = (p) => ({
+  parent_work_order_id: p?.id ?? null,
+  client_id: p?.client_id ?? "",
+  site_id: p?.site_id ?? "",
+  type: p?.type ?? "",
+  start_date: toDateInput(p?.start_date),
+  due_date: toDateInput(p?.due_date),
+  external_id: "",
+  software_id: p?.software_id ?? "",
+  priority: p?.priority ?? "Normal",
+  scope_of_work: "",
+});
+
 function CreateWorkorderForm({
   onSubmit,
   onClose,
   submitting = false,
   workOrders = [],
+  // Pass a work order to create this one as part of that job, with no picker.
+  // Shape: { id, work_order_number, type, priority, software_id, start_date,
+  //          due_date, site_id, site, client, vendor, vendor_id }
+  lockedParent = null,
 }) {
   const { data: clients = [] } = useClients();
   const { data: trades = [] } = useTrades();
 
-  const [form, setForm] = useState({
-    parent_work_order_id: null,
-    client_id: "",
-    site_id: "",
-    type: "",
-    start_date: "",
-    due_date: "",
-    external_id: "",
-    software_id: "",
-    priority: "Normal",
-    scope_of_work: "",
-  });
-  const [parent, setParent] = useState(null);
+  const [form, setForm] = useState(() => seedForm(lockedParent));
+  const [parent, setParent] = useState(lockedParent);
   const [services, setServices] = useState([emptyService()]);
   const [sites, setSites] = useState([]);
   const [sitesLoading, setSitesLoading] = useState(false);
@@ -196,70 +208,75 @@ function CreateWorkorderForm({
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5, p: 0.5 }}>
-      {/* Parent first — it decides the site and flips which price matters */}
-      <Autocomplete
-        size="small"
-        options={parentOptions}
-        value={parent}
-        onChange={onParentChange}
-        getOptionLabel={woLabel}
-        isOptionEqualToValue={(a, b) => a.id === b.id}
-        filterOptions={(opts, state) => {
-          const t = state.inputValue.trim().toLowerCase();
-          const f = t
-            ? opts.filter((o) =>
-                `${woLabel(o)} ${woClientName(o) ?? ""}`
-                  .toLowerCase()
-                  .includes(t),
-              )
-            : opts;
-          return f.slice(0, 50);
-        }}
-        renderOption={(props, o) => {
-          const { key, ...rest } = props;
-          return (
-            <li key={o.id} {...rest}>
-              <Box sx={{ minWidth: 0 }}>
-                <Typography sx={{ fontSize: "0.82rem", fontWeight: 500 }}>
-                  {woLabel(o)}
-                </Typography>
-                {woClientName(o) && (
-                  <Typography
-                    sx={{ fontSize: "0.7rem", color: "text.secondary" }}
-                  >
-                    {woClientName(o)}
+      {/* Parent first — it decides the site and flips which price matters.
+          Hidden when the parent is already fixed. */}
+      {!lockedParent && (
+        <Autocomplete
+          size="small"
+          options={parentOptions}
+          value={parent}
+          onChange={onParentChange}
+          getOptionLabel={woLabel}
+          isOptionEqualToValue={(a, b) => a.id === b.id}
+          filterOptions={(opts, state) => {
+            const t = state.inputValue.trim().toLowerCase();
+            const f = t
+              ? opts.filter((o) =>
+                  `${woLabel(o)} ${woClientName(o) ?? ""}`
+                    .toLowerCase()
+                    .includes(t),
+                )
+              : opts;
+            return f.slice(0, 50);
+          }}
+          renderOption={(props, o) => {
+            const { key, ...rest } = props;
+            return (
+              <li key={o.id} {...rest}>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography sx={{ fontSize: "0.82rem", fontWeight: 500 }}>
+                    {woLabel(o)}
                   </Typography>
-                )}
-              </Box>
-            </li>
-          );
-        }}
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            label="Parent work order"
-            placeholder="Leave empty for a standalone work order"
-            helperText={
-              isChild
-                ? "One vendor's share of the parent job."
-                : "Optional — pick one when this is a second vendor on a job that already exists"
-            }
-          />
-        )}
-      />
+                  {woClientName(o) && (
+                    <Typography
+                      sx={{ fontSize: "0.7rem", color: "text.secondary" }}
+                    >
+                      {woClientName(o)}
+                    </Typography>
+                  )}
+                </Box>
+              </li>
+            );
+          }}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="Parent work order"
+              placeholder="Leave empty for a standalone work order"
+              helperText={
+                isChild
+                  ? "One vendor's share of the parent job."
+                  : "Optional — pick one when this is a second vendor on a job that already exists"
+              }
+            />
+          )}
+        />
+      )}
 
       {isChild && (
         <Alert
           severity={parentHasVendor ? "warning" : "info"}
           icon={<AccountTreeOutlinedIcon fontSize="small" />}
           action={
-            <Button
-              size="small"
-              color="inherit"
-              onClick={() => onParentChange(null, null)}
-            >
-              Clear
-            </Button>
+            lockedParent ? null : (
+              <Button
+                size="small"
+                color="inherit"
+                onClick={() => onParentChange(null, null)}
+              >
+                Clear
+              </Button>
+            )
           }
           sx={{ mt: -1 }}
         >

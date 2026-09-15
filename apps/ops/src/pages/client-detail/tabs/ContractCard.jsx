@@ -19,10 +19,8 @@ import {
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import InfoGrid, { InfoCard, FieldRow } from "../../../components/InfoGrid";
 import RoleAssignment from "../../../components/RoleAssignment";
+import { fmtDate, toInputDate } from "../../../utils/date";
 
-const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString() : "—");
-const toDateInput = (iso) =>
-  iso ? new Date(iso).toISOString().slice(0, 10) : "";
 const fmtMoney = (v) =>
   v == null
     ? "—"
@@ -208,7 +206,7 @@ export default function ContractCard({ contract, employees = [], onSave }) {
                     type="date"
                     size="small"
                     fullWidth
-                    value={toDateInput(value)}
+                    value={toInputDate(value)}
                     onChange={(e) => onChange("start_date", e.target.value)}
                   />
                 ) : (
@@ -229,7 +227,7 @@ export default function ContractCard({ contract, employees = [], onSave }) {
                     type="date"
                     size="small"
                     fullWidth
-                    value={toDateInput(value)}
+                    value={toInputDate(value)}
                     onChange={(e) => onChange("end_date", e.target.value)}
                   />
                 ) : (

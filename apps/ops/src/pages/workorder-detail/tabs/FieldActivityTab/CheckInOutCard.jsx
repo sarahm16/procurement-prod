@@ -23,17 +23,7 @@ import {
   useFieldActivity,
   useWorkOrderDetails,
 } from "../../WorkOrderDetailProvider";
-
-const fmtDateTime = (iso) =>
-  iso
-    ? new Date(iso).toLocaleString(undefined, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      })
-    : null;
+import { fmtDateTime } from "../../../../utils/date";
 
 // convert an ISO string to the value a datetime-local input wants
 const toLocalInput = (iso) => {

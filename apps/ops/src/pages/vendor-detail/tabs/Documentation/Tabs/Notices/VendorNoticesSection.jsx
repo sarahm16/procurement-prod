@@ -21,6 +21,7 @@ import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import NotificationImportantOutlinedIcon from "@mui/icons-material/NotificationImportantOutlined";
 
 import useAuthenticatedUser from "../../../../../../*/hooks/useAuthenticatedUser";
+import { fmtDate } from "../../../../../../utils/date";
 // Type-specific form modals — build these out as you define each form.
 // import ComplianceNoticeForm from "./forms/ComplianceNoticeForm";
 // import WarningForm from "./forms/WarningForm";
@@ -60,15 +61,6 @@ const STATUS_COLORS = {
   declined: "#dc2626",
   voided: "#6b7280",
 };
-
-const fmtDate = (iso) =>
-  iso
-    ? new Date(iso).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })
-    : "—";
 
 // A single notice row in the history list.
 function NoticeRow({ notice }) {

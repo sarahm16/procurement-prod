@@ -40,34 +40,36 @@ export default function WorkOrderDetailsTab() {
   } = useWorkOrderActions();
 
   return (
-    <InfoGrid>
-      {/* Row 1: general info + who's assigned */}
-      <GeneralInfoCard details={details} onSave={updateDetails} />
-      <RoleAssignment
-        entity_type_id={WORK_ORDER_ENTITY_TYPE_ID}
-        entity_id={Number(id)}
-      />
-      <LinkedWorkOrders onAddChild={() => {}} defaultOpen />
+    <>
+      <InfoGrid>
+        {/* Row 1: general info + who's assigned */}
+        <GeneralInfoCard details={details} onSave={updateDetails} />
+        <RoleAssignment
+          entity_type_id={WORK_ORDER_ENTITY_TYPE_ID}
+          entity_id={Number(id)}
+        />
+        <LinkedWorkOrders defaultOpen />
 
-      {/* Row 2: site */}
-      <WorkOrderSiteCard site={site} />
+        {/* Row 2: site */}
+        <WorkOrderSiteCard site={site} />
 
-      {/* Vendor assignment placeholder (logic later) */}
-      <AssignedVendorCard />
-      <VendorOnboardingCard />
+        {/* Vendor assignment placeholder (logic later) */}
+        <AssignedVendorCard />
+        <VendorOnboardingCard />
 
-      {/* Full width: scope + services/pricing */}
-      <ServicesPricingCard
-        services={services || []}
-        scopeOfWork={details?.scope_of_work}
-        onAddService={addService}
-        onUpdateService={updateService}
-        onDeleteService={deleteService}
-        onSaveScope={updateDetails}
-      />
+        {/* Full width: scope + services/pricing */}
+        <ServicesPricingCard
+          services={services || []}
+          scopeOfWork={details?.scope_of_work}
+          onAddService={addService}
+          onUpdateService={updateService}
+          onDeleteService={deleteService}
+          onSaveScope={updateDetails}
+        />
 
-      {/* Attachments / pre-work images placeholder (logic later) */}
-      {/* <AttachmentsCard workOrderId={Number(id)} /> */}
-    </InfoGrid>
+        {/* Attachments / pre-work images placeholder (logic later) */}
+        {/* <AttachmentsCard workOrderId={Number(id)} /> */}
+      </InfoGrid>
+    </>
   );
 }

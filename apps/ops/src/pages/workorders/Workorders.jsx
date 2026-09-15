@@ -37,8 +37,6 @@ const fmtAge = (iso) => {
   return days === 0 ? "Today" : `${days}d`;
 };
 
-const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString() : "—");
-
 const fmtMoney = (n) =>
   n == null
     ? "—"

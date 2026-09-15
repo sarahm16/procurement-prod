@@ -26,6 +26,7 @@ import {
   useLinkedWorkOrders,
   useWorkOrderActions,
 } from "../../WorkOrderDetailProvider";
+import AddChildWorkOrderPanel from "./AddChildWorkOrderPanel";
 
 /**
  * LinkedWorkOrders
@@ -214,6 +215,7 @@ export default function LinkedWorkOrders({ onAddChild, defaultOpen = true }) {
   const { unlinkWorkOrder } = useWorkOrderActions();
 
   const [open, setOpen] = useState(defaultOpen);
+  const [adding, setAdding] = useState(false);
   const [unlinking, setUnlinking] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -239,9 +241,10 @@ export default function LinkedWorkOrders({ onAddChild, defaultOpen = true }) {
 
   const unassigned = children.filter((w) => !w.vendor).length;
 
-  // Nothing to show and no way to start a job — don't render an empty card.
+  // Rendered even with nothing linked. A standalone work order needing a
+  // second vendor is exactly when someone has to find this, and an empty
+  // state that explains the idea is how they do.
   if (loading) return null;
-  if (!isChild && children.length === 0 && !onAddChild) return null;
 
   const openWorkOrder = (id) => window.open(`/workorders/${id}`, "_blank");
 
@@ -313,20 +316,20 @@ export default function LinkedWorkOrders({ onAddChild, defaultOpen = true }) {
             alignItems="center"
             onClick={(e) => e.stopPropagation()}
           >
-            {onAddChild && !isChild && (
-              <Tooltip title="Add a work order to this job">
-                <IconButton
-                  size="small"
-                  onClick={onAddChild}
-                  sx={{
-                    color: "text.disabled",
-                    "&:hover": { color: "primary.main" },
-                  }}
-                >
-                  <AddIcon sx={{ fontSize: 17 }} />
-                </IconButton>
-              </Tooltip>
-            )}
+            {/* Available from either end — needing a third vendor occurs to
+                you just as easily while looking at a child. */}
+            <Tooltip title="Add another vendor's work order to this job">
+              <IconButton
+                size="small"
+                onClick={onAddChild ?? (() => setAdding(true))}
+                sx={{
+                  color: "text.disabled",
+                  "&:hover": { color: "primary.main" },
+                }}
+              >
+                <AddIcon sx={{ fontSize: 17 }} />
+              </IconButton>
+            </Tooltip>
             <Box sx={{ color: "text.disabled", display: "flex" }}>
               {open ? (
                 <ExpandLessIcon sx={{ fontSize: 16 }} />
@@ -430,6 +433,8 @@ export default function LinkedWorkOrders({ onAddChild, defaultOpen = true }) {
           </Box>
         </Collapse>
       </Box>
+
+      <AddChildWorkOrderPanel open={adding} onClose={() => setAdding(false)} />
 
       <Dialog
         open={Boolean(unlinking)}

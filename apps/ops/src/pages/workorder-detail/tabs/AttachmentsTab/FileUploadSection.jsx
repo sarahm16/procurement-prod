@@ -21,8 +21,7 @@ import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
 
 import useAuthenticatedUser from "../../../../*/hooks/useAuthenticatedUser";
-
-const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString() : "");
+import { fmtDate } from "../../../../utils/date";
 
 const fileIcon = (contentType = "", fileName = "") => {
   const ct = (contentType || "").toLowerCase();

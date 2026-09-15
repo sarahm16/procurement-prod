@@ -22,15 +22,7 @@ import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
-
-const fmtDate = (iso) =>
-  iso
-    ? new Date(iso).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })
-    : "—";
+import { fmtDate } from "../../../../../../utils/date";
 
 // Is the COI expired (or missing)?
 const isExpired = (coi) => !coi || new Date(coi.expiration_date) < new Date();

@@ -21,6 +21,7 @@ import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import TableChartOutlinedIcon from "@mui/icons-material/TableChartOutlined";
 
 import useAuthenticatedUser from "../../../../*/hooks/useAuthenticatedUser";
+import { fmtDate } from "../../../../utils/date";
 
 const CATEGORY = "attachment";
 
@@ -48,8 +49,6 @@ const fmtBytes = (bytes) => {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
-
-const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString() : "");
 
 export default function Attachments() {
   const theme = useTheme();

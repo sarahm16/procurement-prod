@@ -18,6 +18,7 @@ import AddIcon from "@mui/icons-material/Add";
 import ConfirmDialog from "../../../../components/ConfirmDialog";
 
 import useAuthenticatedUser from "../../../../*/hooks/useAuthenticatedUser";
+import { fmtDate } from "../../../../utils/date";
 
 // Fixed set of compliance docs, each mapped to its send endpoint slug.
 // Add W9 here and it appears with working buttons — no handler changes.
@@ -33,8 +34,6 @@ const STATUS_COLORS = {
   completed: "#16a34a",
   declined: "#dc2626",
 };
-
-const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString() : "—");
 
 function ComplianceCard({
   docType,

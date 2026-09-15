@@ -15,9 +15,8 @@ import { InfoCard, FieldRow } from "../../../../components/InfoGrid";
 import { workOrderTypes } from "../../../../*/constants/workorderTypes";
 import { workOrderPriorityConfig } from "../../../../*/constants/workOrderPriorityConfig";
 
-const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString() : "—");
-const toInputDate = (iso) =>
-  iso ? new Date(iso).toISOString().slice(0, 10) : "";
+// Utils
+import { fmtDate, toInputDate } from "../../../../utils/date";
 
 export default function GeneralInfoCard({ details, onSave }) {
   const { data: softwares = [] } = useSoftwares();

@@ -22,6 +22,7 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import { alpha } from "@mui/material/styles";
 
 import { useAssignableVendors, milesBetween } from "./useSourcing";
+import { fmtDate } from "../../utils/date";
 
 /* Column definitions drive both header rows and the body, so they can't drift. */
 const CHECK_COLUMNS = [
@@ -33,15 +34,6 @@ const CHECK_COLUMNS = [
   { key: "sent", label: "Exhibit" },
   { key: "signed", label: "Signed" },
 ];
-
-const fmtDate = (iso) =>
-  iso
-    ? new Date(iso).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "2-digit",
-      })
-    : "";
 
 function CheckMark({ value, title }) {
   const common = {
