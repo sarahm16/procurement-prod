@@ -28,6 +28,20 @@ const getPrimaryContact = (contacts = []) =>
 
 const COMPLIANCE_TYPES = ["ACH", "W9"]; // standard MSA not required for work orders
 
+const sumField = (rows = [], field) =>
+  rows.reduce((t, r) => t + (Number(r[field]) || 0), 0) || null;
+
+const serializeFamilyMember = (wo) => ({
+  id: wo.id,
+  work_order_number: wo.work_order_number,
+  type: wo.type,
+  scope_of_work: wo.scope_of_work,
+  status: wo.Status?.name ?? null,
+  status_color: wo.Status?.color ?? null,
+  vendor: wo.Vendor?.company ?? null,
+  vendor_total: sumField(wo.Services, "vendor_price"),
+});
+
 const serializeVendor = (vendor) => {
   if (!vendor) return null;
   const primary = getPrimaryContact(vendor.Contacts);
@@ -105,6 +119,7 @@ const serializeWorkorderById = (workorder, notes, activityLog) => {
     priority: workorder?.priority,
     external_id: workorder?.external_id,
     work_order_number: workorder?.work_order_number,
+    parent_work_order_id: workorder?.parent_work_order_id,
     site: workorder?.Site,
     status: workorder?.Status?.name,
     services: (workorder?.Services ?? []).map(serializeService),
@@ -126,6 +141,22 @@ const serializeWorkorderById = (workorder, notes, activityLog) => {
       .slice()
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)) // chronological
       .map(serializeCommunication),
+    parent: workorder?.Parent
+      ? {
+          id: workorder.Parent.id,
+          work_order_number: workorder.Parent.work_order_number,
+          type: workorder.Parent.type,
+          status: workorder.Parent.Status?.name ?? null,
+          status_color: workorder.Parent.Status?.color ?? null,
+          client_total: sumField(workorder.Parent.Services, "client_price"),
+        }
+      : null,
+    // A child sees the whole sibling set (itself included — the card marks it);
+    // a parent sees its own children.
+    family: (workorder?.Parent?.Children ?? workorder?.Children ?? []).map(
+      serializeFamilyMember,
+    ),
+    client_total: sumField(workorder?.Services, "client_price"),
   };
 };
 
@@ -138,6 +169,7 @@ export default function workordersRouter(prisma) {
       const workorders = await prisma.workOrders.findMany({
         include: {
           Services: true,
+          Vendor: { select: { id: true, company: true } },
           Status: true,
           Site: {
             select: {
@@ -169,6 +201,7 @@ export default function workordersRouter(prisma) {
   router.post("/", async (req, res) => {
     const {
       site_id,
+      parent_work_order_id,
       due_date,
       start_date,
       services = [],
@@ -182,14 +215,69 @@ export default function workordersRouter(prisma) {
       scope_of_work,
     } = req.body;
 
+    if (!site_id || !type) {
+      return res.status(400).json({ error: "site_id and type are required" });
+    }
+
+    // ── Parent validation ──────────────────────────────────────────────
+    // Done up front, outside the transaction, so a bad parent comes back as a
+    // real status code rather than a 500 thrown from inside the retry loop.
+    let parent = null;
+    if (parent_work_order_id) {
+      parent = await prisma.workOrders.findUnique({
+        where: { id: Number(parent_work_order_id) },
+        select: {
+          id: true,
+          site_id: true,
+          parent_work_order_id: true,
+          vendor_id: true,
+          work_order_number: true,
+        },
+      });
+
+      if (!parent) {
+        return res.status(404).json({ error: "Parent work order not found" });
+      }
+      if (parent.parent_work_order_id) {
+        return res
+          .status(400)
+          .json({ error: "A child work order can't itself be a parent" });
+      }
+      if (parent.site_id !== Number(site_id)) {
+        return res
+          .status(400)
+          .json({ error: "A child work order must be at the parent's site" });
+      }
+    }
+
     const createWorkOrder = async () => {
       for (let attempt = 0; attempt < 5; attempt++) {
         const work_order_number = `NFC-${generateRandomSixDigit()}`;
         try {
           return await prisma.$transaction(async (tx) => {
+            // A parent is a client-facing container; the vendor work lives on
+            // its children. Giving it a first child retires its own vendor.
+            if (parent?.vendor_id) {
+              await tx.workOrders.update({
+                where: { id: parent.id },
+                data: { vendor_id: null },
+              });
+
+              await logActivity(tx, {
+                entityTypeId: entity_type_id,
+                entityId: parent.id,
+                fieldChanged: "vendor_id",
+                previousValue: String(parent.vendor_id),
+                newValue: null,
+                changedBy: user_id ?? null,
+                action: "UPDATE",
+              });
+            }
+
             const workorder = await tx.workOrders.create({
               data: {
-                site_id,
+                site_id: Number(site_id),
+                parent_work_order_id: parent?.id ?? null,
                 status_id: 1,
                 work_order_number,
                 created_by_email,
@@ -230,7 +318,9 @@ export default function workordersRouter(prisma) {
               entityId: workorder.id,
               fieldChanged: "work_order",
               previousValue: null,
-              newValue: `Created work order ${workorder.work_order_number}`,
+              newValue: parent
+                ? `Created work order ${workorder.work_order_number} as a child of ${parent.work_order_number}`
+                : `Created work order ${workorder.work_order_number}`,
               changedBy: user_id ?? null,
               action: "CREATE",
             });
@@ -238,7 +328,12 @@ export default function workordersRouter(prisma) {
             return workorder;
           });
         } catch (err) {
-          if (err.code === "P2002" && attempt < 4) continue;
+          // Only retry a genuine work_order_number collision. Any other unique
+          // violation would loop five times and still fail, hiding the cause.
+          const isNumberCollision =
+            err.code === "P2002" &&
+            String(err.meta?.target ?? "").includes("work_order_number");
+          if (isNumberCollision && attempt < 4) continue;
           throw err;
         }
       }
@@ -247,10 +342,26 @@ export default function workordersRouter(prisma) {
 
     try {
       const workorder = await createWorkOrder();
+
+      // Same shape as GET /api/workorders, so the client can drop this
+      // straight into the grid without a refetch if it wants to.
       const full = await prisma.workOrders.findUnique({
         where: { id: workorder.id },
-        include: { Services: true, Status: true, Site: true },
+        include: {
+          Services: true,
+          Status: true,
+          Vendor: { select: { id: true, company: true } },
+          Site: {
+            select: {
+              store: true,
+              mailing_city: true,
+              mailing_state: true,
+              Client: { select: { client: true } },
+            },
+          },
+        },
       });
+
       res.status(201).json(full);
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
@@ -259,12 +370,60 @@ export default function workordersRouter(prisma) {
             .status(409)
             .json({ error: "Work order number collision after retries" });
         }
+        if (error.code === "P2003") {
+          return res
+            .status(400)
+            .json({ error: "Invalid site, software, or service reference" });
+        }
         console.error("Prisma error creating workorder:", error);
         res.status(400).json({ error: "Database Error", code: error.code });
       } else {
         console.error("Error creating workorder:", error);
         res.status(500).json({ error: "Internal Server Error" });
       }
+    }
+  });
+
+  // PUT /api/workorders/:id/unlink
+  router.put("/:id/unlink", async (req, res) => {
+    const { id } = req.params;
+    const { user_id } = req.body;
+    try {
+      const wo = await prisma.workOrders.findUnique({
+        where: { id: Number(id) },
+        select: {
+          id: true,
+          work_order_number: true,
+          parent_work_order_id: true,
+        },
+      });
+      if (!wo) return res.status(404).json({ error: "Work order not found" });
+      if (!wo.parent_work_order_id) {
+        return res
+          .status(400)
+          .json({ error: "That work order isn't part of a job" });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.workOrders.update({
+          where: { id: wo.id },
+          data: { parent_work_order_id: null },
+        });
+        await logActivity(tx, {
+          entityTypeId: entity_type_id,
+          entityId: wo.id,
+          fieldChanged: "parent_work_order_id",
+          previousValue: String(wo.parent_work_order_id),
+          newValue: null,
+          changedBy: user_id ?? null,
+          action: "UPDATE",
+        });
+      });
+
+      res.json({ id: wo.id, parent_work_order_id: null });
+    } catch (error) {
+      console.error("Error unlinking work order:", error);
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 
@@ -358,6 +517,16 @@ export default function workordersRouter(prisma) {
   router.get("/:id", async (req, res) => {
     const { id } = req.params;
 
+    const familySelect = {
+      id: true,
+      work_order_number: true,
+      type: true,
+      scope_of_work: true,
+      Status: { select: { name: true, color: true } },
+      Vendor: { select: { company: true } },
+      Services: { select: { vendor_price: true } },
+    };
+
     try {
       const [workorder, notes, activityLog] = await Promise.all([
         prisma.workOrders.findUnique({
@@ -399,6 +568,17 @@ export default function workordersRouter(prisma) {
                 Vendor: true,
               },
             },
+            Parent: {
+              select: {
+                id: true,
+                work_order_number: true,
+                type: true,
+                Status: { select: { name: true, color: true } },
+                Services: { select: { client_price: true } },
+                Children: { select: familySelect }, // ← the siblings
+              },
+            },
+            Children: { select: familySelect },
           },
         }),
         prisma.notes.findMany({
