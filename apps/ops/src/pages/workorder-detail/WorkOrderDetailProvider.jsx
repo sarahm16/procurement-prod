@@ -17,6 +17,7 @@ const ActionsContext = createContext();
 const ServicesContext = createContext();
 const SiteContext = createContext();
 const FieldActivityContext = createContext();
+const LinkedContext = createContext();
 
 export function WorkOrderDetailProvider({ id, children }) {
   const { user } = useAuthenticatedUser();
@@ -27,43 +28,70 @@ export function WorkOrderDetailProvider({ id, children }) {
   const [services, setServices] = useState([]);
   const [site, setSite] = useState({});
   const [fieldActivity, setFieldActivity] = useState({});
+  const [linked, setLinked] = useState({
+    parent: null,
+    family: [],
+    client_total: null,
+  });
+  const [loading, setLoading] = useState(true);
+
+  /**
+   * Pulled out of the effect so it can be re-run. Creating a child work order
+   * from this page changes both this record and its family, and there's no
+   * way to patch that locally with any confidence.
+   */
+  const load = useCallback(
+    async (signal) => {
+      setLoading(true);
+      try {
+        const { data } = await axios.get(`/api/workorders/${id}`, { signal });
+        setDetails({
+          status: data.status,
+          work_order_number: data.work_order_number,
+          external_id: data?.external_id,
+          software: data?.software,
+          software_id: data?.software_id,
+          type: data?.type,
+          priority: data?.priority,
+          created_at: data.created_at,
+          due_date: data.due_date,
+          start_date: data?.start_date,
+          scope_of_work: data?.scope_of_work,
+          vendor: data?.vendor,
+          vendor_id: data?.vendor?.id,
+          msa: data?.msa ?? null,
+          vendor_compliance: data?.vendor?.compliance,
+        });
+        setActivity(data.activity_log ?? []);
+        setNotes(data.notes ?? []);
+        setSite(data.site ?? {});
+        setServices(data.services ?? []);
+        setFieldActivity({
+          communications: data?.communications ?? [],
+          vendor_updates: data?.vendor_updates ?? [],
+        });
+        setLinked({
+          parent: data?.parent ?? null,
+          family: data?.family ?? [],
+          client_total: data?.client_total ?? null,
+        });
+      } catch (error) {
+        if (axios.isCancel?.(error) || error.name === "CanceledError") return;
+        console.error("Error fetching work order:", error);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [id],
+  );
 
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
-    axios.get(`/api/workorders/${id}`).then(({ data }) => {
-      if (!active) return;
-      setDetails({
-        status: data.status,
-        work_order_number: data.work_order_number,
-        external_id: data?.external_id,
-        software: data?.software,
-        software_id: data?.software_id,
-        type: data?.type,
-        priority: data?.priority,
-        created_at: data.created_at,
-        due_date: data.due_date,
-        start_date: data?.start_date,
-        scope_of_work: data?.scope_of_work,
-        vendor: data?.vendor,
-        vendor_id: data?.vendor?.id,
-        msa: data?.msa ?? null,
-        vendor_compliance: data?.vendor?.compliance,
-      });
-      setActivity(data.activity_log);
-      setNotes(data.notes);
-      setSite(data.site);
-      setServices(data.services);
-      setFieldActivity({
-        communications: data?.communications,
-        vendor_updates: data?.vendor_updates,
-      });
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [id]);
+  const refresh = useCallback(() => load(), [load]);
 
   const updateDetails = useCallback(
     async (draft) => {
@@ -89,7 +117,10 @@ export function WorkOrderDetailProvider({ id, children }) {
     async (sid, changes) => {
       const { data } = await axios.put(
         `/api/workorders/${id}/services/${sid}`,
-        { user_id: user?.id, changes },
+        {
+          user_id: user?.id,
+          changes,
+        },
       );
       setServices((prev) =>
         prev.map((s) => (s.id === sid ? { ...s, ...data } : s)),
@@ -161,7 +192,6 @@ export function WorkOrderDetailProvider({ id, children }) {
       const { data } = await axios.post(`/api/workorders/${id}/msa`, {
         user_id: user?.id,
       });
-      // reflect the sent MSA in details so the card flips to the sent state
       setDetails((prev) => ({ ...prev, msa: data }));
       return data;
     } catch (err) {
@@ -186,16 +216,32 @@ export function WorkOrderDetailProvider({ id, children }) {
             user_id: user?.id,
           },
         );
-        console.log("saved communication", data);
         setFieldActivity((prev) => ({
           ...prev,
-          communications: [...prev.communications, data],
+          communications: [...(prev.communications ?? []), data],
         }));
       } catch (error) {
         console.error("error saving communication", error);
       }
     },
     [id, user?.id],
+  );
+
+  /**
+   * Detaches a child from this job. The work order isn't deleted — it keeps
+   * its vendor, pricing and history and simply becomes standalone.
+   */
+  const unlinkWorkOrder = useCallback(
+    async (childId) => {
+      await axios.put(`/api/workorders/${childId}/unlink`, {
+        user_id: user?.id,
+      });
+      setLinked((prev) => ({
+        ...prev,
+        family: prev.family.filter((w) => w.id !== childId),
+      }));
+    },
+    [user?.id],
   );
 
   const actions = useMemo(
@@ -209,6 +255,8 @@ export function WorkOrderDetailProvider({ id, children }) {
       updateScope,
       sendMSA,
       addCommunication,
+      unlinkWorkOrder,
+      refresh,
     }),
     [
       updateDetails,
@@ -220,8 +268,31 @@ export function WorkOrderDetailProvider({ id, children }) {
       updateScope,
       sendMSA,
       addCommunication,
+      unlinkWorkOrder,
+      refresh,
     ],
   );
+
+  /**
+   * `isParent` / `isChild` are derived here rather than in each consumer,
+   * because more than the linked card cares: a parent holds no vendor, so the
+   * Assigned Vendor and Vendor Onboarding cards shouldn't render on one.
+   *
+   * The job's client price lives on the parent, so a child reads it from
+   * there and a parent reads its own.
+   */
+  const linkedValue = useMemo(() => {
+    const isChild = Boolean(linked.parent);
+    return {
+      workOrderId: Number(id),
+      parent: linked.parent,
+      family: linked.family,
+      isChild,
+      isParent: !isChild && linked.family.length > 0,
+      clientTotal: linked.parent?.client_total ?? linked.client_total,
+      loading,
+    };
+  }, [linked, loading, id]);
 
   return (
     <ActionsContext.Provider value={actions}>
@@ -229,11 +300,13 @@ export function WorkOrderDetailProvider({ id, children }) {
         <ActivityContext.Provider value={activity}>
           <NotesContext.Provider value={notes}>
             <SiteContext.Provider value={site}>
-              <FieldActivityContext value={fieldActivity}>
-                <ServicesContext.Provider value={services}>
-                  {children}
-                </ServicesContext.Provider>
-              </FieldActivityContext>
+              <FieldActivityContext.Provider value={fieldActivity}>
+                <LinkedContext.Provider value={linkedValue}>
+                  <ServicesContext.Provider value={services}>
+                    {children}
+                  </ServicesContext.Provider>
+                </LinkedContext.Provider>
+              </FieldActivityContext.Provider>
             </SiteContext.Provider>
           </NotesContext.Provider>
         </ActivityContext.Provider>
@@ -262,3 +335,5 @@ export const useWorkOrderServices = () =>
   useCtx(ServicesContext, "useWorkOrderServices");
 export const useFieldActivity = () =>
   useCtx(FieldActivityContext, "useFieldActivity");
+export const useLinkedWorkOrders = () =>
+  useCtx(LinkedContext, "useLinkedWorkOrders");

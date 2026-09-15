@@ -1,49 +1,133 @@
 import axios from "axios";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import useAuthenticatedUser from "../../*/hooks/useAuthenticatedUser";
 import { workOrderTypes } from "../../*/constants/workorderTypes";
+import { workOrderPriorityConfig } from "../../*/constants/workOrderPriorityConfig";
+import { useWorkOrderStatuses } from "../../*/hooks/useWorkOrderStatuses";
 
-// Components
-import ListDataGrid from "../../components/ListPageLayout/ListDataGrid";
+import ListDataGrid, {
+  TREE_GROUP_FIELD,
+} from "../../components/ListPageLayout/ListDataGrid";
 import ListPageLayout from "../../components/ListPageLayout/ListPageLayout";
 import ListToolbar from "../../components/ListPageLayout/ListToolbar";
-import CreateWorkorderForm from "./CreateWorkorderForm";
 import SlideOutPanel from "../../components/ListPageLayout/SlideOutPanel";
+import CreateWorkorderForm from "./CreateWorkorderForm";
 
-// MUI
 import AddIcon from "@mui/icons-material/Add";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
-import Chip from "@mui/material/Chip";
-import { useWorkOrderStatuses } from "../../*/hooks/useWorkOrderStatuses";
-import { workOrderPriorityConfig } from "../../*/constants/workOrderPriorityConfig";
+import Typography from "@mui/material/Typography";
 
-// helper for age (put near fmtDate)
+/* ── Helpers ──────────────────────────────────────────────────────────── */
+
 const ageInDays = (iso) => {
   if (!iso) return null;
-  const created = new Date(iso);
-  const diffMs = Date.now() - created.getTime();
-  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 };
+
 const fmtAge = (iso) => {
   const days = ageInDays(iso);
   if (days == null) return "—";
-  if (days === 0) return "Today";
-  return `${days}d`;
+  return days === 0 ? "Today" : `${days}d`;
 };
+
+const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString() : "—");
+
+const fmtMoney = (n) =>
+  n == null
+    ? "—"
+    : n.toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 0,
+      });
 
 const typeColor = (name) =>
   workOrderTypes.find((t) => t.name === name)?.color ?? "#6b7280";
 
-const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString() : "—");
+/** Sum a price field across a work order's service lines. */
+const sumServices = (wo, field) =>
+  (wo.Services ?? []).reduce((total, s) => total + (Number(s[field]) || 0), 0);
+
+/**
+ * Turns the flat list into tree rows, and rolls the money up.
+ *
+ * The rollup mirrors how the business actually works: the client price lives on
+ * the parent (one invoice for the whole job), the vendor prices live on the
+ * children (one per trade). So a parent's cost is the sum of its children's.
+ *
+ * A child whose parent isn't in the current result set — filtered out, or
+ * simply not loaded — becomes a top-level row rather than hanging off a
+ * placeholder group row that MUI would otherwise invent.
+ */
+function buildTreeRows(workorders) {
+  const byId = new Map(workorders.map((w) => [w.id, w]));
+
+  const childrenOf = new Map();
+  for (const w of workorders) {
+    if (w.parent_work_order_id && byId.has(w.parent_work_order_id)) {
+      const list = childrenOf.get(w.parent_work_order_id) ?? [];
+      list.push(w);
+      childrenOf.set(w.parent_work_order_id, list);
+    }
+  }
+
+  const key = (w) => String(w.work_order_number ?? w.id);
+
+  return workorders.map((w) => {
+    const parent = w.parent_work_order_id
+      ? byId.get(w.parent_work_order_id)
+      : null;
+    const kids = childrenOf.get(w.id) ?? [];
+
+    const ownClient = sumServices(w, "client_price");
+    const ownVendor = sumServices(w, "vendor_price");
+
+    return {
+      ...w,
+      treePath: parent ? [key(parent), key(w)] : [key(w)],
+      __isParent: kids.length > 0,
+      __isChild: Boolean(parent),
+      __childCount: kids.length,
+      __childVendorCount: new Set(kids.map((k) => k.vendor_id).filter(Boolean))
+        .size,
+      // Parents show their own client price and their children's total cost.
+      __clientTotal: ownClient || null,
+      __vendorTotal: kids.length
+        ? kids.reduce((t, k) => t + sumServices(k, "vendor_price"), 0) || null
+        : ownVendor || null,
+    };
+  });
+}
+
+const getTreeDataPath = (row) => row.treePath;
+
+/** Striping plus a hook for weighting parent rows. */
+const getRowClassName = (params) => {
+  const banding =
+    params.indexRelativeToCurrentPage % 2 === 0 ? "row-even" : "row-odd";
+  if (params.row.__isParent) return `${banding} wo-parent`;
+  if (params.row.__isChild) return `${banding} wo-child`;
+  return banding;
+};
+
+const gridInitialState = {
+  // The chevrons have to travel with the identity columns, or they scroll away
+  // from the rows they belong to.
+  pinnedColumns: { left: [TREE_GROUP_FIELD, "client"] },
+  sorting: { sortModel: [{ field: "due_date", sort: "asc" }] },
+};
 
 function Workorders() {
   const navigate = useNavigate();
   const { user } = useAuthenticatedUser();
+  const { data: statuses = [] } = useWorkOrderStatuses();
 
   const [formOpen, setFormOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -55,116 +139,92 @@ function Workorders() {
   const [workorders, setWorkorders] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const { data: statuses = [] } = useWorkOrderStatuses();
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [woRes, statusRes] = await Promise.all([
-        axios.get("/api/workorders"),
-      ]);
-      console.log("workorders", woRes.data);
-      setWorkorders(woRes.data);
+      const { data } = await axios.get("/api/workorders");
+      setWorkorders(data);
     } catch (error) {
       console.error("Error fetching work orders:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
-  // Color lookup from the FETCHED statuses (each has name + color from the DB)
-  const statusColor = useMemo(
-    () => (name) => {
-      console.log("name", name);
-      return statuses.find((s) => s.name === name)?.color;
-    },
+  const statusColor = useCallback(
+    (name) => statuses.find((s) => s.name === name)?.color ?? "#6b7280",
     [statuses],
   );
 
-  console.log("statuses in work orders", statuses);
-
   const statusOptions = useMemo(
     () =>
-      [...new Set(workorders.map((w) => w.status?.name).filter(Boolean))].map(
-        (s) => ({
-          value: s,
-          label: s,
-        }),
-      ),
+      [...new Set(workorders.map((w) => w.Status?.name).filter(Boolean))]
+        .sort()
+        .map((s) => ({ value: s, label: s })),
     [workorders],
   );
 
   const typeOptions = useMemo(
     () =>
-      [...new Set(workorders.map((w) => w.type).filter(Boolean))].map((t) => ({
-        value: t,
-        label: t,
-      })),
+      [...new Set(workorders.map((w) => w.type).filter(Boolean))]
+        .sort()
+        .map((t) => ({ value: t, label: t })),
     [workorders],
   );
 
-  const filteredWorkorders = useMemo(() => {
+  const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return workorders.filter((w) => {
       if (q) {
-        const hay = `${w.work_order_number ?? ""} ${w.Site?.store ?? ""} ${
-          w.Site?.Client?.client ?? ""
-        }`.toLowerCase();
+        const hay =
+          `${w.work_order_number ?? ""} ${w.external_id ?? ""} ${w.Site?.store ?? ""} ` +
+          `${w.Site?.Client?.client ?? ""} ${w.Vendor?.company ?? ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
-      if (statusFilter !== "all" && w.status?.name !== statusFilter)
+      if (statusFilter !== "all" && w.Status?.name !== statusFilter)
         return false;
       if (typeFilter !== "all" && w.type !== typeFilter) return false;
       return true;
     });
   }, [workorders, search, statusFilter, typeFilter]);
 
+  const treeRows = useMemo(() => buildTreeRows(filtered), [filtered]);
+
   const columns = useMemo(
     () => [
       {
-        field: "work_order_number",
-        headerName: "WO #",
-        flex: 0.9,
-        minWidth: 120,
-      },
-      {
         field: "client",
         headerName: "Client",
-        flex: 1.2,
-        minWidth: 150,
-        valueGetter: (value, row) => row.Site?.Client?.client ?? "—",
+        width: 150,
+        valueGetter: (value, row) => row.Site?.Client?.client ?? "",
       },
       {
         field: "site",
         headerName: "Site",
-        flex: 1,
-        minWidth: 140,
-        valueGetter: (value, row) => row.Site?.store ?? "—",
+        width: 160,
+        valueGetter: (value, row) => row.Site?.store ?? "",
       },
       {
         field: "type",
         headerName: "Type",
-        flex: 0.9,
-        minWidth: 120,
-        renderCell: (params) => {
-          const t = params.row.type;
-          if (!t) return "—";
-          const c = typeColor(t);
+        width: 120,
+        renderCell: ({ row }) => {
+          if (!row.type) return "—";
+          const c = typeColor(row.type);
           return (
             <Chip
-              label={t}
+              label={row.type}
               size="small"
               sx={{
-                backgroundColor: c + "22",
+                backgroundColor: `${c}22`,
                 color: c,
                 border: `1px solid ${c}55`,
-                fontWeight: 600,
-                fontSize: "0.7rem",
-                height: 22,
+                height: 20,
+                fontSize: "0.65rem",
               }}
             />
           );
@@ -173,58 +233,58 @@ function Workorders() {
       {
         field: "status",
         headerName: "Status",
-        flex: 1,
-        minWidth: 130,
-        renderCell: (params) => {
-          const name = params.row.Status?.name;
+        width: 130,
+        valueGetter: (value, row) => row.Status?.name ?? "",
+        renderCell: ({ row }) => {
+          const name = row.Status?.name;
           if (!name) return "—";
-          const c = statusColor(name) ?? "#6b7280";
+          const c = statusColor(name);
           return (
             <Chip
               label={name}
               size="small"
               sx={{
-                backgroundColor: c + "22",
+                backgroundColor: `${c}22`,
                 color: c,
                 border: `1px solid ${c}55`,
-                fontWeight: 600,
-                fontSize: "0.7rem",
-                height: 22,
+                height: 20,
+                fontSize: "0.65rem",
               }}
             />
           );
         },
       },
       {
-        field: "start_date",
-        headerName: "Start",
-        flex: 0.8,
-        minWidth: 110,
-        valueGetter: (value, row) => fmtDate(row.start_date),
-      },
-      {
-        field: "due_date",
-        headerName: "Due",
-        flex: 0.8,
-        minWidth: 110,
-        valueGetter: (value, row) => fmtDate(row.due_date),
-      },
-      {
-        field: "external_id",
-        headerName: "External ID",
-        flex: 0.9,
-        minWidth: 120,
-        valueGetter: (value, row) => row.external_id ?? "—",
+        field: "vendor",
+        headerName: "Vendor",
+        width: 190,
+        valueGetter: (value, row) => row.Vendor?.company ?? "",
+        // A parent has no vendor by design — the work is split across its
+        // children — so say that rather than showing an empty cell.
+        renderCell: ({ row }) =>
+          row.__isParent ? (
+            <Typography
+              sx={{
+                fontSize: "0.78rem",
+                color: "text.secondary",
+                fontStyle: "italic",
+              }}
+            >
+              {row.__childVendorCount || row.__childCount} across{" "}
+              {row.__childCount} work order
+              {row.__childCount === 1 ? "" : "s"}
+            </Typography>
+          ) : (
+            (row.Vendor?.company ?? "—")
+          ),
       },
       {
         field: "priority",
         headerName: "Priority",
-        flex: 0.8,
-        minWidth: 100,
-        renderCell: (params) => {
-          const p = params.row.priority;
-          if (!p || !workOrderPriorityConfig[p]) return "—";
-          const cfg = workOrderPriorityConfig[p];
+        width: 100,
+        renderCell: ({ row }) => {
+          const cfg = workOrderPriorityConfig[row.priority];
+          if (!cfg) return "—";
           return (
             <Chip
               label={cfg.label}
@@ -233,32 +293,61 @@ function Workorders() {
                 backgroundColor: cfg.bg,
                 color: cfg.color,
                 border: `1px solid ${cfg.color}55`,
-                fontWeight: 600,
-                fontSize: "0.7rem",
-                height: 22,
+                height: 20,
+                fontSize: "0.65rem",
               }}
             />
           );
         },
       },
       {
-        field: "created_at",
-        headerName: "Created",
-        flex: 0.8,
-        minWidth: 110,
-        valueGetter: (value, row) => fmtDate(row.created_at),
+        field: "__clientTotal",
+        headerName: "Client $",
+        width: 110,
+        type: "number",
+        valueFormatter: (value) => fmtMoney(value),
+      },
+      {
+        field: "__vendorTotal",
+        headerName: "Vendor $",
+        width: 110,
+        type: "number",
+        valueFormatter: (value) => fmtMoney(value),
+      },
+      {
+        field: "due_date",
+        headerName: "Due",
+        width: 110,
+        valueGetter: (value, row) =>
+          row.due_date ? new Date(row.due_date) : null,
+        type: "date",
+      },
+      {
+        field: "external_id",
+        headerName: "External ID",
+        width: 120,
+        valueGetter: (value, row) => row.external_id ?? "",
       },
       {
         field: "age",
         headerName: "Age",
-        flex: 0.5,
-        minWidth: 80,
-        // sortable by the numeric age, displayed as "5d"
+        width: 80,
+        type: "number",
         valueGetter: (value, row) => ageInDays(row.created_at) ?? -1,
-        renderCell: (params) => fmtAge(params.row.created_at),
+        renderCell: ({ row }) => fmtAge(row.created_at),
       },
     ],
     [statusColor],
+  );
+
+  /** The grouping column carries the WO number and the expand chevrons. */
+  const groupingColDef = useMemo(
+    () => ({
+      headerName: "WO #",
+      width: 190,
+      valueFormatter: (value) => value,
+    }),
+    [],
   );
 
   const onRowClick = (row) => navigate(`/workorders/${row.id}`);
@@ -267,6 +356,9 @@ function Workorders() {
     setSubmitting(true);
     try {
       const payload = {
+        parent_work_order_id: form.parent_work_order_id
+          ? Number(form.parent_work_order_id)
+          : null,
         site_id: Number(form.site_id),
         type: form.type,
         external_id: form.external_id || null,
@@ -275,6 +367,8 @@ function Workorders() {
         start_date: form.start_date || null,
         due_date: form.due_date || null,
         user_id: user?.id,
+        created_by_email: user?.email,
+        scope_of_work: form.scope_of_work,
         services: services
           .filter((s) => s.service_id)
           .map((s) => ({
@@ -289,12 +383,12 @@ function Workorders() {
               employee_id: Number(employee_id),
             })),
         ),
-        created_by_email: user?.email,
-        scope_of_work: form?.scope_of_work,
       };
 
-      const { data } = await axios.post("/api/workorders", payload);
-      setWorkorders((prev) => [data, ...prev]);
+      await axios.post("/api/workorders", payload);
+      // Refetch rather than prepending: creating a child changes the parent too
+      // (its vendor is cleared), so the local copy would be stale.
+      await fetchData();
       setFormOpen(false);
     } catch (e) {
       console.error("Error creating work order:", e);
@@ -315,6 +409,7 @@ function Workorders() {
           submitting={submitting}
           onClose={() => setFormOpen(false)}
           onSubmit={onSubmit}
+          workOrders={workorders}
         />
       </SlideOutPanel>
 
@@ -323,7 +418,7 @@ function Workorders() {
           <ListToolbar
             search={search}
             onSearchChange={setSearch}
-            searchPlaceholder="Search work orders…"
+            searchPlaceholder="Search WO #, site, client, vendor…"
             filters={[
               {
                 label: "Status",
@@ -367,10 +462,28 @@ function Workorders() {
         }
       >
         <ListDataGrid
-          rows={filteredWorkorders}
+          rows={treeRows}
           columns={columns}
-          onRowClick={onRowClick}
           loading={loading}
+          onRowClick={onRowClick}
+          noRowsMessage="No work orders match these filters"
+          treeData
+          getTreeDataPath={getTreeDataPath}
+          groupingColDef={groupingColDef}
+          defaultGroupingExpansionDepth={-1}
+          getRowClassName={getRowClassName}
+          initialState={gridInitialState}
+          // Tree rows shouldn't paginate — a page break can separate a parent
+          // from its children. Pro virtualizes, so the full list is fine.
+          pagination={false}
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            "& .MuiDataGrid-row.wo-parent": { fontWeight: 600 },
+            "& .MuiDataGrid-row.wo-child .MuiDataGrid-cell": {
+              fontSize: "0.78rem",
+            },
+          }}
         />
       </ListPageLayout>
     </>

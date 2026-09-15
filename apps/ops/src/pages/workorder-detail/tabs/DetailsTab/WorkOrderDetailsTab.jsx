@@ -10,6 +10,8 @@ import RoleAssignment from "../../../../components/RoleAssignment";
 import GeneralInfoCard from "./GeneralInfoCard";
 import WorkOrderSiteCard from "./WorkOrderSiteCard";
 import ServicesPricingCard from "./ServicesPricingCard";
+import VendorOnboardingCard from "./VendorOnboardingCard";
+import LinkedWorkOrders from "./LinkedWorkOrders";
 
 import {
   useWorkOrderActions,
@@ -17,7 +19,6 @@ import {
   useWorkOrderSite,
   useWorkOrderServices,
 } from "../../WorkOrderDetailProvider";
-import VendorOnboardingCard from "./VendorOnboardingCard";
 
 const WORK_ORDER_ENTITY_TYPE_ID = 4; // confirm your actual id
 
@@ -46,6 +47,7 @@ export default function WorkOrderDetailsTab() {
         entity_type_id={WORK_ORDER_ENTITY_TYPE_ID}
         entity_id={Number(id)}
       />
+      <LinkedWorkOrders onAddChild={() => {}} defaultOpen />
 
       {/* Row 2: site */}
       <WorkOrderSiteCard site={site} />
