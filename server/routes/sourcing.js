@@ -4,6 +4,7 @@ import { logActivity } from "../utils/logActivity.js";
 import { registerPricingRoutes } from "./sourcingPricingRoutes.js";
 import { registerReplaceRoute } from "./sourcingReplaceRoute.js";
 import { registerAssignRoute } from "./sourcingAssignRoute.js";
+import registerSiteSourcingRoute from "./sourcingSiteRoute.js";
 
 const SITE_ENTITY_TYPE_ID = 2;
 
@@ -103,6 +104,7 @@ const listParam = (v) =>
 
 export default function sourcingRouter(prisma) {
   const router = Router();
+  registerSiteSourcingRoute(router, prisma, serializeGridRow);
   registerPricingRoutes(router, prisma, serializeGridRow);
   registerReplaceRoute(router, prisma, serializeGridRow);
   registerAssignRoute(router, prisma, serializeGridRow);
