@@ -12,6 +12,7 @@ import WorkOrderSiteCard from "./WorkOrderSiteCard";
 import ServicesPricingCard from "./ServicesPricingCard";
 import VendorOnboardingCard from "./VendorOnboardingCard";
 import LinkedWorkOrders from "./LinkedWorkOrders";
+import MobilizationFeeCard from "./MobilizationFeeCard";
 
 import {
   useWorkOrderActions,
@@ -56,6 +57,7 @@ export default function WorkOrderDetailsTab() {
         {/* Vendor assignment placeholder (logic later) */}
         <AssignedVendorCard />
         <VendorOnboardingCard />
+        <MobilizationFeeCard />
 
         {/* Full width: scope + services/pricing */}
         <ServicesPricingCard

@@ -18,6 +18,7 @@ const ServicesContext = createContext();
 const SiteContext = createContext();
 const FieldActivityContext = createContext();
 const LinkedContext = createContext();
+const MobilizationContext = createContext();
 
 export function WorkOrderDetailProvider({ id, children }) {
   const { user } = useAuthenticatedUser();
@@ -34,6 +35,7 @@ export function WorkOrderDetailProvider({ id, children }) {
     client_total: null,
   });
   const [loading, setLoading] = useState(true);
+  const [mobilizationFees, setMobilizationFees] = useState([]);
 
   /**
    * Pulled out of the effect so it can be re-run. Creating a child work order
@@ -75,6 +77,7 @@ export function WorkOrderDetailProvider({ id, children }) {
           family: data?.family ?? [],
           client_total: data?.client_total ?? null,
         });
+        setMobilizationFees(data?.mobilization_fees ?? []);
       } catch (error) {
         if (axios.isCancel?.(error) || error.name === "CanceledError") return;
         console.error("Error fetching work order:", error);
@@ -244,6 +247,103 @@ export function WorkOrderDetailProvider({ id, children }) {
     [user?.id],
   );
 
+  const replaceFee = (fee) =>
+    setMobilizationFees((prev) => {
+      const exists = prev.some((f) => f.id === fee.id);
+      return exists
+        ? prev.map((f) => (f.id === fee.id ? fee : f))
+        : [fee, ...prev];
+    });
+
+  const createMobilizationFee = useCallback(
+    async ({ amount, notes }) => {
+      const { data } = await axios.post(
+        `/api/workorders/${id}/mobilization-fees`,
+        {
+          amount,
+          notes,
+          user_id: user?.id,
+        },
+      );
+      replaceFee(data);
+    },
+    [id, user?.id],
+  );
+
+  const updateMobilizationFee = useCallback(
+    async (feeId, changes) => {
+      const { data } = await axios.put(
+        `/api/workorders/${id}/mobilization-fees/${feeId}`,
+        { ...changes, user_id: user?.id },
+      );
+      replaceFee(data);
+    },
+    [id, user?.id],
+  );
+
+  const sendMobilizationFee = useCallback(
+    async (feeId) => {
+      try {
+        const { data } = await axios.post(
+          `/api/workorders/${id}/mobilization-fees/${feeId}/send`,
+          { user_id: user?.id },
+        );
+        replaceFee(data);
+      } catch (err) {
+        if (
+          err.response?.status === 409 &&
+          err.response.data?.needsPandaDocAuth
+        ) {
+          window.location.href = "/api/pandadoc/oauth/initiate";
+          return;
+        }
+        throw err;
+      }
+    },
+    [id, user?.id],
+  );
+
+  const markMobilizationFeePaid = useCallback(
+    async (feeId, quickbooks_bill_id) => {
+      const { data } = await axios.put(
+        `/api/workorders/${id}/mobilization-fees/${feeId}/paid`,
+        { quickbooks_bill_id, user_id: user?.id },
+      );
+      replaceFee(data);
+    },
+    [id, user?.id],
+  );
+
+  const voidMobilizationFee = useCallback(
+    async (feeId, reason) => {
+      const { data } = await axios.put(
+        `/api/workorders/${id}/mobilization-fees/${feeId}/void`,
+        { reason, user_id: user?.id },
+      );
+      replaceFee(data);
+    },
+    [id, user?.id],
+  );
+
+  const mobilizationValue = useMemo(() => {
+    const open = mobilizationFees.find((f) => f.is_open);
+    const current = open ?? mobilizationFees[0] ?? null;
+    const vendorTotal =
+      services.reduce((t, s) => t + (Number(s.vendor_price) || 0), 0) || null;
+    const paid = mobilizationFees
+      .filter((f) => f.status === "Paid")
+      .reduce((t, f) => t + (Number(f.amount) || 0), 0);
+
+    return {
+      fees: mobilizationFees,
+      current,
+      history: mobilizationFees.filter((f) => f.id !== current?.id),
+      vendorTotal,
+      balanceDue: vendorTotal ? vendorTotal - paid : null,
+      loading,
+    };
+  }, [mobilizationFees, services, loading]);
+
   const actions = useMemo(
     () => ({
       updateDetails,
@@ -257,6 +357,12 @@ export function WorkOrderDetailProvider({ id, children }) {
       addCommunication,
       unlinkWorkOrder,
       refresh,
+      replaceFee,
+      createMobilizationFee,
+      updateMobilizationFee,
+      sendMobilizationFee,
+      markMobilizationFeePaid,
+      voidMobilizationFee,
     }),
     [
       updateDetails,
@@ -270,6 +376,12 @@ export function WorkOrderDetailProvider({ id, children }) {
       addCommunication,
       unlinkWorkOrder,
       refresh,
+      replaceFee,
+      createMobilizationFee,
+      updateMobilizationFee,
+      sendMobilizationFee,
+      markMobilizationFeePaid,
+      voidMobilizationFee,
     ],
   );
 
@@ -303,7 +415,9 @@ export function WorkOrderDetailProvider({ id, children }) {
               <FieldActivityContext.Provider value={fieldActivity}>
                 <LinkedContext.Provider value={linkedValue}>
                   <ServicesContext.Provider value={services}>
-                    {children}
+                    <MobilizationContext value={mobilizationValue}>
+                      {children}
+                    </MobilizationContext>
                   </ServicesContext.Provider>
                 </LinkedContext.Provider>
               </FieldActivityContext.Provider>
@@ -337,3 +451,5 @@ export const useFieldActivity = () =>
   useCtx(FieldActivityContext, "useFieldActivity");
 export const useLinkedWorkOrders = () =>
   useCtx(LinkedContext, "useLinkedWorkOrders");
+export const useMobilizationFees = () =>
+  useCtx(MobilizationContext, "useMobilizationFees");
