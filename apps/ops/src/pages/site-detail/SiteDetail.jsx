@@ -18,7 +18,7 @@ import {
 // Tabs
 import SiteDetailsTab from "./tabs/SiteDetailsTab/SiteDetailsTab";
 import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
-import SourcingTab from "./tabs/SourcingTab/SourcingTab";
+import SiteSourcingTab from "./tabs/SourcingTab/SiteSourcingTab";
 import SiteAttachmentsTab from "./tabs/AttachmentsTab/AttachmentsTab";
 
 function SiteDetail() {
@@ -31,6 +31,7 @@ function SiteDetail() {
 }
 
 function SiteDetailLayout() {
+  const { id } = useParams();
   const details = useSiteDetails();
   const notes = useSiteNotes();
   const activity = useSiteActivity();
@@ -78,7 +79,7 @@ function SiteDetailLayout() {
         { label: "Attachments", content: <SiteAttachmentsTab /> },
         {
           label: "Sourcing",
-          content: <SourcingTab />,
+          content: <SiteSourcingTab siteId={id} />,
         },
         {
           label: "Activity",
