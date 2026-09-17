@@ -6,6 +6,7 @@ import { registerReplaceRoute } from "./sourcingReplaceRoute.js";
 import { registerAssignRoute } from "./sourcingAssignRoute.js";
 import registerSiteSourcingRoute from "./sourcingSiteRoute.js";
 import registerVendorSitesRoute from "./sourcingVendorRoute.js";
+import registerVendorWorkOrdersRoute from "./vendorWorkordersRoute.js";
 
 const SITE_ENTITY_TYPE_ID = 2;
 
@@ -105,6 +106,7 @@ const listParam = (v) =>
 
 export default function sourcingRouter(prisma) {
   const router = Router();
+  registerVendorWorkOrdersRoute(router, prisma);
   registerVendorSitesRoute(router, prisma);
   registerSiteSourcingRoute(router, prisma, serializeGridRow);
   registerPricingRoutes(router, prisma, serializeGridRow);
