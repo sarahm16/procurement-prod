@@ -31,6 +31,7 @@ import {
   useVendorActivity,
   VendorDetailProvider,
 } from "./VendorDetailProvider";
+import WorkOrdersTab from "./tabs/WorkOrdersTab/WorkOrdersTab";
 
 function VendorDetail() {
   const { id } = useParams();
@@ -87,7 +88,7 @@ function VendorDetailLayout({ id }) {
         },
         {
           label: "Work Orders",
-          content: <></>,
+          content: <WorkOrdersTab vendorId={id} />,
         },
         {
           label: "Activity",
