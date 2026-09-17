@@ -34,6 +34,7 @@ model Vendors {
   WorkOrderMSAs           WorkOrderMSAs[]
   WorkOrders              WorkOrders[]
   WorkOrderUpdates        WorkOrderVendorUpdates[]
+  MobilizationFees WorkOrderMobilizationFees[]
 }
 
 model VendorContacts {

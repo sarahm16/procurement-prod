@@ -2,6 +2,11 @@
 import express from "express";
 import crypto from "crypto";
 import prisma from "../../../db.js";
+import {
+  applyPandaDocStatusToFee,
+  serializeMobilizationFee,
+  MOB_FEE_STATUS,
+} from "../../../routes/mobilizationFeeRoutes.js";
 
 // Hardcoded for now — move to Key Vault / env later.
 const WEBHOOK_SECRETS = {
@@ -9,7 +14,8 @@ const WEBHOOK_SECRETS = {
   operations: "ovJnCU94cTQL8sMU4hjKpf",
 };
 
-// PandaDoc status → your internal status + whether it's a completion
+// PandaDoc status → your internal status + whether it's a completion.
+// Used by the tables whose status column simply mirrors PandaDoc's.
 const STATUS_MAP = {
   "document.draft": { status: "draft" },
   "document.sent": { status: "sent" },
@@ -20,16 +26,27 @@ const STATUS_MAP = {
 };
 
 /**
+ * Tables that just mirror PandaDoc's vocabulary. Mobilization fees are
+ * deliberately NOT in this list — they have their own states and a transition
+ * guard, because the difference between "signed" and "paid" is real money.
+ */
+const MIRRORED_TABLES = [
+  { model: "vendorComplianceDocuments", label: "compliance document" },
+  { model: "vendorWarnings", label: "vendor warning" },
+  { model: "workOrderMSAs", label: "work order MSA" },
+];
+
+/**
  * Verify the request came from PandaDoc.
  * PandaDoc signs the raw body with HMAC-SHA256; signature is in ?signature=.
- * NOTE: confirm the exact mechanism against a real payload — see notes below.
+ * NOTE: confirm the exact mechanism against a real payload.
  */
 function verifySignature(req, secret) {
   const signature = req.query.signature;
   if (!signature) return false;
 
   const hmac = crypto.createHmac("sha256", secret);
-  hmac.update(req.body); // req.body is the raw Buffer (raw parser ran in index.js)
+  hmac.update(req.body); // raw Buffer — the raw parser ran in index.js
   const expected = hmac.digest("hex");
 
   try {
@@ -48,13 +65,11 @@ export function makePandaDocWebhook(workspaceKey) {
   router.post("/", async (req, res) => {
     const secret = WEBHOOK_SECRETS[workspaceKey];
 
-    // 1. Verify authenticity before trusting the payload
     if (!verifySignature(req, secret)) {
       console.warn(`PandaDoc webhook (${workspaceKey}): invalid signature`);
       return res.status(401).end();
     }
 
-    // 2. Parse the now-verified raw body
     let events;
     try {
       events = JSON.parse(req.body.toString("utf8"));
@@ -62,86 +77,90 @@ export function makePandaDocWebhook(workspaceKey) {
       return res.status(400).end();
     }
 
-    // 3. Ack fast — PandaDoc retries on slow/failed responses
+    // Ack fast — PandaDoc retries on slow or failed responses.
     res.status(200).end();
 
-    // 4. Process each event
     for (const event of events) {
       try {
-        // Only care about status changes (confirm event name from real payload)
         if (event.event !== "document_state_changed") continue;
 
         const pandadocId = event.data?.id;
         const rawStatus = event.data?.status;
         if (!pandadocId || !rawStatus) continue;
 
+        // ── Mobilization fees ───────────────────────────────────────────
+        // Checked first, and through its own handler: the fee has its own
+        // status vocabulary ("Completed - Pending Payment", "Paid") and a
+        // state machine that must not be bypassed by a redelivered event.
+        const feeResult = await applyPandaDocStatusToFee(
+          prisma,
+          pandadocId,
+          rawStatus,
+        );
+
+        if (feeResult !== null) {
+          // It IS a mobilization fee. `false` means the event didn't move it
+          // — a duplicate or an out-of-order delivery. Nothing to announce.
+          if (feeResult === false) continue;
+
+          const fee = serializeMobilizationFee(feeResult);
+
+          if (fee.status === MOB_FEE_STATUS.PENDING_PAYMENT) {
+            // TODO: Teams — accounting, release the funds.
+            // notifyTeams("accounting", {
+            //   title: `Mobilization fee signed — ${fee.vendor}`,
+            //   amount: fee.amount,
+            //   work_order_id: fee.work_order_id,
+            // });
+            console.log(
+              `Mobilization fee ${fee.id} signed — $${fee.amount} to ${fee.vendor}, awaiting payment`,
+            );
+          } else if (
+            fee.status === MOB_FEE_STATUS.DECLINED ||
+            fee.status === MOB_FEE_STATUS.VOIDED
+          ) {
+            // TODO: Teams — ops, the vendor didn't sign.
+            console.log(
+              `Mobilization fee ${fee.id} ${fee.status.toLowerCase()}`,
+            );
+          }
+
+          continue;
+        }
+
+        // ── Everything whose status simply mirrors PandaDoc's ────────────
         const mapped = STATUS_MAP[rawStatus];
         if (!mapped) {
           console.warn(`PandaDoc webhook: unmapped status "${rawStatus}"`);
           continue;
         }
 
-        // Check compliance table first for panda doc id
-        const compliance = await prisma.vendorComplianceDocuments.findFirst({
-          where: { pandadoc_id: pandadocId },
-        });
-
-        // if (!compliance) {
-        //   console.warn(`PandaDoc webhook: no local record for ${pandadocId}`);
-        //   continue;
-        // }
-
-        if (compliance) {
-          await prisma.$transaction(async (tx) => {
-            await tx.vendorComplianceDocuments.update({
-              where: { id: compliance.id },
-              data: {
-                status: mapped.status,
-                ...(mapped.completed ? { date_completed: new Date() } : {}),
-              },
-            });
-            // optionally logActivity(tx, { ...against doc.vendor_id... });
+        let handled = false;
+        for (const { model, label } of MIRRORED_TABLES) {
+          const row = await prisma[model].findFirst({
+            where: { pandadoc_id: pandadocId },
+            select: { id: true },
           });
-          continue;
+          if (!row) continue;
+
+          await prisma[model].update({
+            where: { id: row.id },
+            data: {
+              status: mapped.status,
+              ...(mapped.completed ? { date_completed: new Date() } : {}),
+            },
+          });
+
+          handled = true;
+          break;
         }
 
-        // Find our local record by pandadoc_id (works for any doc type)
-        const notice = await prisma.vendorWarnings.findFirst({
-          where: { pandadoc_id: pandadocId },
-        });
-
-        if (notice) {
-          await prisma.$transaction(async (tx) => {
-            await tx.vendorWarnings.update({
-              where: { id: notice.id },
-              data: {
-                status: mapped.status,
-                ...(mapped.completed ? { date_completed: new Date() } : {}),
-              },
-            });
-          });
-          continue;
-        }
-
-        const workOrderMSA = await prisma.workOrderMSAs.findFirst({
-          where: { pandadoc_id: pandadocId },
-        });
-
-        if (workOrderMSA) {
-          await prisma.$transaction(async (tx) => {
-            await tx.workOrderMSAs.update({
-              where: { id: workOrderMSA.id },
-              data: {
-                status: mapped.status,
-                ...(mapped.completed ? { date_completed: new Date() } : {}),
-              },
-            });
-          });
-          continue;
+        if (!handled) {
+          console.warn(`PandaDoc webhook: no local record for ${pandadocId}`);
         }
       } catch (err) {
         console.error(`PandaDoc webhook (${workspaceKey}): event error`, err);
-        // swallow — already 200'd; one bad event shouldn't stop the rest
+        // Swallowed — we already 200'd, and one bad event shouldn't stop the rest.
       }
     }
   });

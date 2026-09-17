@@ -14,6 +14,9 @@ model Employees {
   SentWarnings            VendorWarnings[]
   WorkOrderCommunications WorkOrderCommunications[]
   SentWorkOrderMSAs       WorkOrderMSAs[]
+  MobilizationFeesCreated WorkOrderMobilizationFees[] @relation("MobilizationFeeCreatedBy")
+  MobilizationFeesSent    WorkOrderMobilizationFees[] @relation("MobilizationFeeSentBy")
+  MobilizationFeesPaid    WorkOrderMobilizationFees[] @relation("MobilizationFeePaidBy")
 }
 
 model InternalRoles {

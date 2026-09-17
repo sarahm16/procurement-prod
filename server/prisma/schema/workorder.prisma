@@ -27,6 +27,7 @@ model WorkOrders {
   Vendor               Vendors?                  @relation(fields: [vendor_id], references: [id])
   Services             WorkOrderServices[]
   VendorUpdates        WorkOrderVendorUpdates[]
+  MobilizationFees WorkOrderMobilizationFees[]
 }
 
 model WorkOrderStatuses {

@@ -1,0 +1,84 @@
+/// Money paid to a vendor before work starts — materials, permits, mobilizing
+/// crew. The amount is agreed internally, contracted through a PandaDoc
+/// template, released by accounting through QuickBooks, and then deducted from
+/// what we owe the vendor at close-out.
+///
+/// Modelled as a collection rather than a single field on WorkOrders because a
+/// fee can be declined or voided and re-issued, and that history is money
+/// history — you don't overwrite it.
+model WorkOrderMobilizationFees {
+  id            Int      @id @default(autoincrement())
+  work_order_id Int
+  vendor_id     Int
+
+  amount        Decimal  @db.Decimal(10, 2)
+  status        String   @db.VarChar(40)
+  notes         String?  @db.VarChar(500)
+
+  /// PandaDoc. `pandadoc_id` is how the webhook finds this row, so it's
+  /// indexed. It is NOT declared @unique: SQL Server treats NULLs as equal in
+  /// a unique index, so two drafts that haven't been sent yet would collide.
+  /// If you want the guarantee, add a filtered unique index in prisma/sql:
+  ///   CREATE UNIQUE INDEX UX_MobFee_PandaDoc ON WorkOrderMobilizationFees
+  ///     (pandadoc_id) WHERE pandadoc_id IS NOT NULL;
+  pandadoc_id   String?  @db.VarChar(100)
+  template_id   String?  @db.VarChar(100)
+
+  /// One column per transition rather than a single updated_at, because
+  /// "signed six days ago and still unpaid" is a question accounting will ask
+  /// and a single timestamp can't answer.
+  date_sent      DateTime?
+  date_viewed    DateTime?
+  date_completed DateTime?
+  date_paid      DateTime?
+  date_declined  DateTime?
+  date_voided    DateTime?
+
+  /// Set when accounting releases the funds, so the payment can be traced back
+  /// out of this system.
+  quickbooks_bill_id String? @db.VarChar(100)
+
+  created_at DateTime @default(now())
+  created_by Int
+  sent_by    Int?
+  paid_by    Int?
+
+  WorkOrder WorkOrders @relation(fields: [work_order_id], references: [id], onUpdate: NoAction)
+  Vendor    Vendors    @relation(fields: [vendor_id], references: [id], onUpdate: NoAction)
+
+  /// Three separate paths to Employees, so every one of them has to be
+  /// NoAction — SQL Server refuses multiple cascade paths between the same
+  /// pair of tables, and Prisma's defaults (Cascade on update, SetNull on a
+  /// nullable delete) would create three.
+  ///
+  /// The side effect is what you want anyway: the database will refuse to
+  /// delete an employee who created, sent or paid a fee. People leave by
+  /// getting `terminated` set, not by having their payment history erased.
+  CreatedBy Employees  @relation("MobilizationFeeCreatedBy", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  SentBy    Employees? @relation("MobilizationFeeSentBy", fields: [sent_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  PaidBy    Employees? @relation("MobilizationFeePaidBy", fields: [paid_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([work_order_id])
+  @@index([pandadoc_id])
+  @@index([status])
+  @@index([vendor_id])
+}
+
+// ─── Back-relations to add on the existing models ──────────────────────────
+//
+// model WorkOrders {
+//   ...
+//   MobilizationFees WorkOrderMobilizationFees[]
+// }
+//
+// model Vendors {
+//   ...
+//   MobilizationFees WorkOrderMobilizationFees[]
+// }
+//
+// model Employees {
+//   ...
+//   MobilizationFeesCreated WorkOrderMobilizationFees[] @relation("MobilizationFeeCreatedBy")
+//   MobilizationFeesSent    WorkOrderMobilizationFees[] @relation("MobilizationFeeSentBy")
+//   MobilizationFeesPaid    WorkOrderMobilizationFees[] @relation("MobilizationFeePaidBy")
+// }

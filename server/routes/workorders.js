@@ -6,6 +6,10 @@ import serializeNote from "../serializer/noteSerializer.js";
 import { sendWorkOrderMsa } from "../services/pandadoc/send/sendWorkOrderMsa.js";
 import multer from "multer";
 import { uploadToBlob } from "../services/blob/uploadToBlob.js";
+import {
+  registerMobilizationFeeRoutes,
+  serializeMobilizationFee,
+} from "./mobilizationFeeRoutes.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -157,11 +161,15 @@ const serializeWorkorderById = (workorder, notes, activityLog) => {
       serializeFamilyMember,
     ),
     client_total: sumField(workorder?.Services, "client_price"),
+    mobilization_fees: (workorder?.MobilizationFees ?? []).map(
+      serializeMobilizationFee,
+    ),
   };
 };
 
 export default function workordersRouter(prisma) {
   const router = Router();
+  registerMobilizationFeeRoutes(router, prisma);
 
   // GET /api/workorders
   router.get("/", async (req, res) => {
@@ -579,6 +587,15 @@ export default function workordersRouter(prisma) {
               },
             },
             Children: { select: familySelect },
+            MobilizationFees: {
+              orderBy: { created_at: "desc" },
+              include: {
+                Vendor: { select: { id: true, company: true } },
+                CreatedBy: { select: { id: true, name: true } },
+                SentBy: { select: { id: true, name: true } },
+                PaidBy: { select: { id: true, name: true } },
+              },
+            },
           },
         }),
         prisma.notes.findMany({
