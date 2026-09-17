@@ -18,6 +18,7 @@ import DetailPageLayout from "../../components/DetailPageLayout/DetailPageLayout
 import VendorDetailsTab from "./tabs/DetailsTab/VendorDetailsTab";
 import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
 import VendorDocumentationTab from "./tabs/Documentation/VendorDocumentationTab";
+import SitesTab from "./tabs/SitesTab/SitesTab";
 
 // Local Functions
 import { sendEmailFromHTML } from "../../*/api/microsoftApi";
@@ -42,15 +43,14 @@ function VendorDetail() {
 
 function VendorDetailLayout({ id }) {
   // Get the vendor details from the vendor context
-
-  // Hooks
-  const { data: vendorStatuses = [] } = useVendorStatuses();
-  const { user } = useAuthenticatedUser();
-
   const notes = useVendorNotes();
   const details = useVendorDetails();
   const activity = useVendorActivity();
   const { updateStatus, addNote } = useVendorActions();
+
+  // Hooks
+  const { data: vendorStatuses = [] } = useVendorStatuses();
+  const { user } = useAuthenticatedUser();
 
   return (
     <DetailPageLayout
@@ -83,7 +83,7 @@ function VendorDetailLayout({ id }) {
         },
         {
           label: "Sites",
-          content: <></>,
+          content: <SitesTab vendorId={id} />,
         },
         {
           label: "Work Orders",
