@@ -19,6 +19,7 @@ import {
 import CheckIcon from "@mui/icons-material/Check";
 import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import StarIcon from "@mui/icons-material/Star";
 import { alpha } from "@mui/material/styles";
 
 import { useAssignableVendors, milesBetween } from "./useSourcing";
@@ -119,11 +120,84 @@ const checkTitle = (row, key) => {
   }
 };
 
+/* ── Primary / backup markers ────────────────────────────────────────────
+ * A line can have one primary vendor plus backups. The grid row shows the
+ * primary; these markers say how many others there are, and flag lines where
+ * no primary is marked (e.g. the primary was deleted) so someone picks one.
+ *
+ * The star only appears when there's more than one vendor — on a line with a
+ * single vendor, "primary" is obvious and a star on every row is just noise.
+ */
+function VendorMarkers({ row, onOpen }) {
+  if (!row.vendor_id) return null;
+  const count = row.vendor_count ?? 1;
+  const others = Math.max(count - 1, 0);
+  const needsPrimary = !row.is_primary;
+
+  const chipSx = {
+    height: 18,
+    fontSize: "0.65rem",
+    flexShrink: 0,
+    "& .MuiChip-label": { px: 0.75 },
+  };
+
+  return (
+    <>
+      {row.is_primary && count > 1 && (
+        <Tooltip title="Primary vendor" arrow enterDelay={400}>
+          <StarIcon
+            sx={{ fontSize: 13, color: "warning.main", flexShrink: 0 }}
+          />
+        </Tooltip>
+      )}
+      {others > 0 && (
+        <Tooltip
+          title={`${others} more vendor${others === 1 ? "" : "s"} on this line — open the site to see them`}
+          arrow
+          enterDelay={400}
+        >
+          <Chip
+            label={`+${others}`}
+            size="small"
+            variant="outlined"
+            sx={chipSx}
+          />
+        </Tooltip>
+      )}
+      {needsPrimary && (
+        <Tooltip
+          title="No primary vendor is marked on this line. Click to open the site and pick one."
+          arrow
+        >
+          <Chip
+            label="Needs primary"
+            size="small"
+            color="warning"
+            onClick={(e) => {
+              e.stopPropagation(); // don't start the inline edit
+              onOpen();
+            }}
+            sx={chipSx}
+          />
+        </Tooltip>
+      )}
+    </>
+  );
+}
+
 /* ── Inline vendor cell ──────────────────────────────────────────────────
  * Click the vendor cell to edit it in place, Excel style. Options are sorted
  * by distance from THIS row's site, so the nearest vendor is always first.
  */
-function VendorCell({ row, vendors, editing, onStartEdit, onPick, onCancel }) {
+function VendorCell({
+  row,
+  vendors,
+  editing,
+  onStartEdit,
+  onPick,
+  onCancel,
+  onOpen,
+}) {
   const options = useMemo(() => {
     if (!vendors) return [];
     return vendors
@@ -174,6 +248,7 @@ function VendorCell({ row, vendors, editing, onStartEdit, onPick, onCancel }) {
             not assigned
           </Typography>
         )}
+        <VendorMarkers row={row} onOpen={onOpen} />
         <EditOutlinedIcon
           className="editIcon"
           sx={{
@@ -545,6 +620,7 @@ export default function SourcingGrid({
                     editing={editingId === row.contract_site_id}
                     onStartEdit={() => setEditingId(row.contract_site_id)}
                     onCancel={() => setEditingId(null)}
+                    onOpen={() => onOpenRow(row)}
                     onPick={(vendor) => {
                       setEditingId(null);
                       onAssignInline(row, vendor);

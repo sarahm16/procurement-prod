@@ -3,7 +3,6 @@ import {
   Autocomplete,
   Box,
   Button,
-  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
@@ -11,6 +10,8 @@ import {
   Divider,
   FormControlLabel,
   Paper,
+  Radio,
+  RadioGroup,
   Stack,
   TextField,
   Typography,
@@ -20,11 +21,49 @@ import CloseIcon from "@mui/icons-material/Close";
 import { useAssignableVendors } from "./useSourcing";
 
 /**
+ * What to do with lines that already have a vendor. Order is the order shown.
+ * `mode` / `makePrimary` are what POST /api/sourcing/assignments expects.
+ */
+const OCCUPIED_CHOICES = [
+  {
+    value: "skip",
+    label: "Leave them alone",
+    help: "Only lines with no vendor are assigned.",
+    mode: "skip",
+    makePrimary: false,
+  },
+  {
+    value: "backup",
+    label: "Add as a backup vendor",
+    help: "The current vendor stays primary. This vendor is added alongside them.",
+    mode: "add",
+    makePrimary: false,
+  },
+  {
+    value: "primary",
+    label: "Add as the primary vendor",
+    help: "This vendor becomes primary. The current primary stays on as a backup.",
+    mode: "add",
+    makePrimary: true,
+  },
+  {
+    value: "replace",
+    label: "Replace the primary vendor",
+    help: "The current primary is marked terminated, not deleted — their rates and exhibits stay on the record. Backups are left alone.",
+    mode: "replace",
+    makePrimary: false,
+  },
+];
+
+/**
  * One dialog for every assign that isn't trivially safe.
  *
  * "Trivially safe" means assigning to rows that have nobody on them — the grid
  * already shows what you picked and it's one click to change. Anything that
- * would displace an existing vendor asks first, and never replaces by default.
+ * touches a line with an existing vendor asks first, and never replaces by
+ * default.
+ *
+ * onConfirm(mode, makePrimary)
  */
 export function AssignConfirmDialog({
   open,
@@ -34,7 +73,8 @@ export function AssignConfirmDialog({
   onCancel,
   onConfirm,
 }) {
-  const [replace, setReplace] = useState(false);
+  const [choice, setChoice] = useState("skip");
+  const picked = OCCUPIED_CHOICES.find((c) => c.value === choice);
 
   const empty = rows.filter((r) => !r.vendor_id);
   const occupied = rows.filter(
@@ -42,10 +82,11 @@ export function AssignConfirmDialog({
   );
   const already = rows.filter((r) => r.vendor_id === vendor?.id);
 
-  const willTouch = empty.length + (replace ? occupied.length : 0);
+  const willTouch = empty.length + (choice !== "skip" ? occupied.length : 0);
 
+  const reset = () => setChoice("skip");
   const handleClose = () => {
-    setReplace(false);
+    reset();
     onCancel();
   };
 
@@ -61,7 +102,8 @@ export function AssignConfirmDialog({
         {empty.length > 0 && (
           <Typography sx={{ fontSize: "0.88rem", mb: occupied.length ? 2 : 0 }}>
             <strong>{empty.length}</strong> service line
-            {empty.length === 1 ? "" : "s"} with no vendor will be assigned.
+            {empty.length === 1 ? "" : "s"} with no vendor will be assigned
+            {occupied.length ? " (as primary)" : ""}.
           </Typography>
         )}
 
@@ -86,7 +128,7 @@ export function AssignConfirmDialog({
               }}
             >
               {occupied.length} already{" "}
-              {occupied.length === 1 ? "has a" : "have"} vendor
+              {occupied.length === 1 ? "has a" : "have a"} vendor
             </Typography>
 
             <Box sx={{ maxHeight: 180, overflowY: "auto", mb: 1.5 }}>
@@ -106,35 +148,42 @@ export function AssignConfirmDialog({
                     sx={{ fontSize: "0.78rem", color: "text.secondary" }}
                   >
                     {r.vendor}
+                    {r.vendor_count > 1 ? ` +${r.vendor_count - 1}` : ""}
                   </Typography>
                 </Stack>
               ))}
             </Box>
 
-            <FormControlLabel
-              control={
-                <Checkbox
-                  size="small"
-                  checked={replace}
-                  onChange={(e) => setReplace(e.target.checked)}
-                />
-              }
-              label={
-                <Typography sx={{ fontSize: "0.82rem" }}>
-                  Replace{" "}
-                  {occupied.length === 1
-                    ? "this vendor"
-                    : `these ${occupied.length} vendors`}{" "}
-                  too
-                </Typography>
-              }
-            />
-            <Typography
-              sx={{ fontSize: "0.75rem", color: "text.secondary", mt: 0.5 }}
-            >
-              Replaced assignments are marked terminated, not deleted — their
-              rates and exhibits stay on the record.
+            <Typography sx={{ fontSize: "0.82rem", fontWeight: 600, mb: 0.5 }}>
+              On {occupied.length === 1 ? "this line" : "these lines"}:
             </Typography>
+            <RadioGroup
+              value={choice}
+              onChange={(e) => setChoice(e.target.value)}
+            >
+              {OCCUPIED_CHOICES.map((c) => (
+                <FormControlLabel
+                  key={c.value}
+                  value={c.value}
+                  control={<Radio size="small" />}
+                  sx={{ alignItems: "flex-start", mb: 0.5 }}
+                  label={
+                    <Box sx={{ pt: 0.75 }}>
+                      <Typography sx={{ fontSize: "0.82rem", lineHeight: 1.3 }}>
+                        {c.label}
+                      </Typography>
+                      {choice === c.value && (
+                        <Typography
+                          sx={{ fontSize: "0.75rem", color: "text.secondary" }}
+                        >
+                          {c.help}
+                        </Typography>
+                      )}
+                    </Box>
+                  }
+                />
+              ))}
+            </RadioGroup>
           </>
         )}
       </DialogContent>
@@ -145,11 +194,13 @@ export function AssignConfirmDialog({
         </Button>
         <Button
           variant="contained"
-          color={replace && occupied.length ? "warning" : "primary"}
+          color={
+            choice === "replace" && occupied.length ? "warning" : "primary"
+          }
           disabled={busy || willTouch === 0}
           onClick={() => {
-            onConfirm(replace ? "replace" : "skip");
-            setReplace(false);
+            onConfirm(picked.mode, picked.makePrimary);
+            reset();
           }}
         >
           {willTouch === 0
