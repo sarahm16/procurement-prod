@@ -1,135 +1,67 @@
 // pages/Sites/SiteSourcingTab.jsx
-import { useMemo, useState } from "react";
+//
+// Service lines down the left, the selected line on the right. The list is
+// the site-level summary: each line's status is visible at a glance, so there's
+// no separate summary bar.
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
   Button,
-  Chip,
-  LinearProgress,
+  List,
+  ListItemButton,
   Paper,
   Skeleton,
   Stack,
-  ToggleButton,
-  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 
 import SourcingPanel from "../../../sourcing/SourcingPanel";
-import ServiceLineSourcingCard from "./ServiceLineSourcingCard";
+import ServiceLineSourcingCard, {
+  LineIcon,
+  StatusChip,
+  lineStatus,
+} from "./ServiceLineSourcingCard";
 import { useSiteSourcing } from "./useSiteSourcing";
 
-const money = (n) =>
-  n == null
-    ? "—"
-    : Number(n).toLocaleString("en-US", {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: 0,
-      });
-
-function SummaryBar({ summary, rows }) {
-  if (!summary) return null;
-
-  const { service_lines, sourced, client_price_total, vendor_price_total } =
-    summary;
-  const margin = client_price_total - vendor_price_total;
-  const unassigned = rows.filter((r) => !r.vendor_id).length;
-
-  return (
-    <Paper
-      variant="outlined"
-      sx={{
-        px: 2,
-        py: 1.5,
-        bgcolor: (t) => alpha(t.palette.primary.main, 0.03),
-      }}
-    >
-      <Stack
-        direction="row"
-        spacing={3}
-        alignItems="center"
-        flexWrap="wrap"
-        useFlexGap
-      >
-        <Box sx={{ minWidth: 150 }}>
-          <Typography
-            variant="overline"
-            sx={{ fontSize: "0.58rem", color: "text.secondary" }}
-          >
-            Sourcing complete
-          </Typography>
-          <Typography variant="h6" sx={{ lineHeight: 1.2, fontWeight: 600 }}>
-            {sourced} of {service_lines}
-          </Typography>
-          <LinearProgress
-            variant="determinate"
-            value={service_lines ? (sourced / service_lines) * 100 : 0}
-            color={sourced === service_lines ? "success" : "secondary"}
-            sx={{ height: 4, borderRadius: 2, mt: 0.5 }}
-          />
-        </Box>
-
-        <Stat label="Client value" value={money(client_price_total)} />
-        <Stat label="Vendor cost" value={money(vendor_price_total)} />
-        <Stat
-          label="Margin"
-          value={money(margin)}
-          color={margin < 0 ? "error.main" : "success.dark"}
-        />
-
-        <Box sx={{ flex: 1 }} />
-
-        {unassigned > 0 && (
-          <Chip
-            label={`${unassigned} line${unassigned > 1 ? "s" : ""} unassigned`}
-            color="warning"
-            size="small"
-            variant="outlined"
-          />
-        )}
-      </Stack>
-    </Paper>
-  );
-}
-
-const Stat = ({ label, value, color }) => (
-  <Box>
-    <Typography
-      variant="overline"
-      sx={{ display: "block", fontSize: "0.58rem", color: "text.secondary" }}
-    >
-      {label}
-    </Typography>
-    <Typography
-      variant="subtitle1"
-      sx={{ fontWeight: 600, color: color ?? "text.primary" }}
-    >
-      {value}
-    </Typography>
-  </Box>
-);
+// Which line to open first: the one most in need of attention.
+const ATTENTION = { none: 0, primary: 1, progress: 2, done: 3 };
 
 export default function SiteSourcingTab({ siteId, userId }) {
-  const { rows, summary, loading, error, refresh, mergeRows } =
-    useSiteSourcing(siteId);
+  const { rows, loading, error, refresh, mergeRows } = useSiteSourcing(siteId);
 
-  const [filter, setFilter] = useState("all"); // all | open | assigned
+  const [selectedId, setSelectedId] = useState(null);
   const [panelRow, setPanelRow] = useState(null);
 
-  const visible = useMemo(() => {
-    if (filter === "open") return rows.filter((r) => !r.is_sourced);
-    if (filter === "assigned") return rows.filter((r) => r.vendor_id);
-    return rows;
-  }, [rows, filter]);
+  // Pick a line once rows arrive, and again if the selected one disappears.
+  useEffect(() => {
+    if (!rows.length) return;
+    if (rows.some((r) => r.contract_site_id === selectedId)) return;
+    const first = [...rows].sort(
+      (a, b) => ATTENTION[lineStatus(a).key] - ATTENTION[lineStatus(b).key],
+    )[0];
+    setSelectedId(first.contract_site_id);
+  }, [rows, selectedId]);
+
+  const selected = rows.find((r) => r.contract_site_id === selectedId);
+  const sourced = useMemo(
+    () => rows.filter((r) => r.is_sourced).length,
+    [rows],
+  );
 
   if (loading) {
     return (
-      <Stack spacing={1.5}>
-        <Skeleton variant="rounded" height={72} />
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "260px 1fr" },
+          gap: 2,
+        }}
+      >
         <Skeleton variant="rounded" height={220} />
-        <Skeleton variant="rounded" height={220} />
-      </Stack>
+        <Skeleton variant="rounded" height={420} />
+      </Box>
     );
   }
 
@@ -161,58 +93,92 @@ export default function SiteSourcingTab({ siteId, userId }) {
 
   return (
     <>
-      <Stack spacing={1.5}>
-        <SummaryBar summary={summary} rows={rows} />
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "260px 1fr" },
+          gap: 2.5,
+          alignItems: "start",
+        }}
+      >
+        {/* ── Service lines ──────────────────────────────────────────── */}
+        <Paper
+          variant="outlined"
+          sx={{ overflow: "hidden", position: { md: "sticky" }, top: 16 }}
+        >
+          <Box sx={{ px: 2, pt: 1.75, pb: 1 }}>
+            <Typography sx={{ fontWeight: 700, fontSize: "0.9rem" }}>
+              Service lines
+            </Typography>
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+              {sourced} of {rows.length} sourced
+            </Typography>
+          </Box>
+          <List disablePadding>
+            {rows.map((r) => {
+              const active = r.contract_site_id === selectedId;
+              return (
+                <ListItemButton
+                  key={r.contract_site_id}
+                  selected={active}
+                  onClick={() => setSelectedId(r.contract_site_id)}
+                  sx={(t) => ({
+                    gap: 1.25,
+                    py: 1.25,
+                    borderTop: 1,
+                    borderColor: "divider",
+                    borderLeft: 3,
+                    borderLeftColor: active
+                      ? t.palette.primary.main
+                      : "transparent",
+                    "&.Mui-selected": {
+                      bgcolor: alpha(
+                        t.palette.primary.main,
+                        t.palette.mode === "dark" ? 0.16 : 0.07,
+                      ),
+                    },
+                  })}
+                >
+                  <LineIcon name={r.service_line} size={32} />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography
+                      noWrap
+                      sx={{
+                        fontWeight: active ? 700 : 600,
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      {r.service_line}
+                    </Typography>
+                    <Typography
+                      noWrap
+                      variant="caption"
+                      sx={{ display: "block", color: "text.secondary" }}
+                    >
+                      {r.vendor ?? "No vendor"}
+                    </Typography>
+                  </Box>
+                  <StatusChip row={r} />
+                </ListItemButton>
+              );
+            })}
+          </List>
+        </Paper>
 
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <ToggleButtonGroup
-            size="small"
-            exclusive
-            value={filter}
-            onChange={(_, v) => v && setFilter(v)}
-          >
-            <ToggleButton
-              value="all"
-              sx={{ px: 1.5, py: 0.25, fontSize: "0.7rem" }}
-            >
-              All ({rows.length})
-            </ToggleButton>
-            <ToggleButton
-              value="open"
-              sx={{ px: 1.5, py: 0.25, fontSize: "0.7rem" }}
-            >
-              Needs work ({rows.filter((r) => !r.is_sourced).length})
-            </ToggleButton>
-            <ToggleButton
-              value="assigned"
-              sx={{ px: 1.5, py: 0.25, fontSize: "0.7rem" }}
-            >
-              Assigned ({rows.filter((r) => r.vendor_id).length})
-            </ToggleButton>
-          </ToggleButtonGroup>
-        </Stack>
-
-        {visible.length === 0 ? (
-          <Typography variant="body2" sx={{ color: "text.secondary", py: 2 }}>
-            Nothing in this view.
-          </Typography>
-        ) : (
-          visible.map((row) => (
-            <ServiceLineSourcingCard
-              key={row.contract_site_id}
-              row={row}
-              userId={userId}
-              onAssign={setPanelRow}
-              onReplace={setPanelRow}
-              onRowsChanged={mergeRows}
-            />
-          ))
+        {/* ── Selected line ──────────────────────────────────────────── */}
+        {selected && (
+          <ServiceLineSourcingCard
+            key={selected.contract_site_id}
+            row={selected}
+            userId={userId}
+            onManage={setPanelRow}
+            onRowsChanged={mergeRows}
+          />
         )}
-      </Stack>
+      </Box>
 
-      {/* The same panel the Sourcing page uses. It takes every line at the site
-          so multi-line assignment works from here too — assign one vendor to
-          landscaping and sweeping in a single pass without leaving the profile. */}
+      {/* The same panel the Sourcing page uses. It opens on this line and has
+          a tab for each of the site's other lines. */}
       <SourcingPanel
         open={Boolean(panelRow)}
         onClose={() => setPanelRow(null)}

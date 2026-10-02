@@ -1,4 +1,8 @@
 // pages/Sites/ServiceLineSourcingCard.jsx
+//
+// The right-hand side of the site's Sourcing tab: everything about ONE
+// service line at this site. Vendor changes (assign, add backup, make primary,
+// replace) all go through the sourcing panel via `onManage`.
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -8,7 +12,6 @@ import {
   Chip,
   Collapse,
   Divider,
-  IconButton,
   InputAdornment,
   LinearProgress,
   Paper,
@@ -26,89 +29,18 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import PersonAddAltIcon from "@mui/icons-material/PersonAddAlt";
 import HistoryIcon from "@mui/icons-material/History";
+import StarIcon from "@mui/icons-material/Star";
 
 import { useContractSiteServices } from "./useSiteSourcing";
+// Adjust this path to wherever constants/ lives relative to pages/Sites.
+import { getServiceLineConfig } from "../../../../*/constants/serviceLineConfig";
+
+const DAY = 86400000;
 
 const money = (n) =>
   n == null || n === ""
     ? "—"
     : Number(n).toLocaleString("en-US", { style: "currency", currency: "USD" });
-
-/**
- * The seven checks, split the way the sourcing team actually thinks about
- * them. The first four are properties of the VENDOR — identical on every site
- * they work — and the last three are properties of THIS line at THIS site.
- * Mixing them into one undifferentiated row is what made the old screen hard
- * to read: someone would chase a missing W-9 site by site not realising it was
- * one document covering all forty of them.
- */
-const VENDOR_CHECKS = [
-  { key: "w9", label: "W-9" },
-  { key: "coi", label: "COI" },
-  { key: "msa", label: "MSA" },
-  { key: "ach", label: "ACH" },
-];
-
-const SITE_CHECKS = [
-  { key: "rates", label: "Rates" },
-  { key: "sent", label: "Exhibit" },
-  { key: "signed", label: "Signed" },
-];
-
-function CheckDot({ value }) {
-  const common = {
-    width: 16,
-    height: 16,
-    borderRadius: "50%",
-    display: "inline-grid",
-    placeItems: "center",
-    flexShrink: 0,
-  };
-  if (value === true)
-    return (
-      <Box
-        component="span"
-        sx={{ ...common, bgcolor: "success.main", color: "common.white" }}
-      >
-        <CheckIcon sx={{ fontSize: 11 }} />
-      </Box>
-    );
-  if (value === "warn")
-    return (
-      <Box
-        component="span"
-        sx={{ ...common, bgcolor: "warning.main", color: "common.white" }}
-      >
-        <PriorityHighIcon sx={{ fontSize: 11 }} />
-      </Box>
-    );
-  return (
-    <Box
-      component="span"
-      sx={{
-        ...common,
-        border: 1.5,
-        borderStyle: "solid",
-        borderColor: "divider",
-      }}
-    />
-  );
-}
-
-/** COI is the only three-state check, so it's the only one that needs a story. */
-const checkTitle = (key, row) => {
-  if (key !== "coi") return null;
-  const v = row.checks?.coi;
-  if (v === true)
-    return row.coi_expiration
-      ? `Current through ${fmtDate(row.coi_expiration)}`
-      : "On file";
-  if (v === "warn")
-    return row.coi_expiration
-      ? `Expires ${fmtDate(row.coi_expiration)} — verify additional insured`
-      : "On file but not verified";
-  return "No certificate on file";
-};
 
 const fmtDate = (value) => {
   if (!value) return "—";
@@ -122,45 +54,235 @@ const fmtDate = (value) => {
       });
 };
 
-function CheckGroup({ title, checks, row }) {
+/* ── Shared bits (also used by SiteSourcingTab) ──────────────────────────── */
+
+/** The service line's icon on a tint of its own colour. */
+export function LineIcon({ name, size = 36 }) {
+  const { color, icon: Icon } = getServiceLineConfig(name);
   return (
-    <Stack spacing={0.5}>
+    <Box
+      sx={{
+        width: size,
+        height: size,
+        borderRadius: 1.5,
+        display: "grid",
+        placeItems: "center",
+        flexShrink: 0,
+        bgcolor: alpha(color, 0.14),
+        color,
+      }}
+    >
+      <Icon sx={{ fontSize: size * 0.58 }} />
+    </Box>
+  );
+}
+
+/**
+ * One status per line, in priority order. Used for the list on the left and
+ * the header on the right so the two always agree.
+ */
+export function lineStatus(row) {
+  if (!row.vendor_id)
+    return { key: "none", label: "No vendor", color: "error" };
+  if (!row.is_primary)
+    return { key: "primary", label: "Needs primary", color: "warning" };
+  if (row.is_sourced)
+    return { key: "done", label: "Sourced", color: "success" };
+  return {
+    key: "progress",
+    label: `${row.completed_steps ?? 0} of 7`,
+    color: "default",
+  };
+}
+
+export function StatusChip({ row, size = "small" }) {
+  const s = lineStatus(row);
+  return (
+    <Chip
+      size={size}
+      label={s.label}
+      color={s.color}
+      variant={s.key === "progress" ? "outlined" : "filled"}
+      icon={s.key === "done" ? <CheckIcon /> : undefined}
+      sx={{ fontWeight: 600, fontSize: "0.7rem", height: 22 }}
+    />
+  );
+}
+
+/* ── Layout helpers ──────────────────────────────────────────────────────── */
+
+function Section({ title, caption, action, children }) {
+  return (
+    <Paper variant="outlined" sx={{ p: 2, bgcolor: "background.paper" }}>
+      <Stack direction="row" alignItems="baseline" spacing={1} sx={{ mb: 1.5 }}>
+        <Typography sx={{ fontWeight: 700, fontSize: "0.9rem" }}>
+          {title}
+        </Typography>
+        {caption && (
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
+            {caption}
+          </Typography>
+        )}
+        <Box sx={{ flex: 1 }} />
+        {action}
+      </Stack>
+      {children}
+    </Paper>
+  );
+}
+
+/* ── Checklist ───────────────────────────────────────────────────────────── */
+
+function StepIcon({ state }) {
+  const common = {
+    width: 22,
+    height: 22,
+    borderRadius: "50%",
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+  };
+  if (state === "done")
+    return (
+      <Box sx={{ ...common, bgcolor: "success.main", color: "common.white" }}>
+        <CheckIcon sx={{ fontSize: 14 }} />
+      </Box>
+    );
+  if (state === "warn")
+    return (
+      <Box sx={{ ...common, bgcolor: "warning.main", color: "common.white" }}>
+        <PriorityHighIcon sx={{ fontSize: 14 }} />
+      </Box>
+    );
+  return (
+    <Box
+      sx={{
+        ...common,
+        border: 2,
+        borderStyle: "dashed",
+        borderColor: "text.disabled",
+      }}
+    />
+  );
+}
+
+/**
+ * Each check as words, not just a dot: "Expires Oct 12" tells you what to
+ * do; an orange circle makes you hover to find out.
+ */
+function steps(row) {
+  const c = row.checks ?? {};
+  const doc = (v, done = "On file") =>
+    v === true
+      ? { state: "done", text: done }
+      : { state: "todo", text: "Missing" };
+
+  const coi = (() => {
+    if (c.coi === true)
+      return {
+        state: "done",
+        text: `Current through ${fmtDate(row.coi_expiration)}`,
+      };
+    if (c.coi === "warn") {
+      const exp = row.coi_expiration
+        ? new Date(row.coi_expiration).getTime()
+        : null;
+      if (exp && exp <= Date.now())
+        return {
+          state: "warn",
+          text: `Expired ${fmtDate(row.coi_expiration)}`,
+        };
+      if (exp && exp - Date.now() <= 30 * DAY)
+        return {
+          state: "warn",
+          text: `Expires ${fmtDate(row.coi_expiration)}`,
+        };
+      return { state: "warn", text: "Additional insured not verified" };
+    }
+    return { state: "todo", text: "Missing" };
+  })();
+
+  const rates = !row.service_count
+    ? { state: "todo", text: "No services to price yet" }
+    : c.rates
+      ? { state: "done", text: `All ${row.service_count} priced` }
+      : {
+          state: "todo",
+          text: `${row.priced_count ?? 0} of ${row.service_count} priced`,
+        };
+
+  const sent = row.exhibit_sent_at
+    ? { state: "done", text: `Sent ${fmtDate(row.exhibit_sent_at)}` }
+    : { state: "todo", text: "Not sent" };
+
+  const signed = row.exhibit_signed_at
+    ? { state: "done", text: `Signed ${fmtDate(row.exhibit_signed_at)}` }
+    : row.exhibit_sent_at
+      ? { state: "warn", text: "Waiting on the vendor" }
+      : { state: "todo", text: "Send the exhibit first" };
+
+  return {
+    vendor: [
+      { label: "W-9", ...doc(c.w9) },
+      { label: "COI", ...coi },
+      { label: "MSA", ...doc(c.msa, "Signed") },
+      { label: "ACH", ...doc(c.ach) },
+    ],
+    site: [
+      { label: "Rates", ...rates },
+      { label: "Exhibit", ...sent },
+      { label: "Exhibit signed", ...signed },
+    ],
+  };
+}
+
+function StepList({ title, hint, items }) {
+  return (
+    <Box sx={{ minWidth: 0 }}>
       <Typography
-        variant="overline"
-        sx={{ fontSize: "0.55rem", lineHeight: 1.4, color: "text.disabled" }}
+        sx={{ fontSize: "0.72rem", fontWeight: 700, color: "text.secondary" }}
       >
         {title}
       </Typography>
-      <Stack direction="row" spacing={1.5} alignItems="center">
-        {checks.map(({ key, label }) => {
-          const dot = (
-            <Stack direction="row" spacing={0.625} alignItems="center">
-              <CheckDot value={row.checks?.[key]} />
-              <Typography
-                variant="caption"
-                sx={{
-                  fontSize: "0.68rem",
-                  color:
-                    row.checks?.[key] === true
-                      ? "text.secondary"
-                      : "text.primary",
-                }}
-              >
-                {label}
-              </Typography>
-            </Stack>
-          );
-          const title = checkTitle(key, row);
-          return title ? (
-            <Tooltip key={key} title={title} arrow>
-              <span>{dot}</span>
-            </Tooltip>
-          ) : (
-            <Box key={key}>{dot}</Box>
-          );
-        })}
-      </Stack>
-    </Stack>
+      <Typography
+        variant="caption"
+        sx={{ display: "block", color: "text.secondary", mb: 0.75 }}
+      >
+        {hint}
+      </Typography>
+      {items.map((s, i) => (
+        <Stack
+          key={s.label}
+          direction="row"
+          spacing={1.25}
+          alignItems="center"
+          sx={{
+            py: 0.9,
+            borderTop: i ? 1 : 0,
+            borderColor: "divider",
+          }}
+        >
+          <StepIcon state={s.state} />
+          <Typography sx={{ fontWeight: 600, fontSize: "0.85rem", width: 112 }}>
+            {s.label}
+          </Typography>
+          <Typography
+            sx={{
+              fontSize: "0.82rem",
+              color:
+                s.state === "done"
+                  ? "text.secondary"
+                  : s.state === "warn"
+                    ? "warning.dark"
+                    : "text.primary",
+              fontWeight: s.state === "done" ? 400 : 500,
+            }}
+          >
+            {s.text}
+          </Typography>
+        </Stack>
+      ))}
+    </Box>
   );
 }
 
@@ -175,6 +297,8 @@ function CheckGroup({ title, checks, row }) {
  * single edit.
  */
 function PricingTable({ row, onRowsChanged, userId }) {
+  // Always the PRIMARY's rates (the view row's assignment). Backups' rates
+  // are entered from the sourcing panel.
   const { services, loading, error, refresh } = useContractSiteServices(
     row.contract_site_id,
     {
@@ -250,7 +374,7 @@ function PricingTable({ row, onRowsChanged, userId }) {
 
   if (loading && !services) {
     return (
-      <Stack spacing={0.75} sx={{ px: 2, py: 1.5 }}>
+      <Stack spacing={0.75}>
         <Skeleton height={20} />
         <Skeleton height={20} width="80%" />
       </Stack>
@@ -261,7 +385,6 @@ function PricingTable({ row, onRowsChanged, userId }) {
     return (
       <Alert
         severity="error"
-        sx={{ m: 2 }}
         action={
           <Button size="small" onClick={refresh}>
             Retry
@@ -275,11 +398,9 @@ function PricingTable({ row, onRowsChanged, userId }) {
 
   if (!services?.length) {
     return (
-      <Typography
-        variant="caption"
-        sx={{ display: "block", px: 2, py: 1.5, color: "text.secondary" }}
-      >
-        No services on this contract site yet.
+      <Typography variant="body2" sx={{ color: "text.secondary" }}>
+        No services are set up on this line for this site yet, so there's
+        nothing to price.
       </Typography>
     );
   }
@@ -289,7 +410,7 @@ function PricingTable({ row, onRowsChanged, userId }) {
   const marginPct = totals.client > 0 ? (margin / totals.client) * 100 : null;
 
   return (
-    <Box sx={{ px: 2, pb: 1.5 }}>
+    <Box>
       <Box
         sx={{
           display: "grid",
@@ -441,7 +562,7 @@ const HeadCell = ({ children, align = "left" }) => (
   <Typography
     variant="overline"
     align={align}
-    sx={{ fontSize: "0.55rem", lineHeight: 2, color: "text.disabled" }}
+    sx={{ fontSize: "0.65rem", lineHeight: 2, color: "text.secondary" }}
   >
     {children}
   </Typography>
@@ -454,7 +575,7 @@ function PriorVendors({ rows }) {
   if (!rows?.length) return null;
 
   return (
-    <Box sx={{ px: 2, pb: 1.5 }}>
+    <Box>
       <Button
         size="small"
         onClick={() => setOpen((o) => !o)}
@@ -498,138 +619,215 @@ function PriorVendors({ rows }) {
   );
 }
 
-/* ── Card ────────────────────────────────────────────────────────────────── */
+/* ── Detail ──────────────────────────────────────────────────────────────── */
 
 export default function ServiceLineSourcingCard({
   row,
   userId,
-  onAssign,
-  onReplace,
+  onManage,
   onRowsChanged,
 }) {
+  const { color } = getServiceLineConfig(row.service_line);
   const assigned = Boolean(row.vendor_id);
-  const steps = row.completed_steps ?? 0;
+  const backups = row.backups ?? [];
+  const needsPrimary = assigned && !row.is_primary;
+  const done = row.completed_steps ?? 0;
+  const list = assigned ? steps(row) : null;
 
   return (
-    <Paper
-      variant="outlined"
-      sx={{
-        overflow: "hidden",
-        borderColor: (t) =>
-          row.is_sourced
-            ? alpha(t.palette.success.main, 0.4)
-            : t.palette.divider,
-      }}
-    >
+    <Stack spacing={2}>
       {/* Header */}
-      <Stack
-        direction="row"
-        alignItems="flex-start"
-        spacing={2}
-        sx={{
-          px: 2,
-          py: 1.25,
-          bgcolor: (t) =>
-            row.is_sourced
-              ? alpha(t.palette.success.main, 0.05)
-              : alpha(t.palette.primary.main, 0.03),
-        }}
-      >
-        <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography
-            variant="overline"
-            sx={{
-              display: "block",
-              fontSize: "0.6rem",
-              lineHeight: 1.6,
-              color: "text.secondary",
-            }}
-          >
+      <Stack direction="row" spacing={1.5} alignItems="center">
+        <LineIcon name={row.service_line} size={44} />
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
             {row.service_line}
           </Typography>
-          <Stack
-            direction="row"
-            spacing={1}
-            alignItems="center"
-            sx={{ minWidth: 0 }}
-          >
-            <Typography
-              variant="subtitle1"
-              noWrap
-              sx={{
-                fontWeight: 600,
-                color: assigned ? "text.primary" : "text.disabled",
-              }}
+          {assigned && (
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              sx={{ mt: 0.5, maxWidth: 260 }}
             >
-              {assigned ? row.vendor : "No vendor assigned"}
-            </Typography>
-            {row.is_primary && assigned && (
-              <Chip
-                label="Primary"
-                size="small"
-                sx={{ height: 18, fontSize: "0.58rem" }}
+              <LinearProgress
+                variant="determinate"
+                value={(done / 7) * 100}
+                sx={{
+                  flex: 1,
+                  height: 6,
+                  borderRadius: 3,
+                  bgcolor: alpha(color, 0.15),
+                  "& .MuiLinearProgress-bar": {
+                    bgcolor: row.is_sourced ? "success.main" : color,
+                  },
+                }}
               />
-            )}
-          </Stack>
+              <Typography
+                variant="caption"
+                sx={{ color: "text.secondary", whiteSpace: "nowrap" }}
+              >
+                {done} of 7 steps
+              </Typography>
+            </Stack>
+          )}
         </Box>
+        <StatusChip row={row} size="medium" />
+      </Stack>
 
-        <Stack alignItems="flex-end" spacing={0.75} sx={{ flexShrink: 0 }}>
-          <Button
-            size="small"
-            variant={assigned ? "outlined" : "contained"}
-            startIcon={
-              assigned ? (
-                <SwapHorizIcon sx={{ fontSize: 16 }} />
-              ) : (
-                <PersonAddAltIcon sx={{ fontSize: 16 }} />
-              )
-            }
-            onClick={() => (assigned ? onReplace?.(row) : onAssign?.(row))}
-            sx={{ fontSize: "0.7rem", py: 0.25 }}
+      {/* No vendor: that's the only thing worth showing. */}
+      {!assigned ? (
+        <Paper
+          variant="outlined"
+          sx={{
+            p: 4,
+            textAlign: "center",
+            borderStyle: "dashed",
+            borderWidth: 2,
+          }}
+        >
+          <Typography sx={{ fontWeight: 700, fontSize: "1rem" }}>
+            No vendor on {row.service_line} yet
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{ color: "text.secondary", mt: 0.5, mb: 2 }}
           >
-            {assigned ? "Replace" : "Assign"}
+            Assign one to start the checklist and enter rates.
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={<PersonAddAltIcon />}
+            onClick={() => onManage?.(row)}
+          >
+            Assign a vendor
           </Button>
-          <Box sx={{ width: 120 }}>
-            <LinearProgress
-              variant="determinate"
-              value={(steps / 7) * 100}
-              color={row.is_sourced ? "success" : "secondary"}
-              sx={{ height: 4, borderRadius: 2 }}
-            />
-            <Typography
-              variant="caption"
+        </Paper>
+      ) : (
+        <>
+          {/* Vendor */}
+          <Section
+            title="Vendor"
+            action={
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<SwapHorizIcon sx={{ fontSize: 16 }} />}
+                onClick={() => onManage?.(row)}
+              >
+                Manage vendors
+              </Button>
+            }
+          >
+            {needsPrimary && (
+              <Alert
+                severity="warning"
+                sx={{ mb: 1.5 }}
+                action={
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => onManage?.(row)}
+                  >
+                    Pick primary
+                  </Button>
+                }
+              >
+                No primary vendor is marked on this line.
+              </Alert>
+            )}
+            <Stack direction="row" spacing={1} alignItems="center">
+              {row.is_primary && (
+                <StarIcon sx={{ fontSize: 18, color: "warning.main" }} />
+              )}
+              <Typography sx={{ fontWeight: 700, fontSize: "1.05rem" }}>
+                {row.vendor}
+              </Typography>
+              <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                {row.is_primary ? "Primary" : "Backup"}
+              </Typography>
+            </Stack>
+            {backups.length > 0 && (
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                flexWrap="wrap"
+                useFlexGap
+                sx={{ mt: 1.25 }}
+              >
+                <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                  Backup{backups.length > 1 ? "s" : ""}:
+                </Typography>
+                {backups.map((a) => (
+                  <Tooltip
+                    key={a.assignment_id}
+                    title={`${a.status ?? "Backup"} · added ${fmtDate(a.created_at)}`}
+                    arrow
+                  >
+                    <Chip
+                      label={a.vendor ?? "Unknown vendor"}
+                      size="small"
+                      variant="outlined"
+                    />
+                  </Tooltip>
+                ))}
+              </Stack>
+            )}
+            {row.prior_assignments?.length > 0 && (
+              <Box sx={{ mt: 1.5, ml: -0.5 }}>
+                <PriorVendors rows={row.prior_assignments} />
+              </Box>
+            )}
+          </Section>
+
+          {/* Checklist */}
+          <Section
+            title="Checklist"
+            caption={
+              row.is_sourced
+                ? "Everything's done."
+                : `${7 - done} step${7 - done === 1 ? "" : "s"} left`
+            }
+          >
+            <Box
               sx={{
-                display: "block",
-                textAlign: "right",
-                fontSize: "0.6rem",
-                color: "text.secondary",
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                columnGap: 4,
+                rowGap: 2,
               }}
             >
-              {steps} of 7
-            </Typography>
-          </Box>
-        </Stack>
-      </Stack>
+              <StepList
+                title="Vendor documents"
+                hint={`Cover every site ${row.vendor} works`}
+                items={list.vendor}
+              />
+              <StepList
+                title="This site"
+                hint={`Specific to ${row.service_line} here`}
+                items={list.site}
+              />
+            </Box>
+          </Section>
 
-      <Divider />
-
-      {/* Compliance */}
-      <Stack
-        direction="row"
-        spacing={3}
-        sx={{ px: 2, py: 1.25 }}
-        flexWrap="wrap"
-        useFlexGap
-      >
-        <CheckGroup title="Vendor" checks={VENDOR_CHECKS} row={row} />
-        <CheckGroup title="This site" checks={SITE_CHECKS} row={row} />
-      </Stack>
-
-      <Divider />
-
-      <PricingTable row={row} userId={userId} onRowsChanged={onRowsChanged} />
-
-      <PriorVendors rows={row.prior_assignments} />
-    </Paper>
+          {/* Rates */}
+          <Section
+            title="Rates"
+            caption={
+              backups.length
+                ? `for ${row.vendor} · backups' rates are under Manage vendors`
+                : `for ${row.vendor}`
+            }
+          >
+            <PricingTable
+              row={row}
+              userId={userId}
+              onRowsChanged={onRowsChanged}
+            />
+          </Section>
+        </>
+      )}
+    </Stack>
   );
 }
