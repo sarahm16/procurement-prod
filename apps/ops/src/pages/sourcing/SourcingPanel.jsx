@@ -24,7 +24,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
+  IconButton,
   InputAdornment,
   MenuItem,
   Paper,
@@ -44,6 +44,9 @@ import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import StarIcon from "@mui/icons-material/Star";
+import StarBorderIcon from "@mui/icons-material/StarBorder";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import { alpha } from "@mui/material/styles";
 
 import {
@@ -53,6 +56,8 @@ import {
 } from "./useSourcing";
 import SlideOutPanel from "../../components/ListPageLayout/SlideOutPanel";
 import VendorForm from "../vendors/CreateVendorForm";
+// Adjust this path to wherever constants/ lives relative to sourcing/.
+import { getServiceLineConfig } from "../../*/constants/serviceLineConfig";
 
 const PANEL_WIDTH = 560;
 const RADII = [20, 50, 100, null]; // null = any distance
@@ -66,20 +71,6 @@ const money = (n) =>
         currency: "USD",
         maximumFractionDigits: 2,
       });
-
-const Eyebrow = ({ children, sx }) => (
-  <Typography
-    variant="overline"
-    sx={{
-      display: "block",
-      color: "text.secondary",
-      fontSize: "0.62rem",
-      ...sx,
-    }}
-  >
-    {children}
-  </Typography>
-);
 
 function DocDot({ value }) {
   const common = {
@@ -128,49 +119,367 @@ const coiOf = (v) => {
   return exp - Date.now() <= 30 * DAY ? "warn" : true;
 };
 
-/** W-9 · COI · MSA · ACH with labels, for a vendor row from the vendors view. */
-function DocsStrip({ v }) {
-  const docs = [
-    ["W-9", v.has_w9],
-    ["COI", coiOf(v)],
-    ["MSA", v.has_msa],
-    ["ACH", v.has_ach],
-  ];
+const fmtDate = (value) =>
+  value
+    ? new Date(value).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      })
+    : "";
+
+/** The line's icon on a tint of its own colour (constants/serviceLineConfig). */
+function LineIcon({ name, size = 36 }) {
+  const { color, icon: Icon } = getServiceLineConfig(name);
   return (
-    <Stack direction="row" spacing={1.25} alignItems="center">
-      {docs.map(([label, value]) => (
-        <Stack key={label} direction="row" spacing={0.4} alignItems="center">
-          <DocDot value={value} />
-          <Typography sx={{ fontSize: "0.68rem", color: "text.secondary" }}>
-            {label}
-          </Typography>
-        </Stack>
-      ))}
+    <Box
+      sx={{
+        width: size,
+        height: size,
+        borderRadius: 1.5,
+        display: "grid",
+        placeItems: "center",
+        flexShrink: 0,
+        bgcolor: alpha(color, 0.14),
+        color,
+      }}
+    >
+      <Icon sx={{ fontSize: size * 0.58 }} />
+    </Box>
+  );
+}
+
+function StateIcon({ state, size = 18 }) {
+  const common = {
+    width: size,
+    height: size,
+    borderRadius: "50%",
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+  };
+  if (state === "done")
+    return (
+      <Box sx={{ ...common, bgcolor: "success.main", color: "common.white" }}>
+        <CheckIcon sx={{ fontSize: size * 0.65 }} />
+      </Box>
+    );
+  if (state === "warn")
+    return (
+      <Box sx={{ ...common, bgcolor: "warning.main", color: "common.white" }}>
+        <PriorityHighIcon sx={{ fontSize: size * 0.65 }} />
+      </Box>
+    );
+  return (
+    <Box
+      sx={{
+        ...common,
+        border: 2,
+        borderStyle: "dashed",
+        borderColor: "text.disabled",
+      }}
+    />
+  );
+}
+
+/**
+ * A vendor's four documents as one sentence instead of four dots:
+ * "All documents on file" / "Missing W-9, ACH" / "COI expires Oct 12".
+ */
+function docSummary(v) {
+  const missing = [
+    !v.has_w9 && "W-9",
+    coiOf(v) === false && "COI",
+    !v.has_msa && "MSA",
+    !v.has_ach && "ACH",
+  ].filter(Boolean);
+  const coiWarn =
+    coiOf(v) === "warn"
+      ? v.coi_expiration && new Date(v.coi_expiration) <= new Date()
+        ? `COI expired ${fmtDate(v.coi_expiration)}`
+        : v.coi_expiration &&
+            new Date(v.coi_expiration) - Date.now() <= 30 * DAY
+          ? `COI expires ${fmtDate(v.coi_expiration)}`
+          : "COI not verified"
+      : null;
+  if (!missing.length && !coiWarn)
+    return { state: "done", text: "All documents on file" };
+  const parts = [];
+  if (missing.length) parts.push(`Missing ${missing.join(", ")}`);
+  if (coiWarn) parts.push(coiWarn);
+  return { state: missing.length ? "todo" : "warn", text: parts.join(" · ") };
+}
+
+function DocLine({ v }) {
+  const d = docSummary(v);
+  return (
+    <Stack direction="row" spacing={0.75} alignItems="center">
+      <StateIcon state={d.state} size={16} />
+      <Typography
+        sx={{
+          fontSize: "0.78rem",
+          color:
+            d.state === "done"
+              ? "text.secondary"
+              : d.state === "warn"
+                ? "warning.dark"
+                : "text.primary",
+        }}
+      >
+        {d.text}
+      </Typography>
     </Stack>
   );
 }
 
-function Progress({ v }) {
-  return v.is_sourced ? (
-    <Chip
-      label="Sourced"
-      size="small"
-      color="success"
-      variant="outlined"
-      sx={{ height: 20, fontSize: "0.68rem" }}
-    />
-  ) : (
-    <Tooltip title="Steps done out of 7" arrow>
-      <Typography
-        sx={{
-          fontSize: "0.75rem",
-          color: "text.secondary",
-          fontVariantNumeric: "tabular-nums",
-        }}
+/**
+ * The one thing to do next on this line, in checklist order. This is where
+ * the eye should land when the panel opens.
+ */
+function nextStep(line, primary, backups) {
+  if (!primary)
+    return {
+      tone: "warning",
+      title: "Pick a primary vendor",
+      body: backups.length
+        ? "Choose Set primary on one of the vendors below."
+        : "Add a vendor to this line.",
+    };
+  if (primary.is_sourced)
+    return {
+      tone: "success",
+      title: "This line is sourced",
+      body: `All 7 steps are done for ${primary.company}.`,
+    };
+  const d = docSummary(primary);
+  if (d.state !== "done")
+    return {
+      tone: "info",
+      title: `Collect documents from ${primary.company}`,
+      body: `${d.text}. These cover every site they work.`,
+    };
+  if (primary.service_count > 0 && !primary.has_rates)
+    return {
+      tone: "info",
+      title: "Enter rates",
+      body: `${primary.priced_count ?? 0} of ${primary.service_count} services priced for ${primary.company}.`,
+      action: "rates",
+    };
+  if (!primary.service_count)
+    return {
+      tone: "info",
+      title: "No services to price yet",
+      body: `Services need to be set up on ${line.service_line} for this site before rates can be entered.`,
+    };
+  if (!primary.exhibit_sent)
+    return {
+      tone: "info",
+      title: `Send the exhibit to ${primary.company}`,
+      body: "Rates are in — the exhibit is the next step.",
+    };
+  return {
+    tone: "info",
+    title: `Waiting on ${primary.company} to sign`,
+    body: `Exhibit sent ${fmtDate(primary.exhibit_sent_at)}.`,
+  };
+}
+
+const SectionTitle = ({ children, action }) => (
+  <Stack direction="row" alignItems="center" spacing={1.25} sx={{ mb: 1 }}>
+    <Typography
+      sx={{
+        fontWeight: 700,
+        fontSize: "0.72rem",
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        color: "text.secondary",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </Typography>
+    <Box sx={{ flex: 1, height: "1px", bgcolor: "divider" }} />
+    {action}
+  </Stack>
+);
+
+/**
+ * Where a vendor's profile lives. Opened in a new tab so the panel (and
+ * anything half-typed in it) stays put. Change this if your route differs.
+ */
+const vendorProfileUrl = (vendorId) => `/vendors/${vendorId}`;
+
+const initials = (name = "") =>
+  name
+    .split(/\s+/)
+    .filter((w) => /[a-z0-9]/i.test(w[0] ?? ""))
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join("") || "?";
+
+/**
+ * One vendor on the line — the layout from the old app: avatar, name with a
+ * link to their profile, documents underneath, and the role control on the
+ * same row (blue ★ Primary chip, or an outlined ☆ Set primary button).
+ */
+/** The old app's primary blue — distinct from the theme's navy buttons. */
+const PRIMARY_BLUE = "#2563EB";
+
+function VendorRow({
+  v,
+  loaded,
+  flash,
+  noPrimary,
+  promoting,
+  onMakePrimary,
+  onReplace,
+}) {
+  return (
+    <Box
+      sx={(t) => {
+        const blue = PRIMARY_BLUE;
+        return {
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 1.5,
+          px: 1.5,
+          py: 1.25,
+          borderRadius: 1.5,
+          border: 1,
+          transition: "background-color .6s ease, border-color .6s ease",
+          borderColor: flash
+            ? t.palette.success.main
+            : v.is_primary
+              ? alpha(blue, 0.35)
+              : t.palette.divider,
+          bgcolor: flash
+            ? alpha(
+                t.palette.success.main,
+                t.palette.mode === "dark" ? 0.2 : 0.1,
+              )
+            : v.is_primary
+              ? alpha(blue, t.palette.mode === "dark" ? 0.16 : 0.06)
+              : alpha(
+                  t.palette.text.primary,
+                  t.palette.mode === "dark" ? 0.04 : 0.02,
+                ),
+        };
+      }}
+    >
+      <Box
+        sx={(t) => ({
+          width: 34,
+          height: 34,
+          borderRadius: 1.5,
+          display: "grid",
+          placeItems: "center",
+          flexShrink: 0,
+          fontWeight: 700,
+          fontSize: "0.8rem",
+          bgcolor: v.is_primary
+            ? alpha(PRIMARY_BLUE, 0.14)
+            : t.palette.action.hover,
+          color: v.is_primary ? PRIMARY_BLUE : "text.secondary",
+        })}
       >
-        {v.completed_steps ?? 0}/7
-      </Typography>
-    </Tooltip>
+        {initials(v.company)}
+      </Box>
+
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Stack direction="row" spacing={0.5} alignItems="center">
+          <Typography
+            noWrap
+            sx={{ fontWeight: 700, fontSize: "0.92rem", minWidth: 0 }}
+          >
+            {v.company}
+          </Typography>
+          {v.vendor_id && (
+            <Tooltip title="Open vendor profile in a new tab" arrow>
+              <IconButton
+                size="small"
+                component="a"
+                href={vendorProfileUrl(v.vendor_id)}
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{ p: 0.25, color: "text.secondary" }}
+              >
+                <OpenInNewIcon sx={{ fontSize: 15 }} />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Stack>
+        {loaded && (
+          <Box sx={{ mt: 0.5 }}>
+            <DocLine v={v} />
+          </Box>
+        )}
+      </Box>
+
+      <Stack
+        direction="row"
+        spacing={0.5}
+        alignItems="center"
+        sx={{ pt: 0.25 }}
+      >
+        {v.is_primary ? (
+          <Chip
+            icon={<StarIcon sx={{ fontSize: "14px !important" }} />}
+            label="Primary"
+            size="small"
+            variant="outlined"
+            sx={{
+              height: 24,
+              fontWeight: 600,
+              fontSize: "0.72rem",
+              borderRadius: 1,
+              color: PRIMARY_BLUE,
+              borderColor: alpha(PRIMARY_BLUE, 0.5),
+              bgcolor: alpha(PRIMARY_BLUE, 0.08),
+              "& .MuiChip-icon": { color: PRIMARY_BLUE },
+            }}
+          />
+        ) : (
+          <Button
+            size="small"
+            variant={noPrimary ? "contained" : "outlined"}
+            color={noPrimary ? "primary" : "inherit"}
+            startIcon={
+              noPrimary ? (
+                <StarIcon sx={{ fontSize: 14 }} />
+              ) : (
+                <StarBorderIcon sx={{ fontSize: 14 }} />
+              )
+            }
+            onClick={onMakePrimary}
+            disabled={promoting != null}
+            sx={{
+              height: 24,
+              px: 1,
+              fontSize: "0.72rem",
+              fontWeight: 600,
+              textTransform: "none",
+              borderRadius: 1,
+              whiteSpace: "nowrap",
+              ...(!noPrimary && {
+                color: "text.secondary",
+                borderColor: "divider",
+                bgcolor: "background.paper",
+              }),
+            }}
+          >
+            {promoting === v.assignment_id ? "Saving…" : "Set primary"}
+          </Button>
+        )}
+        <Tooltip title={`Replace ${v.company}`} arrow>
+          <IconButton
+            size="small"
+            onClick={onReplace}
+            sx={{ color: "text.secondary" }}
+          >
+            <SwapHorizIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
+      </Stack>
+    </Box>
   );
 }
 
@@ -210,6 +519,7 @@ export default function SourcingPanel({
   const [radius, setRadius] = useState(20);
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
+  const ratesRef = useRef(null);
 
   // Opening on a grid row lands on that row's line.
   useEffect(() => {
@@ -549,6 +859,10 @@ export default function SourcingPanel({
 
   const rateServices = rateKey ? services[rateKey] : null;
   const rateVendor = live.find((v) => v.assignment_id === rateAssignment);
+  // Document and progress details come from the vendors view; until it
+  // loads, don't guess (an empty row would read as "missing everything").
+  const listLoaded = Boolean(lineVendors[csId]?.list);
+  const step = nextStep(line, primary, backups);
 
   return (
     <>
@@ -577,9 +891,10 @@ export default function SourcingPanel({
               <Tab
                 key={r.contract_site_id}
                 value={r.contract_site_id}
-                sx={{ textTransform: "none", minHeight: 44 }}
+                sx={{ textTransform: "none", minHeight: 48, px: 1.5 }}
                 label={
                   <Stack direction="row" spacing={0.75} alignItems="center">
+                    <LineIcon name={r.service_line} size={22} />
                     <span>{r.service_line}</span>
                     {flag && (
                       <Tooltip title={flag.tip} arrow>
@@ -626,14 +941,24 @@ export default function SourcingPanel({
               </Button>
             )}
 
-            <Typography sx={{ fontSize: "1rem", fontWeight: 700 }}>
-              {pickerHeading.title}
-            </Typography>
-            <Typography
-              sx={{ fontSize: "0.8rem", color: "text.secondary", mb: 2 }}
+            <Stack
+              direction="row"
+              spacing={1.5}
+              alignItems="center"
+              sx={{ mb: 2 }}
             >
-              {pickerHeading.detail}
-            </Typography>
+              <LineIcon name={line.service_line} size={40} />
+              <Box>
+                <Typography sx={{ fontSize: "1rem", fontWeight: 700 }}>
+                  {pickerHeading.title}
+                </Typography>
+                <Typography
+                  sx={{ fontSize: "0.8rem", color: "text.secondary" }}
+                >
+                  {pickerHeading.detail}
+                </Typography>
+              </Box>
+            </Stack>
 
             <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
               <TextField
@@ -819,266 +1144,261 @@ export default function SourcingPanel({
           </Box>
         ) : (
           /* ── The line's vendors and rates ─────────────────────────── */
-          <Box>
-            <Eyebrow sx={{ mb: 0.75 }}>Primary vendor</Eyebrow>
-            {primary ? (
-              <Paper
-                variant="outlined"
-                sx={(t) => ({
-                  p: 1.75,
-                  mb: 3,
-                  transition: "background-color .6s ease",
-                  bgcolor:
-                    justChanged === primary.assignment_id
-                      ? alpha(
-                          t.palette.success.main,
-                          t.palette.mode === "dark" ? 0.2 : 0.12,
-                        )
-                      : "background.paper",
-                })}
+          <Stack spacing={2.5}>
+            {/* Line header */}
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <LineIcon name={line.service_line} size={40} />
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography sx={{ fontWeight: 700, fontSize: "1.1rem" }}>
+                  {line.service_line}
+                </Typography>
+                <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                  {live.length} vendor{live.length === 1 ? "" : "s"}
+                </Typography>
+              </Box>
+            </Stack>
+            {/* Next step — where the eye lands */}
+            {listLoaded && (
+              <Alert
+                severity={step.tone}
+                icon={step.tone === "success" ? <CheckIcon /> : undefined}
+                action={
+                  step.action === "rates" ? (
+                    <Button
+                      color="inherit"
+                      size="small"
+                      endIcon={<ArrowForwardIcon sx={{ fontSize: 15 }} />}
+                      onClick={() =>
+                        ratesRef.current?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        })
+                      }
+                    >
+                      Rates
+                    </Button>
+                  ) : undefined
+                }
               >
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <StarIcon sx={{ fontSize: 16, color: "warning.main" }} />
-                  <Typography
-                    sx={{ fontWeight: 700, fontSize: "0.95rem", flex: 1 }}
-                  >
-                    {primary.company}
-                  </Typography>
-                  <Progress v={primary} />
-                </Stack>
-                <Stack
-                  direction="row"
-                  alignItems="center"
-                  justifyContent="space-between"
-                  sx={{ mt: 1.25, pl: 3 }}
-                >
-                  <DocsStrip v={primary} />
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="inherit"
-                    startIcon={<SwapHorizIcon sx={{ fontSize: 15 }} />}
-                    onClick={() =>
-                      startPicking({ kind: "replace", vendor: primary })
-                    }
-                  >
-                    Replace
-                  </Button>
-                </Stack>
-              </Paper>
-            ) : (
-              <Alert severity="warning" sx={{ mb: 3 }}>
-                No primary vendor on {line.service_line}. Choose{" "}
-                <strong>Make primary</strong> on one of the backups below.
+                <Typography sx={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                  Next: {step.title}
+                </Typography>
+                <Typography sx={{ fontSize: "0.8rem" }}>{step.body}</Typography>
               </Alert>
             )}
 
-            <Eyebrow sx={{ mb: 0.25 }}>
-              Backup vendors{backups.length ? ` (${backups.length})` : ""}
-            </Eyebrow>
-            {backups.length === 0 && (
-              <Typography
-                sx={{ fontSize: "0.8rem", color: "text.secondary", mb: 1 }}
-              >
-                None yet. A backup can step in if the primary can't do the work.
-              </Typography>
-            )}
-            {backups.map((v) => (
-              <Box
-                key={v.assignment_id}
-                sx={{ py: 1, borderBottom: 1, borderColor: "divider" }}
-              >
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Typography
-                    sx={{ fontSize: "0.85rem", fontWeight: 600, flex: 1 }}
+            {/* Vendors — one row each; the primary's row is tinted blue */}
+            <Box>
+              <SectionTitle
+                action={
+                  <Button
+                    size="small"
+                    startIcon={<AddIcon sx={{ fontSize: 16 }} />}
+                    onClick={() => startPicking({ kind: "backup" })}
+                    sx={{ textTransform: "none", fontWeight: 600 }}
                   >
-                    {v.company}
-                  </Typography>
-                  <Progress v={v} />
-                </Stack>
-                <Stack
-                  direction="row"
-                  alignItems="center"
-                  justifyContent="space-between"
-                  sx={{ mt: 0.75 }}
+                    Add backup
+                  </Button>
+                }
+              >
+                Vendors
+              </SectionTitle>
+              <Stack spacing={1}>
+                {[...(primary ? [primary] : []), ...backups].map((v) => (
+                  <VendorRow
+                    key={v.assignment_id}
+                    v={v}
+                    loaded={listLoaded}
+                    flash={justChanged === v.assignment_id}
+                    noPrimary={!primary}
+                    promoting={promoting}
+                    onMakePrimary={() => makePrimary(v)}
+                    onReplace={() =>
+                      startPicking({ kind: "replace", vendor: v })
+                    }
+                  />
+                ))}
+              </Stack>
+              {!backups.length && (
+                <Typography
+                  variant="caption"
+                  sx={{ display: "block", color: "text.secondary", mt: 0.75 }}
                 >
-                  <DocsStrip v={v} />
-                  <Stack direction="row" spacing={0.5}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      startIcon={<StarIcon sx={{ fontSize: 14 }} />}
-                      onClick={() => makePrimary(v)}
-                      disabled={promoting != null}
-                    >
-                      {promoting === v.assignment_id
-                        ? "Saving…"
-                        : "Make primary"}
-                    </Button>
-                    <Tooltip title={`Replace ${v.company}`} arrow>
-                      <Button
-                        size="small"
-                        color="inherit"
-                        onClick={() =>
-                          startPicking({ kind: "replace", vendor: v })
-                        }
-                        sx={{ minWidth: 0, px: 1 }}
-                      >
-                        <SwapHorizIcon sx={{ fontSize: 16 }} />
-                      </Button>
-                    </Tooltip>
-                  </Stack>
-                </Stack>
-              </Box>
-            ))}
-            <Button
-              size="small"
-              startIcon={<AddIcon sx={{ fontSize: 16 }} />}
-              onClick={() => startPicking({ kind: "backup" })}
-              sx={{ mt: 1, ml: -0.5 }}
-            >
-              Add a backup vendor
-            </Button>
-
-            {/* ── Rates ─────────────────────────────────────────────── */}
-            <Divider sx={{ my: 3 }} />
-            <Stack
-              direction="row"
-              alignItems="center"
-              justifyContent="space-between"
-              sx={{ mb: 1 }}
-            >
-              <Eyebrow>
-                Rates{rateVendor ? ` · ${rateVendor.company}` : ""}
-              </Eyebrow>
-              {live.length > 1 && (
-                <TextField
-                  select
-                  size="small"
-                  label="Show rates for"
-                  value={rateAssignment ?? ""}
-                  onChange={(e) =>
-                    setRateFor((s) => ({
-                      ...s,
-                      [csId]: Number(e.target.value),
-                    }))
-                  }
-                  sx={{ minWidth: 200 }}
-                >
-                  {live.map((v) => (
-                    <MenuItem key={v.assignment_id} value={v.assignment_id}>
-                      {v.company}
-                      {v.is_primary ? " (primary)" : ""}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                  No backups yet. A backup can step in if the primary can't do
+                  the work.
+                </Typography>
               )}
-            </Stack>
-
-            {rateServices == null && <CircularProgress size={18} />}
-            {rateServices?.length === 0 && (
-              <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>
-                No services are set up on {line.service_line} for this site, so
-                there's nothing to price yet.
-              </Typography>
-            )}
-            {rateServices?.length > 0 && (
+            </Box>
+            {/* Rates */}
+            <Box ref={ratesRef} sx={{ scrollMarginTop: 16 }}>
+              <SectionTitle>Rates</SectionTitle>
               <Stack
                 direction="row"
-                spacing={1.5}
-                sx={{
-                  pb: 0.5,
-                  borderBottom: 1,
-                  borderColor: "divider",
-                  "& > *": { fontSize: "0.65rem", color: "text.secondary" },
-                }}
+                spacing={0.5}
+                alignItems="center"
+                sx={{ mt: -0.5, mb: 1 }}
               >
-                <Typography sx={{ flex: 1 }}>Service</Typography>
-                <Typography sx={{ width: 76, textAlign: "right" }}>
-                  Client
-                </Typography>
-                <Typography sx={{ width: 96, textAlign: "right" }}>
-                  Vendor
-                </Typography>
-                <Typography sx={{ width: 104, textAlign: "right" }}>
-                  Margin
-                </Typography>
-              </Stack>
-            )}
-            {(rateServices ?? []).map((svc) => {
-              const vp =
-                svc.vendor_price === "" || svc.vendor_price == null
-                  ? null
-                  : Number(svc.vendor_price);
-              const margin = vp == null ? null : svc.client_price - vp;
-              const pct =
-                margin == null || !svc.client_price
-                  ? null
-                  : Math.round((margin / svc.client_price) * 100);
-              const marginColor =
-                margin == null
-                  ? "text.secondary"
-                  : margin < 0
-                    ? "error.main"
-                    : pct < 20
-                      ? "warning.main"
-                      : "success.main";
-
-              return (
-                <Stack
-                  key={svc.id}
-                  direction="row"
-                  spacing={1.5}
-                  alignItems="center"
-                  sx={{ py: 0.75, borderBottom: 1, borderColor: "divider" }}
+                <Typography
+                  sx={{ fontSize: "0.8rem", color: "text.secondary" }}
                 >
-                  <Typography sx={{ flex: 1, fontSize: "0.8rem" }}>
-                    {svc.name}
+                  for
+                </Typography>
+                {live.length > 1 ? (
+                  <TextField
+                    select
+                    size="small"
+                    variant="standard"
+                    value={rateAssignment ?? ""}
+                    onChange={(e) =>
+                      setRateFor((s) => ({
+                        ...s,
+                        [csId]: Number(e.target.value),
+                      }))
+                    }
+                    InputProps={{ disableUnderline: true }}
+                    sx={{
+                      "& .MuiSelect-select": {
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        py: 0,
+                      },
+                    }}
+                  >
+                    {live.map((v) => (
+                      <MenuItem key={v.assignment_id} value={v.assignment_id}>
+                        {v.company}
+                        {v.is_primary ? " (primary)" : ""}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                ) : (
+                  <Typography sx={{ fontSize: "0.8rem", fontWeight: 600 }}>
+                    {rateVendor?.company ?? line.vendor}
                   </Typography>
+                )}
+              </Stack>
+
+              <Paper variant="outlined" sx={{ px: 1.75, py: 1 }}>
+                {rateServices == null && <CircularProgress size={18} />}
+                {rateServices?.length === 0 && (
                   <Typography
                     sx={{
                       fontSize: "0.8rem",
                       color: "text.secondary",
-                      width: 76,
-                      textAlign: "right",
+                      py: 0.5,
                     }}
                   >
-                    {money(svc.client_price)}
+                    No services are set up on {line.service_line} for this site,
+                    so there's nothing to price yet.
                   </Typography>
-                  <TextField
-                    size="small"
-                    type="number"
-                    placeholder="—"
-                    value={svc.vendor_price ?? ""}
-                    onChange={(e) =>
-                      setLocalRate(rateKey, svc.id, e.target.value)
-                    }
-                    onBlur={(e) =>
-                      saveRate(rateAssignment, svc, e.target.value)
-                    }
-                    inputProps={{
-                      style: {
-                        textAlign: "right",
-                        fontVariantNumeric: "tabular-nums",
+                )}
+                {rateServices?.length > 0 && (
+                  <Stack
+                    direction="row"
+                    spacing={1.5}
+                    sx={{
+                      pb: 0.5,
+                      borderBottom: 1,
+                      borderColor: "divider",
+                      "& > *": {
+                        fontSize: "0.68rem !important",
+                        color: "text.secondary",
+                        fontWeight: 600,
                       },
                     }}
-                    sx={{ width: 96 }}
-                  />
-                  <Typography
-                    sx={{
-                      width: 104,
-                      textAlign: "right",
-                      fontSize: "0.78rem",
-                      color: marginColor,
-                      fontWeight: margin == null ? 400 : 600,
-                    }}
                   >
-                    {margin == null ? "—" : `${money(margin)} · ${pct}%`}
-                  </Typography>
-                </Stack>
-              );
-            })}
-          </Box>
+                    <Typography sx={{ flex: 1 }}>Service</Typography>
+                    <Typography sx={{ width: 76, textAlign: "right" }}>
+                      Client
+                    </Typography>
+                    <Typography sx={{ width: 96, textAlign: "right" }}>
+                      Vendor
+                    </Typography>
+                    <Typography sx={{ width: 104, textAlign: "right" }}>
+                      Margin
+                    </Typography>
+                  </Stack>
+                )}
+                {(rateServices ?? []).map((svc, i) => {
+                  const vp =
+                    svc.vendor_price === "" || svc.vendor_price == null
+                      ? null
+                      : Number(svc.vendor_price);
+                  const margin = vp == null ? null : svc.client_price - vp;
+                  const pct =
+                    margin == null || !svc.client_price
+                      ? null
+                      : Math.round((margin / svc.client_price) * 100);
+                  const marginColor =
+                    margin == null
+                      ? "text.secondary"
+                      : margin < 0
+                        ? "error.main"
+                        : pct < 20
+                          ? "warning.main"
+                          : "success.main";
+
+                  return (
+                    <Stack
+                      key={svc.id}
+                      direction="row"
+                      spacing={1.5}
+                      alignItems="center"
+                      sx={{
+                        py: 0.75,
+                        borderTop: i ? 1 : 0,
+                        borderColor: "divider",
+                      }}
+                    >
+                      <Typography sx={{ flex: 1, fontSize: "0.82rem" }}>
+                        {svc.name}
+                      </Typography>
+                      <Typography
+                        sx={{
+                          fontSize: "0.8rem",
+                          color: "text.secondary",
+                          width: 76,
+                          textAlign: "right",
+                        }}
+                      >
+                        {money(svc.client_price)}
+                      </Typography>
+                      <TextField
+                        size="small"
+                        type="number"
+                        placeholder="—"
+                        value={svc.vendor_price ?? ""}
+                        onChange={(e) =>
+                          setLocalRate(rateKey, svc.id, e.target.value)
+                        }
+                        onBlur={(e) =>
+                          saveRate(rateAssignment, svc, e.target.value)
+                        }
+                        inputProps={{
+                          style: {
+                            textAlign: "right",
+                            fontVariantNumeric: "tabular-nums",
+                          },
+                        }}
+                        sx={{ width: 96 }}
+                      />
+                      <Typography
+                        sx={{
+                          width: 104,
+                          textAlign: "right",
+                          fontSize: "0.78rem",
+                          color: marginColor,
+                          fontWeight: margin == null ? 400 : 600,
+                        }}
+                      >
+                        {margin == null ? "—" : `${money(margin)} · ${pct}%`}
+                      </Typography>
+                    </Stack>
+                  );
+                })}
+              </Paper>
+            </Box>
+          </Stack>
         )}
       </SlideOutPanel>
 
