@@ -51,6 +51,21 @@ model VendorContacts {
   @@index([vendor_id])
 }
 
+/// A vendor assigned to a site for one service line (a ContractSite is one
+/// site on one contract, and every contract has exactly one service line).
+///
+/// Many vendors can be assigned to the same ContractSite. At most one of them
+/// is the primary; the rest are backups.
+///
+/// "At most one primary" is enforced by a filtered unique index, which Prisma
+/// can't express, so it was created by the multi_vendor_primary migration:
+///   CREATE UNIQUE INDEX UX_VendorContractSites_Primary
+///     ON VendorContractSites (contract_site_id) WHERE is_primary = 1;
+/// If a future `migrate dev` generates a DROP for that index, delete the line.
+///
+/// To change the primary, clear the old one and set the new one in the same
+/// transaction, in that order, or the index will reject the write. Closing an
+/// assignment always clears is_primary.
 model VendorContractSites {
   id                Int                @id @default(autoincrement())
   is_primary        Boolean            @default(false)

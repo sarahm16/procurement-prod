@@ -20,10 +20,16 @@ view SourcingGrid {
   service_line_id         Int
   service_line            String
 
+  /// One row per ContractSite. The assignment, vendor and progress columns
+  /// describe the primary vendor (or the newest live one if none is marked).
+  /// Backups are counted here and listed in full by SourcingGridVendors.
+  /// Definition: prisma/sql/vw_SourcingGrid.sql
   assignment_id           Int?
   assignment_status_id    Int?
   is_primary              Boolean?
   assigned_at             DateTime?
+  vendor_count            Int
+  backup_vendor_count     Int
 
   vendor_id               Int?
   company                 String?
@@ -53,6 +59,47 @@ view SourcingGrid {
   completed_steps         Int       @db.TinyInt
 
   @@map("vw_SourcingGrid")
+}
+
+/// Every vendor assigned to a ContractSite (primary and backups), one row per
+/// VendorContractSites row, with the same seven checks as SourcingGrid.
+/// Includes closed assignments; filter assignment_status_category for the
+/// live list. Definition: prisma/sql/vw_SourcingGridVendors.sql
+view SourcingGridVendors {
+  assignment_id              Int       @id
+  contract_site_id           Int
+  is_primary                 Boolean
+  assignment_status_id       Int
+  assignment_status_category String
+  assigned_at                DateTime
+
+  vendor_id                  Int
+  company                    String
+  vendor_lat                 Decimal?
+  vendor_lng                 Decimal?
+  vendor_status_id           Int
+
+  has_w9                     Boolean
+  has_coi                    Boolean
+  has_msa                    Boolean
+  has_ach                    Boolean
+  coi_expiration             DateTime?
+
+  service_count              Int
+  priced_count               Int
+  has_rates                  Boolean
+
+  exhibit_sent_at            DateTime?
+  exhibit_signed_at          DateTime?
+  exhibit_sent               Boolean
+  exhibit_signed             Boolean
+
+  vendor_price_total         Decimal?
+
+  is_sourced                 Boolean
+  completed_steps            Int       @db.TinyInt
+
+  @@map("vw_SourcingGridVendors")
 }
 
 datasource db {

@@ -1,10 +1,18 @@
 /**
  * POST /api/sourcing/assignments/:id/replace
  *
- * Swap the vendor on one contract site. The outgoing assignment is closed,
+ * Swap the vendor on one assignment. The outgoing assignment is closed,
  * never deleted — its pricing and exhibits stay attached to it, which is the
  * whole reason VendorServicePricing hangs off the assignment rather than the
  * vendor.
+ *
+ * The incoming vendor takes the outgoing one's place: replace the primary and
+ * the new vendor becomes primary; replace a backup and it becomes a backup.
+ * Other vendors on the line are left alone.
+ *
+ * If the incoming vendor is already a live backup on this line, that
+ * assignment is kept as-is (status, pricing, exhibits) and simply moves into
+ * the outgoing vendor's role.
  *
  * Register on the sourcing router:
  *   registerReplaceRoute(router, prisma, serializeGridRow);
@@ -40,11 +48,14 @@ export function registerReplaceRoute(router, prisma, serializeGridRow) {
       return res.status(400).json({ error: "vendor_id is required" });
     }
 
+    const vendorId = Number(vendor_id);
+
     try {
       const outgoing = await prisma.vendorContractSites.findUnique({
         where: { id: oldAssignmentId },
         include: {
           Vendor: { select: { id: true, company: true } },
+          VendorSiteStatus: { select: { category: true } },
           ContractSite: {
             select: {
               id: true,
@@ -57,58 +68,93 @@ export function registerReplaceRoute(router, prisma, serializeGridRow) {
 
       if (!outgoing)
         return res.status(404).json({ error: "Assignment not found" });
-      if (outgoing.vendor_id === Number(vendor_id)) {
+      if (outgoing.VendorSiteStatus?.category === "closed") {
+        return res
+          .status(400)
+          .json({ error: "That assignment is already closed" });
+      }
+      if (outgoing.vendor_id === vendorId) {
         return res.status(400).json({
           error: "That vendor is already assigned to this service line",
         });
       }
 
       const contractSiteId = outgoing.contract_site_id;
+      const becomesPrimary = outgoing.is_primary;
 
       const incoming = await prisma.$transaction(async (tx) => {
         const closed = await statusByCategory(tx, "closed");
         const sourcing = await statusByCategory(tx, "sourcing");
 
+        // 1. Close the outgoing assignment. This also clears its primary
+        //    flag, which has to happen before step 2 sets the new one —
+        //    UX_VendorContractSites_Primary allows one primary at a time.
         await tx.vendorContractSites.update({
           where: { id: oldAssignmentId },
           data: { status_id: closed.id, is_primary: false },
         });
 
-        // The incoming vendor may already have a closed assignment here from a
-        // previous season. @@unique([vendor_id, contract_site_id]) means we
-        // reopen that row rather than inserting a duplicate.
+        // 2. Find the incoming vendor's existing row on this line, if any.
+        //    @@unique([vendor_id, contract_site_id]) means there's at most one.
         const prior = await tx.vendorContractSites.findUnique({
           where: {
             vendor_id_contract_site_id: {
-              vendor_id: Number(vendor_id),
+              vendor_id: vendorId,
               contract_site_id: contractSiteId,
             },
           },
+          include: { VendorSiteStatus: { select: { category: true } } },
         });
 
-        const created = prior
+        // Belt and braces: make sure nothing else on the line is still
+        // marked primary before we set one.
+        if (becomesPrimary) {
+          await tx.vendorContractSites.updateMany({
+            where: { contract_site_id: contractSiteId, is_primary: true },
+            data: { is_primary: false },
+          });
+        }
+
+        const include = { Vendor: { select: { company: true } } };
+
+        const priorIsLive =
+          prior && prior.VendorSiteStatus?.category !== "closed";
+
+        // - Already a live backup here: keep its status and progress, just
+        //   move it into the outgoing vendor's role.
+        // - A closed row from a previous season: reopen it.
+        // - Otherwise: insert.
+        const created = priorIsLive
           ? await tx.vendorContractSites.update({
               where: { id: prior.id },
-              data: { status_id: sourcing.id },
-              include: { Vendor: { select: { company: true } } },
+              data: { is_primary: becomesPrimary },
+              include,
             })
-          : await tx.vendorContractSites.create({
-              data: {
-                vendor_id: Number(vendor_id),
-                contract_site_id: contractSiteId,
-                status_id: sourcing.id,
-              },
-              include: { Vendor: { select: { company: true } } },
-            });
+          : prior
+            ? await tx.vendorContractSites.update({
+                where: { id: prior.id },
+                data: { status_id: sourcing.id, is_primary: becomesPrimary },
+                include,
+              })
+            : await tx.vendorContractSites.create({
+                data: {
+                  vendor_id: vendorId,
+                  contract_site_id: contractSiteId,
+                  status_id: sourcing.id,
+                  is_primary: becomesPrimary,
+                },
+                include,
+              });
 
         const line =
           outgoing.ContractSite.Contract?.ServiceLine?.name ?? "service line";
+        const role = becomesPrimary ? "primary" : "backup";
         await logActivity(tx, {
           entityTypeId: SITE_ENTITY_TYPE_ID,
           entityId: outgoing.ContractSite.site_id,
           fieldChanged: "vendor_assignment",
           previousValue: `${outgoing.Vendor?.company ?? "Vendor"} — ${line}`,
-          newValue: `${created.Vendor?.company ?? "Vendor"} — ${line} (replaced)`,
+          newValue: `${created.Vendor?.company ?? "Vendor"} — ${line} (replaced, ${role})`,
           changedBy: user_id ?? null,
           action: "UPDATE",
         });
@@ -123,10 +169,18 @@ export function registerReplaceRoute(router, prisma, serializeGridRow) {
       res.json({
         assignment_id: incoming.id,
         replaced_assignment_id: oldAssignmentId,
+        is_primary: becomesPrimary,
         rows: rows.map(serializeGridRow),
       });
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
+        if (error.code === "P2002") {
+          return res.status(409).json({
+            error: "Conflict",
+            message:
+              "Someone else changed the vendors on this line at the same time. Refresh and try again.",
+          });
+        }
         console.error("Prisma error replacing vendor:", error);
         res.status(400).json({
           error: "Database Error",

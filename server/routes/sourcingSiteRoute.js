@@ -2,7 +2,8 @@
  * GET /api/sourcing/sites/:siteId
  *
  * Every service line at one site, assigned or not, with the same seven checks
- * the sourcing grid shows — plus the full assignment history per line.
+ * the sourcing grid shows — plus the backup vendors and full assignment
+ * history per line.
  *
  * Register on the sourcing router alongside the others:
  *
@@ -26,20 +27,18 @@
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 
 /**
- * The view carries the CURRENT assignment only (OUTER APPLY ... TOP 1). On the
- * sourcing queue that's right — you're chasing what's open. On a site profile
- * it isn't: "who did we have on snow last winter and why did they go away" is
- * exactly the question someone opens this tab to answer, and that history is
- * the reason assignments get a status instead of getting deleted.
+ * The view carries ONE assignment per line: the primary (or the newest live
+ * one if no primary is marked). A site profile wants the rest too:
+ *   - backups:            other live vendors on the line, ready to step in
+ *   - prior_assignments:  closed ones — "who did we have on snow last winter
+ *                         and why did they go away", which is the reason
+ *                         assignments get a status instead of getting deleted.
  */
 async function assignmentsByContractSite(prisma, contractSiteIds) {
   const rows = await prisma.vendorContractSites.findMany({
     where: { contract_site_id: { in: contractSiteIds } },
     include: {
       Vendor: { select: { id: true, company: true } },
-      // If your relation field on VendorContractSites is named something other
-      // than `Status` (VendorSiteStatus, etc.), rename it here — Prisma throws
-      // on an unknown include rather than ignoring it.
       VendorSiteStatus: { select: { id: true, name: true, category: true } },
     },
     orderBy: [{ is_primary: "desc" }, { created_at: "desc" }],
@@ -54,8 +53,8 @@ async function assignmentsByContractSite(prisma, contractSiteIds) {
       vendor: a.Vendor?.company ?? null,
       is_primary: a.is_primary,
       status_id: a.status_id,
-      status: a.Status?.name ?? null,
-      status_category: a.Status?.category ?? null,
+      status: a.VendorSiteStatus?.name ?? null,
+      status_category: a.VendorSiteStatus?.category ?? null,
       created_at: a.created_at,
     });
   }
@@ -89,14 +88,18 @@ export function registerSiteSourcingRoute(router, prisma, serializeGridRow) {
       const serialized = rows.map((r) => {
         const base = serializeGridRow(r);
         const all = history.get(r.contract_site_id) ?? [];
+        const others = all.filter(
+          (a) => a.assignment_id !== base.assignment_id,
+        );
         return {
           ...base,
           assignments: all,
-          // Everything that isn't the one the view picked. Rendered collapsed,
-          // so a line that's been re-sourced three times doesn't bury the
-          // vendor who's actually working there now.
-          prior_assignments: all.filter(
-            (a) => a.assignment_id !== base.assignment_id,
+          // Live vendors other than the one the view picked.
+          backups: others.filter((a) => a.status_category !== "closed"),
+          // Closed ones only. Rendered collapsed, so a line that's been
+          // re-sourced three times doesn't bury the vendors working there now.
+          prior_assignments: others.filter(
+            (a) => a.status_category === "closed",
           ),
         };
       });
@@ -126,6 +129,7 @@ const emptySummary = () => ({
   service_lines: 0,
   assigned: 0,
   sourced: 0,
+  with_backup: 0,
   client_price_total: 0,
   vendor_price_total: 0,
 });
@@ -140,6 +144,7 @@ function summarize(rows) {
       service_lines: acc.service_lines + 1,
       assigned: acc.assigned + (r.vendor_id ? 1 : 0),
       sourced: acc.sourced + (r.is_sourced ? 1 : 0),
+      with_backup: acc.with_backup + (r.backups.length ? 1 : 0),
       client_price_total: acc.client_price_total + (r.client_price_total ?? 0),
       vendor_price_total: acc.vendor_price_total + (r.vendor_price_total ?? 0),
     }),

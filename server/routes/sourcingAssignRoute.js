@@ -1,19 +1,16 @@
 /**
- * POST /api/sourcing/assignments
+ * Vendor assignment routes for sourcing.
  *
- * Assign one vendor to any number of contract sites in a single transaction.
- * Backs three flows: the panel's multi-line assign, the grid's inline cell
- * edit, and the bulk bar.
+ *   POST /api/sourcing/assignments                  assign a vendor to many lines
+ *   PUT  /api/sourcing/assignments/:id/primary      make a backup the primary
+ *   GET  /api/sourcing/contract-sites/:id/vendors   every vendor on a line
  *
- * Body:
- *   { vendor_id, contract_site_ids: [1,2,3], mode: "skip" | "replace", user_id }
+ * A contract site (site x service line) can have several live vendors: one
+ * primary and any number of backups. The database enforces "at most one
+ * primary" with UX_VendorContractSites_Primary, so every write below clears
+ * the old primary BEFORE setting the new one, inside the same transaction.
  *
- * `mode` decides what happens to lines that already have a live vendor:
- *   skip     (default) — leave them alone and report them back
- *   replace  — close the incumbent assignment and open one for the new vendor
- *
- * Replaces the inline POST /assignments handler in sourcing.js — delete that
- * one and register this instead:
+ * Register as before (it now adds all three routes):
  *   registerAssignRoute(router, prisma, serializeGridRow);
  */
 
@@ -21,6 +18,9 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { logActivity } from "../utils/logActivity.js";
 
 const SITE_ENTITY_TYPE_ID = 2;
+const MODES = ["skip", "add", "replace"];
+
+const num = (v) => (v == null ? null : Number(v));
 
 async function statusByCategory(tx, category) {
   const s = await tx.vendorSiteStatuses.findFirst({
@@ -34,9 +34,13 @@ async function statusByCategory(tx, category) {
   return s;
 }
 
-/** Matches the OUTER APPLY in vw_SourcingGrid. Keep the two in step. */
-function currentAssignment(tx, contractSiteId) {
-  return tx.vendorContractSites.findFirst({
+/**
+ * Live (not closed) assignments on a contract site, in the same order as the
+ * OUTER APPLY in vw_SourcingGrid — so [0] is the one the grid shows. Keep the
+ * two in step.
+ */
+function liveAssignments(tx, contractSiteId) {
+  return tx.vendorContractSites.findMany({
     where: {
       contract_site_id: contractSiteId,
       VendorSiteStatus: { category: { not: "closed" } },
@@ -46,9 +50,67 @@ function currentAssignment(tx, contractSiteId) {
   });
 }
 
+/** Clear any primary on the site. Must run before setting a new one. */
+function clearPrimary(tx, contractSiteId) {
+  return tx.vendorContractSites.updateMany({
+    where: { contract_site_id: contractSiteId, is_primary: true },
+    data: { is_primary: false },
+  });
+}
+
+const serializeVendorRow = (r) => ({
+  ...r,
+  vendor_lat: num(r.vendor_lat),
+  vendor_lng: num(r.vendor_lng),
+  vendor_price_total: num(r.vendor_price_total),
+});
+
+function sendError(res, error, label) {
+  if (error instanceof PrismaClientKnownRequestError) {
+    // P2002 here means two people changed the same site's primary at once
+    // and the unique index stopped the second one.
+    if (error.code === "P2002") {
+      return res.status(409).json({
+        error: "Conflict",
+        message:
+          "Someone else changed the vendors on this line at the same time. Refresh and try again.",
+      });
+    }
+    console.error(`Prisma error ${label}:`, error);
+    return res.status(400).json({
+      error: "Database Error",
+      code: error.code,
+      message: error.message,
+    });
+  }
+  console.error(`Error ${label}:`, error);
+  return res
+    .status(500)
+    .json({ error: error.message ?? "Internal Server Error" });
+}
+
 export function registerAssignRoute(router, prisma, serializeGridRow) {
+  // ── POST /api/sourcing/assignments ───────────────────────────────────────
+  //
+  // Body:
+  //   { vendor_id, contract_site_ids: [1,2,3], mode, make_primary, user_id }
+  //
+  // A line with no live vendor always gets the new vendor as its primary.
+  // `mode` decides what happens on lines that already have one:
+  //   skip    (default) — leave the line alone and report it back
+  //   add     — add the vendor as a backup. With make_primary: true it
+  //             becomes the primary instead, and the old primary stays on
+  //             as a backup.
+  //   replace — close the current primary and make the new vendor primary.
+  //             Backups are left alone.
   router.post("/assignments", async (req, res) => {
-    const { vendor_id, contract_site_ids, mode = "skip", user_id } = req.body;
+    const {
+      vendor_id,
+      contract_site_ids,
+      mode = "skip",
+      make_primary = false,
+      user_id,
+    } = req.body;
 
     if (
       !vendor_id ||
@@ -58,6 +120,11 @@ export function registerAssignRoute(router, prisma, serializeGridRow) {
       return res
         .status(400)
         .json({ error: "vendor_id and contract_site_ids are required" });
+    }
+    if (!MODES.includes(mode)) {
+      return res
+        .status(400)
+        .json({ error: `mode must be one of: ${MODES.join(", ")}` });
     }
     if (contract_site_ids.length > 200) {
       return res
@@ -83,8 +150,8 @@ export function registerAssignRoute(router, prisma, serializeGridRow) {
           });
           if (!vendor) throw new Error("Vendor not found");
 
-          const out = { assigned: [], replaced: [], skipped: [] };
-          const perSite = new Map(); // site_id -> [{ line, action }]
+          const out = { assigned: [], added: [], replaced: [], skipped: [] };
+          const perSite = new Map(); // site_id -> [description]
 
           for (const csId of ids) {
             const contractSite = await tx.contractSites.findUnique({
@@ -101,31 +168,42 @@ export function registerAssignRoute(router, prisma, serializeGridRow) {
 
             const line =
               contractSite.Contract?.ServiceLine?.name ?? "service line";
-            const incumbent = await currentAssignment(tx, csId);
+            const live = await liveAssignments(tx, csId);
+            const current = live[0] ?? null; // what the grid shows
 
-            if (incumbent?.vendor_id === vendorId) {
+            const mine = live.find((a) => a.vendor_id === vendorId);
+            if (mine) {
               out.skipped.push({
                 contract_site_id: csId,
-                reason: "already assigned to this vendor",
+                reason: mine.is_primary
+                  ? "already the primary vendor"
+                  : "already a backup vendor — use make primary instead",
               });
               continue;
             }
 
-            if (incumbent && mode !== "replace") {
+            if (current && mode === "skip") {
               out.skipped.push({
                 contract_site_id: csId,
                 reason: "already has a vendor",
-                vendor: incumbent.Vendor?.company ?? null,
+                vendor: current.Vendor?.company ?? null,
               });
               continue;
             }
 
-            if (incumbent && mode === "replace") {
+            const becomesPrimary =
+              !current ||
+              mode === "replace" ||
+              (mode === "add" && make_primary);
+
+            // Order matters: the unique index allows one primary at a time.
+            if (current && mode === "replace") {
               await tx.vendorContractSites.update({
-                where: { id: incumbent.id },
+                where: { id: current.id },
                 data: { status_id: closed.id, is_primary: false },
               });
             }
+            if (becomesPrimary) await clearPrimary(tx, csId);
 
             // The vendor may already have a closed assignment here from a
             // previous season — @@unique([vendor_id, contract_site_id]) means
@@ -139,30 +217,43 @@ export function registerAssignRoute(router, prisma, serializeGridRow) {
               },
             });
 
+            const data = { status_id: sourcing.id, is_primary: becomesPrimary };
             const saved = prior
               ? await tx.vendorContractSites.update({
                   where: { id: prior.id },
-                  data: { status_id: sourcing.id },
+                  data,
                 })
               : await tx.vendorContractSites.create({
                   data: {
+                    ...data,
                     vendor_id: vendorId,
                     contract_site_id: csId,
-                    status_id: sourcing.id,
                   },
                 });
 
-            (incumbent ? out.replaced : out.assigned).push({
+            const entry = {
               contract_site_id: csId,
               assignment_id: saved.id,
-            });
+              is_primary: becomesPrimary,
+            };
+            const was = current?.Vendor?.company ?? "vendor";
+            let text;
+            if (!current) {
+              out.assigned.push(entry);
+              text = line;
+            } else if (mode === "replace") {
+              out.replaced.push(entry);
+              text = `${line} (replaced ${was})`;
+            } else if (becomesPrimary) {
+              out.added.push(entry);
+              text = `${line} (primary; ${was} moved to backup)`;
+            } else {
+              out.added.push(entry);
+              text = `${line} (backup)`;
+            }
 
             const bucket = perSite.get(contractSite.site_id) ?? [];
-            bucket.push(
-              incumbent
-                ? `${line} (replaced ${incumbent.Vendor?.company ?? "vendor"})`
-                : line,
-            );
+            bucket.push(text);
             perSite.set(contractSite.site_id, bucket);
           }
 
@@ -192,21 +283,119 @@ export function registerAssignRoute(router, prisma, serializeGridRow) {
 
       res.status(201).json({ summary, rows: rows.map(serializeGridRow) });
     } catch (error) {
-      if (error instanceof PrismaClientKnownRequestError) {
-        console.error("Prisma error creating assignments:", error);
-        res
-          .status(400)
-          .json({
-            error: "Database Error",
-            code: error.code,
-            message: error.message,
-          });
-      } else {
-        console.error("Error creating assignments:", error);
-        res
-          .status(500)
-          .json({ error: error.message ?? "Internal Server Error" });
+      sendError(res, error, "creating assignments");
+    }
+  });
+
+  // ── PUT /api/sourcing/assignments/:id/primary ────────────────────────────
+  // Body: { user_id }
+  // Makes this assignment the primary on its line. The old primary stays
+  // assigned as a backup. Returns the grid row and the line's vendor list.
+  router.put("/assignments/:id/primary", async (req, res) => {
+    const assignmentId = Number(req.params.id);
+    const { user_id } = req.body ?? {};
+    if (!Number.isInteger(assignmentId)) {
+      return res.status(400).json({ error: "Invalid assignment id" });
+    }
+
+    try {
+      const assignment = await prisma.vendorContractSites.findUnique({
+        where: { id: assignmentId },
+        include: {
+          VendorSiteStatus: { select: { category: true } },
+          Vendor: { select: { company: true } },
+          ContractSite: {
+            select: {
+              site_id: true,
+              Contract: { select: { ServiceLine: { select: { name: true } } } },
+            },
+          },
+        },
+      });
+      if (!assignment) {
+        return res.status(404).json({ error: "Assignment not found" });
       }
+      if (assignment.VendorSiteStatus?.category === "closed") {
+        return res
+          .status(400)
+          .json({ error: "A closed assignment can't be made primary" });
+      }
+
+      const csId = assignment.contract_site_id;
+
+      if (!assignment.is_primary) {
+        await prisma.$transaction(async (tx) => {
+          const previous = await tx.vendorContractSites.findFirst({
+            where: { contract_site_id: csId, is_primary: true },
+            include: { Vendor: { select: { company: true } } },
+          });
+
+          await clearPrimary(tx, csId);
+          await tx.vendorContractSites.update({
+            where: { id: assignmentId },
+            data: { is_primary: true },
+          });
+
+          const line =
+            assignment.ContractSite.Contract?.ServiceLine?.name ??
+            "service line";
+          await logActivity(tx, {
+            entityTypeId: SITE_ENTITY_TYPE_ID,
+            entityId: assignment.ContractSite.site_id,
+            fieldChanged: "primary_vendor",
+            previousValue: previous?.Vendor?.company ?? null,
+            newValue: `${assignment.Vendor?.company ?? "Vendor"} — ${line}`,
+            changedBy: user_id ?? null,
+            action: "UPDATE",
+          });
+        });
+      }
+
+      const [rows, vendors] = await Promise.all([
+        prisma.sourcingGrid.findMany({ where: { contract_site_id: csId } }),
+        prisma.sourcingGridVendors.findMany({
+          where: {
+            contract_site_id: csId,
+            assignment_status_category: { not: "closed" },
+          },
+          orderBy: [{ is_primary: "desc" }, { assigned_at: "desc" }],
+        }),
+      ]);
+
+      res.json({
+        rows: rows.map(serializeGridRow),
+        vendors: vendors.map(serializeVendorRow),
+      });
+    } catch (error) {
+      sendError(res, error, "setting primary vendor");
+    }
+  });
+
+  // ── GET /api/sourcing/contract-sites/:id/vendors ─────────────────────────
+  // Every live vendor on the line, primary first, each with its seven checks.
+  // ?include_closed=1 adds past assignments too.
+  router.get("/contract-sites/:id/vendors", async (req, res) => {
+    const contractSiteId = Number(req.params.id);
+    if (!Number.isInteger(contractSiteId)) {
+      return res.status(400).json({ error: "Invalid contract site id" });
+    }
+
+    try {
+      const includeClosed = ["1", "true"].includes(
+        String(req.query.include_closed),
+      );
+      const vendors = await prisma.sourcingGridVendors.findMany({
+        where: {
+          contract_site_id: contractSiteId,
+          ...(includeClosed
+            ? {}
+            : { assignment_status_category: { not: "closed" } }),
+        },
+        orderBy: [{ is_primary: "desc" }, { assigned_at: "desc" }],
+      });
+      res.json(vendors.map(serializeVendorRow));
+    } catch (error) {
+      sendError(res, error, "fetching contract site vendors");
     }
   });
 }

@@ -96,6 +96,10 @@ const serializeGridRow = (r) => ({
 
   client_price_total: num(r.client_price_total),
   vendor_price_total: num(r.vendor_price_total),
+  vendor: r.company,
+  is_primary: r.is_primary,
+  vendor_count: r.vendor_count,
+  backup_vendor_count: r.backup_vendor_count,
 });
 
 // Accepts ?service_line_id=1&service_line_id=2 or ?service_line_id=1,2
@@ -216,94 +220,6 @@ export default function sourcingRouter(prisma) {
     } catch (error) {
       console.error("Error fetching sourcing clients:", error);
       res.status(500).json({ error: "Internal Server Error" });
-    }
-  });
-
-  // POST /api/sourcing/assignments
-  //   { vendor_id, contract_site_ids: [1,2], status_id, user_id }
-  // One vendor onto several service lines at a site in a single call — the
-  // multi-line assign from the panel.
-  router.post("/assignments", async (req, res) => {
-    const { vendor_id, contract_site_ids, status_id, user_id } = req.body;
-
-    if (
-      !vendor_id ||
-      !Array.isArray(contract_site_ids) ||
-      !contract_site_ids.length
-    ) {
-      return res
-        .status(400)
-        .json({ error: "vendor_id and contract_site_ids are required" });
-    }
-
-    try {
-      const created = await prisma.$transaction(async (tx) => {
-        const out = [];
-
-        const sourcingStatus = await tx.vendorSiteStatuses.findFirst({
-          where: { category: "sourcing" },
-          orderBy: { id: "asc" },
-        });
-        if (!sourcingStatus) {
-          throw new Error(
-            "No VendorSiteStatuses row with category 'sourcing' — seed the table",
-          );
-        }
-        for (const csId of contract_site_ids) {
-          const contractSite = await tx.contractSites.findUnique({
-            where: { id: Number(csId) },
-            include: { Contract: { include: { ServiceLine: true } } },
-          });
-          if (!contractSite) continue;
-
-          const assignment = await tx.vendorContractSites.create({
-            data: {
-              vendor_id: Number(vendor_id),
-              contract_site_id: Number(csId),
-              status_id: Number(status_id) || sourcingStatus.id,
-            },
-            include: { Vendor: true },
-          });
-
-          await logActivity(tx, {
-            entityTypeId: SITE_ENTITY_TYPE_ID,
-            entityId: contractSite.site_id,
-            fieldChanged: "vendor_assignment",
-            previousValue: null,
-            newValue: `${assignment.Vendor?.company ?? "Vendor"} → ${contractSite.Contract?.ServiceLine?.name ?? "service line"}`,
-            changedBy: user_id ?? null,
-            action: "CREATE",
-          });
-
-          out.push(assignment.id);
-        }
-        return out;
-      });
-
-      // Read the affected rows back off the view so the client can patch
-      // state without recomputing the seven checks itself.
-      const rows = await prisma.sourcingGrid.findMany({
-        where: { contract_site_id: { in: contract_site_ids.map(Number) } },
-      });
-
-      res
-        .status(201)
-        .json({ assignment_ids: created, rows: rows.map(serializeGridRow) });
-    } catch (error) {
-      if (error instanceof PrismaClientKnownRequestError) {
-        // P2002 = the @@unique([vendor_id, contract_site_id]) caught a double-assign
-        console.error("Prisma error creating assignments:", error);
-        res.status(400).json({
-          error:
-            error.code === "P2002"
-              ? "That vendor is already assigned to this service line"
-              : "Database Error",
-          code: error.code,
-        });
-      } else {
-        console.error("Error creating assignments:", error);
-        res.status(500).json({ error: "Internal Server Error" });
-      }
     }
   });
 

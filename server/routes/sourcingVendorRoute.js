@@ -2,11 +2,17 @@
  * GET /api/sourcing/vendors/:vendorId
  *
  * Every site/service line this vendor is assigned to — the mirror of
- * /api/sourcing/sites/:siteId, read off the same view so the two tabs can
- * never disagree about a vendor's compliance.
+ * /api/sourcing/sites/:siteId. Checks come from vw_SourcingGridVendors, which
+ * computes them per assignment, so a backup vendor's row shows the backup's
+ * own pricing and exhibits, never the primary's.
  *
  * Query:
  *   ?include_past=true   also return assignments this vendor no longer holds
+ *
+ * Each row has a `role`:
+ *   primary — this vendor is the primary on the line
+ *   backup  — live on the line, but someone else is primary
+ *   past    — the assignment is closed
  *
  * Register on the sourcing router:
  *
@@ -24,13 +30,12 @@ const DAY = 86400000;
 const SOON_DAYS = 30;
 
 /**
- * Same three-state COI logic as sourcingRouter.serializeGridRow.
+ * Same three-state COI logic as sourcing.js serializeGridRow.
  *
  * Duplicated rather than imported because this route serializes a different
- * shape (assignment-first, not contract-site-first) and importing the whole
- * serializer would drag in fields that are actively misleading here. If you
- * change the COI rule, change it in both places — or hoist this one function
- * into a shared module, which is what I'd do the second time it moves.
+ * shape (assignment-first, not contract-site-first). If you change the COI
+ * rule, change it in both places — or hoist this one function into a shared
+ * module, which is what I'd do the second time it moves.
  */
 const coiState = (r) => {
   if (!r.vendor_id) return null;
@@ -70,18 +75,12 @@ export function registerVendorSitesRoute(router, prisma) {
     const includePast = String(req.query.include_past) === "true";
 
     try {
-      // Start from the assignments, not the view: the view only carries the
-      // CURRENT vendor per contract site, so starting there would silently
-      // drop every line this vendor used to hold.
-      const assignments = await prisma.vendorContractSites.findMany({
+      // Every assignment this vendor has, with its own seven checks.
+      // Unfiltered on purpose: compliance below needs a row even when the
+      // vendor only has past assignments.
+      const assignments = await prisma.sourcingGridVendors.findMany({
         where: { vendor_id: vendorId },
-        include: {
-          // Rename if your relation field isn't `Status`.
-          VendorSiteStatus: {
-            select: { id: true, name: true, category: true },
-          },
-        },
-        orderBy: [{ created_at: "desc" }],
+        orderBy: [{ assigned_at: "desc" }],
       });
 
       if (!assignments.length) {
@@ -93,9 +92,17 @@ export function registerVendorSitesRoute(router, prisma) {
         });
       }
 
-      const gridRows = await gridRowsFor(prisma, [
-        ...new Set(assignments.map((a) => a.contract_site_id)),
+      // Site, client and line details, plus who the grid shows on each line.
+      // Status names are a tiny lookup table, so read it whole.
+      const [gridRows, statuses] = await Promise.all([
+        gridRowsFor(prisma, [
+          ...new Set(assignments.map((a) => a.contract_site_id)),
+        ]),
+        prisma.vendorSiteStatuses.findMany({
+          select: { id: true, name: true },
+        }),
       ]);
+      const statusName = new Map(statuses.map((s) => [s.id, s.name]));
       const byContractSite = new Map(
         gridRows.map((r) => [r.contract_site_id, r]),
       );
@@ -105,11 +112,18 @@ export function registerVendorSitesRoute(router, prisma) {
         const g = byContractSite.get(a.contract_site_id);
         if (!g) continue; // contract site no longer in the view (contract ended)
 
-        const isCurrent = g.assignment_id === a.id;
-        if (!isCurrent && !includePast) continue;
+        const isLive = a.assignment_status_category !== "closed";
+        if (!isLive && !includePast) continue;
+
+        const role = !isLive ? "past" : a.is_primary ? "primary" : "backup";
+        // The vendor the grid shows on this line, if it isn't this one.
+        const other =
+          g.assignment_id !== a.assignment_id && g.vendor_id != null
+            ? { name: g.company ?? null, id: g.vendor_id }
+            : null;
 
         rows.push({
-          assignment_id: a.id,
+          assignment_id: a.assignment_id,
           contract_site_id: a.contract_site_id,
           site_id: g.site_id,
           site: g.store,
@@ -121,35 +135,37 @@ export function registerVendorSitesRoute(router, prisma) {
           service_line_id: g.service_line_id,
           service_line: g.service_line,
 
-          is_current: isCurrent,
+          role,
+          is_current: isLive, // primary or backup — still working the line
           is_primary: a.is_primary,
-          status: a.Status?.name ?? null,
-          status_category: a.Status?.category ?? null,
-          created_at: a.created_at,
+          status: statusName.get(a.assignment_status_id) ?? null,
+          status_id: a.assignment_status_id,
+          status_category: a.assignment_status_category,
+          created_at: a.assigned_at,
 
-          // The site-level checks in the view are computed for whoever holds
-          // the line NOW. Showing them against a replaced vendor would credit
-          // one vendor with another's signed exhibit, so they're nulled and
-          // the UI renders a dash. Same reasoning for the money.
-          checks: isCurrent
+          // Past rows show dashes: the line has moved on, and a closed
+          // assignment's progress isn't something anyone is chasing.
+          checks: isLive
             ? {
-                rates: g.has_rates,
-                sent: g.exhibit_sent,
-                signed: g.exhibit_signed,
+                rates: a.has_rates,
+                sent: a.exhibit_sent,
+                signed: a.exhibit_signed,
               }
             : { rates: null, sent: null, signed: null },
 
-          service_count: isCurrent ? g.service_count : null,
-          priced_count: isCurrent ? g.priced_count : null,
-          vendor_price_total: isCurrent ? num(g.vendor_price_total) : null,
-          client_price_total: isCurrent ? num(g.client_price_total) : null,
-          is_sourced: isCurrent ? g.is_sourced : null,
-          completed_steps: isCurrent ? g.completed_steps : null,
+          service_count: isLive ? a.service_count : null,
+          priced_count: isLive ? a.priced_count : null,
+          vendor_price_total: isLive ? num(a.vendor_price_total) : null,
+          client_price_total: isLive ? num(g.client_price_total) : null,
+          is_sourced: isLive ? a.is_sourced : null,
+          completed_steps: isLive ? a.completed_steps : null,
 
-          // Who has the line instead — the single most useful thing to show on
-          // a row that says "you used to work here".
-          current_vendor: isCurrent ? null : (g.company ?? null),
-          current_vendor_id: isCurrent ? null : (g.vendor_id ?? null),
+          // backup → who the primary is ("backup to X")
+          // past   → who holds the line now ("you used to work here")
+          primary_vendor: role === "backup" ? (other?.name ?? null) : null,
+          primary_vendor_id: role === "backup" ? (other?.id ?? null) : null,
+          current_vendor: role === "past" ? (other?.name ?? null) : null,
+          current_vendor_id: role === "past" ? (other?.id ?? null) : null,
         });
       }
 
@@ -157,10 +173,8 @@ export function registerVendorSitesRoute(router, prisma) {
         vendor_id: vendorId,
         rows,
         // W-9 / COI / MSA / ACH are properties of the vendor, identical on
-        // every row, so they're lifted out of the table and sent once. Derived
-        // from a view row rather than re-queried, which is what guarantees the
-        // header strip and the sourcing grid always say the same thing.
-        compliance: vendorCompliance(gridRows, vendorId),
+        // every assignment row, so they're lifted out and sent once.
+        compliance: vendorCompliance(assignments[0]),
         summary: summarize(rows),
       });
     } catch (error) {
@@ -179,14 +193,8 @@ export function registerVendorSitesRoute(router, prisma) {
   });
 }
 
-/**
- * Returns null when this vendor holds no current line anywhere — the view
- * carries a vendor's documents only on rows where they're the active vendor.
- * The tab treats null as "look at the Compliance tab" rather than inventing
- * four empty circles, which would read as "nothing on file".
- */
-function vendorCompliance(gridRows, vendorId) {
-  const r = gridRows.find((g) => g.vendor_id === vendorId);
+/** Any of the vendor's assignment rows carries the vendor-level documents. */
+function vendorCompliance(r) {
   if (!r) return null;
   return {
     w9: r.has_w9,
@@ -200,6 +208,8 @@ function vendorCompliance(gridRows, vendorId) {
 const emptySummary = () => ({
   assignments: 0,
   current: 0,
+  primary: 0,
+  backup: 0,
   sites: 0,
   clients: 0,
   sourced: 0,
@@ -209,18 +219,22 @@ const emptySummary = () => ({
 
 function summarize(rows) {
   const current = rows.filter((r) => r.is_current);
+  // Money counts primary lines only: a backup isn't being paid for the line.
+  const primary = current.filter((r) => r.role === "primary");
   return {
     assignments: rows.length,
     current: current.length,
+    primary: primary.length,
+    backup: current.length - primary.length,
     sites: new Set(current.map((r) => r.site_id)).size,
     clients: new Set(current.map((r) => r.client_id).filter((v) => v != null))
       .size,
     sourced: current.filter((r) => r.is_sourced).length,
-    vendor_price_total: current.reduce(
+    vendor_price_total: primary.reduce(
       (a, r) => a + (r.vendor_price_total ?? 0),
       0,
     ),
-    client_price_total: current.reduce(
+    client_price_total: primary.reduce(
       (a, r) => a + (r.client_price_total ?? 0),
       0,
     ),
