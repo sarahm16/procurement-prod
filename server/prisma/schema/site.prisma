@@ -13,14 +13,14 @@ model Sites {
   sandbox          Boolean           @default(false)
   created_at       DateTime          @default(now())
 
-  status_id        Int?              @default(3)
-  
+  // No status column: whether a site is active is worked out from its
+  // contract sites — see view SiteStatus (vw_SiteStatus) in schema.prisma.
+
   ContractSites    ContractSites[]
   Attachments      SiteAttachments[]
   Contacts         SiteContacts[]
     WorkOrders       WorkOrders[]
 
-  Status           SiteStatuses?     @relation(fields: [status_id], references: [id])
   Client           Clients           @relation(fields: [client_id], references: [id], onUpdate: NoAction, map: "FK__Sites__client_id__40F9A68C")
   Company          Companies?        @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK__Sites__company_i__41EDCAC5")
 }
@@ -48,14 +48,4 @@ model SiteAttachments {
   uploaded_by  Int?
   created_at   DateTime @default(now())
   Site         Sites    @relation(fields: [site_id], references: [id])
-}
-
-model SiteStatuses {
-  id            Int             @id @default(autoincrement())
-  name          String          @db.VarChar(30)
-  description   String?         @db.VarChar(100)
-  color         String?         @db.VarChar(8)
-
-  ContractSites ContractSites[]
-  Sites         Sites[]
 }

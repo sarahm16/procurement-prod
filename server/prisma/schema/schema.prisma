@@ -3,9 +3,12 @@ generator client {
   previewFeatures = ["prismaSchemaFolder", "views"]
 }
 
+/// Only active and upcoming lines — removed and ended ones drop out.
 view SourcingGrid {
   contract_site_id        Int       @id
-  contract_site_status_id Int
+  line_status             String    // active | upcoming
+  starts_on               DateTime? @db.Date
+  ends_on                 DateTime? @db.Date
 
   site_id                 Int
   store                   String?
@@ -100,6 +103,48 @@ view SourcingGridVendors {
   completed_steps            Int       @db.TinyInt
 
   @@map("vw_SourcingGridVendors")
+}
+
+/// One row per contract site: its status, worked out from the contract's and
+/// the site's dates. Definition: prisma/sql/vw_ServiceLineStatus.sql
+view ServiceLineStatus {
+  contract_site_id Int       @id
+  site_id          Int
+  contract_id      Int
+  client_id        Int
+  service_line_id  Int
+  service_line     String
+  project_name     String
+  /// active | upcoming | removed | contract_ended
+  status           String
+  is_active        Boolean
+  /// active or upcoming — what the sourcing grid shows
+  is_current       Boolean
+  /// The later of the contract's and the site's start dates
+  starts_on        DateTime? @db.Date
+  /// The earlier of the two end dates (null = open-ended)
+  ends_on          DateTime? @db.Date
+
+  @@map("vw_ServiceLineStatus")
+}
+
+/// One row per site, rolled up from ServiceLineStatus.
+///   active    at least one line is active
+///   upcoming  nothing active yet, but at least one line is starting
+///   inactive  every line has ended or been removed
+///   none      the site has never been on a contract
+/// Definition: prisma/sql/vw_SiteStatus.sql
+view SiteStatus {
+  site_id         Int       @id
+  status          String
+  active_lines    Int
+  upcoming_lines  Int
+  ended_lines     Int
+  total_lines     Int
+  next_start_date DateTime? @db.Date
+  last_end_date   DateTime? @db.Date
+
+  @@map("vw_SiteStatus")
 }
 
 datasource db {

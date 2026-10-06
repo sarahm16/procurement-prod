@@ -1,35 +1,173 @@
--- prisma/sql/vw_SourcingGrid.sql
+-- Site status from contracts, not a dropdown.
 --
--- One row per contract site (site x service line) — the grain the sourcing
--- grid renders. Contract sites with no vendor still appear, with NULL vendor
--- columns and 0 flags, because an unsourced site is the most important row
--- on the page.
+-- Paste over the migration.sql created by
+--   npx prisma migrate dev --create-only --name derived_site_status
+-- then run `npx prisma migrate dev`.
 --
--- Only ACTIVE and UPCOMING lines (vw_ServiceLineStatus.is_current): a site
--- removed from a contract, or a contract that has ended, drops out of the
--- grid. Upcoming lines stay because vendors are sourced ahead of the start.
--- To show everything again, delete the WHERE at the bottom of `base`.
--- Needs vw_ServiceLineStatus to exist first.
+-- Everything runs in one transaction: if any step fails, none of it sticks,
+-- and the migration can simply be fixed and re-run.
 --
--- A contract site can have several live vendors: one primary plus backups.
--- The vendor and progress columns describe the PRIMARY (or, if none is
--- marked, the newest live assignment). vendor_count / backup_vendor_count say
--- how many others there are; vw_SourcingGridVendors lists them all.
---
--- Re-run after every `prisma db push`: push does not know this view exists,
--- and a column change silently invalidates it.
---
--- Drop-then-create rather than CREATE OR ALTER, which needs SQL Server 2016
--- SP1+. The GO separator is required: CREATE VIEW must be the first
--- statement in its batch.
---
--- Deliberately NOT schema-bound, so db push can still alter the underlying
--- tables. Add WITH SCHEMABINDING only if you later need an indexed view.
+-- GENERATED view bodies come from prisma/sql/vw_ServiceLineStatus.sql,
+-- vw_SiteStatus.sql and vw_SourcingGrid.sql (quotes doubled for EXEC).
 
-IF OBJECT_ID('dbo.vw_SourcingGrid', 'V') IS NOT NULL
-    DROP VIEW dbo.vw_SourcingGrid;
-GO
+BEGIN TRY
+BEGIN TRAN;
 
+-- 1. ContractSites gets dates instead of a status.
+--    Existing rows start when their contract started (all 51 are Active
+--    today, so nothing needs an end_date).
+ALTER TABLE [dbo].[ContractSites] ADD
+    [start_date] DATE NOT NULL CONSTRAINT [ContractSites_start_date_df] DEFAULT CURRENT_TIMESTAMP,
+    [end_date]   DATE NULL;
+
+-- EXEC because SQL Server compiles a batch up front and the new column
+-- doesn't exist yet at that point.
+EXEC(N'
+UPDATE cs
+SET    start_date = CAST(c.start_date AS date)
+FROM   ContractSites cs
+JOIN   Contracts c ON c.id = cs.contract_id;
+');
+
+CREATE NONCLUSTERED INDEX [ContractSites_site_id_idx]
+    ON [dbo].[ContractSites]([site_id]);
+
+-- 2. Remove the manual statuses. Constraint names are looked up rather than
+--    hard-coded, because some were created by hand with system names.
+DECLARE @sql NVARCHAR(MAX) = N'';
+
+-- foreign keys pointing at SiteStatuses
+SELECT @sql += N'ALTER TABLE ' + QUOTENAME(OBJECT_SCHEMA_NAME(fk.parent_object_id))
+             + N'.' + QUOTENAME(OBJECT_NAME(fk.parent_object_id))
+             + N' DROP CONSTRAINT ' + QUOTENAME(fk.name) + N';'
+FROM sys.foreign_keys fk
+WHERE fk.referenced_object_id = OBJECT_ID('dbo.SiteStatuses');
+
+-- defaults on the two status_id columns (DEFAULT 3 / DEFAULT 1)
+SELECT @sql += N'ALTER TABLE dbo.' + QUOTENAME(OBJECT_NAME(dc.parent_object_id))
+             + N' DROP CONSTRAINT ' + QUOTENAME(dc.name) + N';'
+FROM sys.default_constraints dc
+JOIN sys.columns col ON col.object_id = dc.parent_object_id
+                    AND col.column_id = dc.parent_column_id
+WHERE col.name = 'status_id'
+  AND dc.parent_object_id IN (OBJECT_ID('dbo.Sites'), OBJECT_ID('dbo.ContractSites'));
+
+-- any index on those columns
+SELECT @sql += N'DROP INDEX ' + QUOTENAME(i.name) + N' ON dbo.'
+             + QUOTENAME(OBJECT_NAME(i.object_id)) + N';'
+FROM sys.indexes i
+JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+JOIN sys.columns col ON col.object_id = ic.object_id AND col.column_id = ic.column_id
+WHERE col.name = 'status_id'
+  AND i.is_primary_key = 0
+  AND i.object_id IN (OBJECT_ID('dbo.Sites'), OBJECT_ID('dbo.ContractSites'));
+
+EXEC sp_executesql @sql;
+
+ALTER TABLE [dbo].[Sites]         DROP COLUMN [status_id];
+ALTER TABLE [dbo].[ContractSites] DROP COLUMN [status_id];
+DROP TABLE [dbo].[SiteStatuses];
+
+-- 3. Status views (ServiceLineStatus first; the others read it).
+IF OBJECT_ID('dbo.vw_ServiceLineStatus', 'V') IS NOT NULL DROP VIEW dbo.vw_ServiceLineStatus;
+EXEC(N'
+CREATE VIEW dbo.vw_ServiceLineStatus AS
+WITH today AS (
+    SELECT CAST(SYSDATETIMEOFFSET() AT TIME ZONE ''Pacific Standard Time'' AS date) AS d
+),
+x AS (
+    SELECT
+        cs.id                                   AS contract_site_id,
+        cs.site_id,
+        cs.contract_id,
+        ct.client_id,
+        ct.service_line_id,
+        sl.name                                 AS service_line,
+        ct.project_name,
+        cs.start_date                           AS site_start,
+        cs.end_date                             AS site_end,
+        CAST(ct.start_date AS date)             AS contract_start,
+        CASE WHEN ct.auto_renew = 1 THEN NULL
+             ELSE CAST(ct.end_date AS date) END AS contract_end,
+        today.d                                 AS today
+    FROM ContractSites cs
+    JOIN Contracts     ct ON ct.id = cs.contract_id
+    JOIN ServiceLines  sl ON sl.id = ct.service_line_id
+    CROSS JOIN today
+),
+y AS (
+    SELECT
+        x.*,
+        CASE WHEN x.site_start > x.contract_start
+             THEN x.site_start ELSE x.contract_start END AS starts_on,
+        CASE WHEN x.site_end IS NULL THEN x.contract_end
+             WHEN x.contract_end IS NULL THEN x.site_end
+             WHEN x.site_end < x.contract_end THEN x.site_end
+             ELSE x.contract_end END                     AS ends_on,
+        CASE
+            WHEN x.site_end < x.today
+             AND (x.contract_end IS NULL OR x.site_end < x.contract_end)
+                THEN ''removed''
+            WHEN x.contract_end < x.today THEN ''contract_ended''
+            WHEN x.site_end < x.today     THEN ''removed''
+            WHEN x.contract_start > x.today
+              OR x.site_start > x.today   THEN ''upcoming''
+            ELSE ''active''
+        END                                              AS status
+    FROM x
+)
+SELECT
+    contract_site_id,
+    site_id,
+    contract_id,
+    client_id,
+    service_line_id,
+    service_line,
+    project_name,
+    status,
+    CAST(CASE WHEN status = ''active'' THEN 1 ELSE 0 END AS BIT)               AS is_active,
+    CAST(CASE WHEN status IN (''active'', ''upcoming'') THEN 1 ELSE 0 END AS BIT) AS is_current,
+    starts_on,
+    ends_on
+FROM y
+');
+
+IF OBJECT_ID('dbo.vw_SiteStatus', 'V') IS NOT NULL DROP VIEW dbo.vw_SiteStatus;
+EXEC(N'
+CREATE VIEW dbo.vw_SiteStatus AS
+WITH counts AS (
+    SELECT
+        s.id                                                         AS site_id,
+        SUM(CASE WHEN l.status = ''active''   THEN 1 ELSE 0 END)       AS active_lines,
+        SUM(CASE WHEN l.status = ''upcoming'' THEN 1 ELSE 0 END)       AS upcoming_lines,
+        SUM(CASE WHEN l.status IN (''removed'', ''contract_ended'')
+                 THEN 1 ELSE 0 END)                                  AS ended_lines,
+        COUNT(l.contract_site_id)                                    AS total_lines,
+        MIN(CASE WHEN l.status = ''upcoming'' THEN l.starts_on END)    AS next_start_date,
+        MAX(CASE WHEN l.status IN (''removed'', ''contract_ended'')
+                 THEN l.ends_on END)                                 AS last_end_date
+    FROM Sites s
+    LEFT JOIN vw_ServiceLineStatus l ON l.site_id = s.id
+    GROUP BY s.id
+)
+SELECT
+    site_id,
+    CASE WHEN active_lines   > 0 THEN ''active''
+         WHEN upcoming_lines > 0 THEN ''upcoming''
+         WHEN total_lines    > 0 THEN ''inactive''
+         ELSE ''none'' END                         AS status,
+    ISNULL(active_lines, 0)                      AS active_lines,
+    ISNULL(upcoming_lines, 0)                    AS upcoming_lines,
+    ISNULL(ended_lines, 0)                       AS ended_lines,
+    total_lines,
+    next_start_date,
+    last_end_date
+FROM counts
+');
+
+-- 4. Sourcing grid: line status instead of status_id; active + upcoming only.
+IF OBJECT_ID('dbo.vw_SourcingGrid', 'V') IS NOT NULL DROP VIEW dbo.vw_SourcingGrid;
+EXEC(N'
 CREATE VIEW dbo.vw_SourcingGrid AS
 WITH base AS (
     SELECT
@@ -73,21 +211,21 @@ WITH base AS (
         CAST(CASE WHEN EXISTS (
             SELECT 1 FROM VendorComplianceDocuments d
              WHERE d.vendor_id = v.id
-               AND d.document_type = 'W-9'
+               AND d.document_type = ''W-9''
                AND d.date_completed IS NOT NULL
         ) THEN 1 ELSE 0 END AS BIT)                     AS has_w9,
 
         CAST(CASE WHEN EXISTS (
             SELECT 1 FROM VendorComplianceDocuments d
              WHERE d.vendor_id = v.id
-               AND d.document_type = 'MSA'
+               AND d.document_type = ''MSA''
                AND d.date_completed IS NOT NULL
         ) THEN 1 ELSE 0 END AS BIT)                     AS has_msa,
 
         CAST(CASE WHEN EXISTS (
             SELECT 1 FROM VendorComplianceDocuments d
              WHERE d.vendor_id = v.id
-               AND d.document_type = 'ACH'
+               AND d.document_type = ''ACH''
                AND d.date_completed IS NOT NULL
         ) THEN 1 ELSE 0 END AS BIT)                     AS has_ach,
 
@@ -159,7 +297,7 @@ WITH base AS (
           FROM VendorContractSites vcs
           JOIN VendorSiteStatuses vss ON vss.id = vcs.status_id
          WHERE vcs.contract_site_id = cs.id
-           AND vss.category <> 'closed'
+           AND vss.category <> ''closed''
          ORDER BY vcs.is_primary DESC, vcs.created_at DESC
     ) a
 
@@ -170,7 +308,7 @@ WITH base AS (
           FROM VendorContractSites vcs
           JOIN VendorSiteStatuses vss ON vss.id = vcs.status_id
          WHERE vcs.contract_site_id = cs.id
-           AND vss.category <> 'closed'
+           AND vss.category <> ''closed''
     ) vc
 
     LEFT JOIN Vendors v ON v.id = a.vendor_id
@@ -187,7 +325,7 @@ SELECT
     CAST(CASE WHEN b.exhibit_sent_at   IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS exhibit_sent,
     CAST(CASE WHEN b.exhibit_signed_at IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS exhibit_signed,
 
-    -- The grid's only status: everything done, or not.
+    -- The grid''s only status: everything done, or not.
     CAST(CASE WHEN b.vendor_id IS NOT NULL
                AND b.has_w9  = 1
                AND b.has_coi = 1
@@ -209,4 +347,15 @@ SELECT
         + CASE WHEN b.exhibit_sent_at   IS NOT NULL THEN 1 ELSE 0 END
         + CASE WHEN b.exhibit_signed_at IS NOT NULL THEN 1 ELSE 0 END
     AS TINYINT)                                          AS completed_steps
-FROM base b;
+FROM base b
+');
+
+COMMIT TRAN;
+END TRY
+BEGIN CATCH
+IF @@TRANCOUNT > 0
+BEGIN
+    ROLLBACK TRAN;
+END;
+THROW
+END CATCH

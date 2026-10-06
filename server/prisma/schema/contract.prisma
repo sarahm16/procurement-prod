@@ -27,22 +27,37 @@ model ServiceTypes {
   Contracts   Contracts[]
 }
 
+/// A site on a contract (= a site on a service line for that client).
+///
+/// There's no status column. A line's status is worked out from dates — see
+/// view ServiceLineStatus (vw_ServiceLineStatus) in schema.prisma:
+///   active          the contract is running and the site is on it today
+///   upcoming        the contract or the site's start_date is in the future
+///   removed         the site's end_date has passed; the contract carries on
+///   contract_ended  the contract's end_date has passed (auto_renew ignores it)
+///
+/// Removing a site from a contract = set end_date. Nothing else changes, and
+/// the row (with its vendors, rates and exhibits) stays as history.
+/// Putting it back = clear end_date (@@unique below means one row per pair).
+///
+/// Both dates are inclusive: end_date is the LAST day of service.
 model ContractSites {
   id                   Int                    @id @default(autoincrement())
   high_risk            Boolean                @default(false)
   site_id              Int
   contract_id          Int
   created_at           DateTime               @default(now())
-  status_id            Int                    @default(1)
+  start_date           DateTime               @default(now()) @db.Date
+  end_date             DateTime?              @db.Date
 
   Contract             Contracts              @relation(fields: [contract_id], references: [id], onUpdate: NoAction)
   Site                 Sites                  @relation(fields: [site_id], references: [id], onUpdate: NoAction)
-  Status               SiteStatuses           @relation(fields: [status_id], references: [id])
   
   ContractSiteServices ContractSiteServices[]
   VendorContractSites  VendorContractSites[]
 
   @@unique([contract_id, site_id])
+  @@index([site_id])
 }
 
 model ContractSiteServices {
@@ -55,4 +70,3 @@ model ContractSiteServices {
   ServiceLineService      ServiceLineServices   @relation(fields: [service_line_service_id], references: [id], onUpdate: NoAction)
   VendorServicePricing    VendorServicePricing[]
 }
-
