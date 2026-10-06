@@ -1,6 +1,15 @@
 import { useCallback, useMemo } from "react";
 import { Box, Typography, useTheme, alpha } from "@mui/material";
-import { DataGridPro } from "@mui/x-data-grid-pro";
+import * as XGrid from "@mui/x-data-grid-pro";
+import {
+  DataGridPro,
+  GridToolbarColumnsButton,
+  GridToolbarContainer,
+  GridToolbarDensitySelector,
+  GridToolbarExport,
+  GridToolbarFilterButton,
+  GridToolbarQuickFilter,
+} from "@mui/x-data-grid-pro";
 
 /**
  * ListDataGrid
@@ -14,11 +23,29 @@ import { DataGridPro } from "@mui/x-data-grid-pro";
  *     columns={columns}
  *     loading={isLoading}
  *     onRowClick={(row) => navigate(`/sites/${row.id}`)}
+ *     exportFileName="sites"
  *     initialState={{ pinnedColumns: { left: ["work_order_number"] } }}
  *   />
  *
+ * Every grid gets the standard toolbar — Columns, Filters, Density, Export —
+ * unless told otherwise:
+ *   toolbar={false}          no toolbar at all
+ *   toolbar={MyToolbar}      your own toolbar component instead
+ *   quickFilter              add the grid's own search box (off by default:
+ *                            most list pages already have one in ListToolbar,
+ *                            and two search boxes that filter differently
+ *                            would just confuse people)
+ *   exportFileName="sites"   CSV name; today's date is appended
+ *
  * All additional DataGridPro props are spread onto the grid.
  */
+
+/**
+ * MUI X v8 only renders the toolbar slot when `showToolbar` is set; v7 doesn't
+ * know the prop. `Toolbar` is a v8-only export, so its presence tells us which
+ * we're on — and upgrading from v7 to v8 won't silently hide every toolbar.
+ */
+const NEEDS_SHOW_TOOLBAR = "Toolbar" in XGrid;
 
 /**
  * Striping has to come from getRowClassName, not a CSS :nth-child rule. The
@@ -33,13 +60,49 @@ const defaultGetRowClassName = (params) =>
 /** Tree-data grouping column — the one holding the expand/collapse chevrons. */
 export const TREE_GROUP_FIELD = "__tree_data_group__";
 
+const todayStamp = () => {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
+/**
+ * The standard toolbar. Exported so a page that needs extra buttons can
+ * render it inside its own toolbar rather than rebuilding it.
+ *
+ * Receives `quickFilter` and `exportFileName` through slotProps.toolbar.
+ */
+export function ListGridToolbar({ quickFilter = false, exportFileName }) {
+  const fileName = exportFileName
+    ? `${exportFileName}-${todayStamp()}`
+    : `export-${todayStamp()}`;
+
+  return (
+    <GridToolbarContainer>
+      <GridToolbarColumnsButton />
+      <GridToolbarFilterButton />
+      <GridToolbarDensitySelector />
+      <GridToolbarExport
+        csvOptions={{ fileName, utf8WithBom: true }}
+        // Printing a 40-column grid is never what anyone wants.
+        printOptions={{ disableToolbarButton: true }}
+      />
+      <Box sx={{ flex: 1 }} />
+      {quickFilter && <GridToolbarQuickFilter debounceMs={250} />}
+    </GridToolbarContainer>
+  );
+}
+
 export default function ListDataGrid({
   rows = [],
   columns = [],
   loading = false,
   onRowClick,
   noRowsMessage = "No records found",
+  /** undefined → standard toolbar · false → none · component → yours */
   toolbar,
+  quickFilter = false,
+  exportFileName,
   // Density. The defaults are deliberately tighter than MUI's — these grids
   // are scanned, and fitting more rows on screen is the point.
   rowHeight = 38,
@@ -47,10 +110,18 @@ export default function ListDataGrid({
   striped = true,
   initialState,
   getRowClassName,
+  slotProps,
   ...rest
 }) {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
+
+  const toolbarSlot =
+    toolbar === false
+      ? null
+      : toolbar === undefined
+        ? ListGridToolbar
+        : toolbar;
 
   /**
    * Merged, not replaced. A caller passing `initialState={{ pinnedColumns }}`
@@ -221,11 +292,39 @@ export default function ListDataGrid({
             },
 
           // ── Toolbar ──────────────────────────────────────────────
-          "& .MuiDataGrid-toolbarContainer": {
-            padding: "8px 16px",
-            gap: 1,
+          // v7 renders .MuiDataGrid-toolbarContainer; v8's legacy container
+          // also carries .MuiDataGrid-toolbar. Style both the same.
+          "& .MuiDataGrid-toolbarContainer, & .MuiDataGrid-toolbar": {
+            padding: "6px 12px",
+            gap: 0.5,
+            minHeight: 44,
             borderBottom: `1px solid ${theme.palette.divider}`,
-            backgroundColor: "background.paper",
+            backgroundColor: theme.palette.background.paper,
+            "& .MuiButton-root": {
+              fontFamily: '"Barlow", sans-serif',
+              fontWeight: 600,
+              fontSize: "0.76rem",
+              letterSpacing: "0.02em",
+              textTransform: "none",
+              color: theme.palette.text.secondary,
+              borderRadius: 1.5,
+              px: 1.25,
+              minHeight: 30,
+              "&:hover": {
+                color: theme.palette.primary.main,
+                backgroundColor: alpha(theme.palette.primary.main, 0.06),
+              },
+              "& .MuiButton-startIcon svg": { fontSize: 18 },
+            },
+            // Filter count badge on the Filters button
+            "& .MuiBadge-badge": {
+              fontFamily: '"Barlow", sans-serif',
+              fontWeight: 700,
+            },
+            "& .MuiInputBase-root": {
+              fontFamily: '"Barlow", sans-serif',
+              fontSize: "0.82rem",
+            },
           },
 
           "& .MuiDataGrid-overlay": { backgroundColor: "transparent" },
@@ -260,8 +359,9 @@ export default function ListDataGrid({
         pagination
         pageSizeOptions={[25, 50, 100, 250]}
         initialState={mergedInitialState}
+        {...(NEEDS_SHOW_TOOLBAR && toolbarSlot ? { showToolbar: true } : {})}
         slots={{
-          toolbar: toolbar ?? null,
+          toolbar: toolbarSlot,
           noRowsOverlay: () => (
             <Box
               sx={{
@@ -283,6 +383,10 @@ export default function ListDataGrid({
               </Typography>
             </Box>
           ),
+        }}
+        slotProps={{
+          ...slotProps,
+          toolbar: { quickFilter, exportFileName, ...slotProps?.toolbar },
         }}
         sx={{ flex: 1, minHeight: 0 }}
         {...rest}

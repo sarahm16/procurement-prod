@@ -354,6 +354,7 @@ function Sites() {
         rows={filteredSites}
         columns={columns}
         loading={loading}
+        exportFileName="sites"
         onRowClick={(row) => navigate(`/sites/${row.id}`)}
       />
     </ListPageLayout>
