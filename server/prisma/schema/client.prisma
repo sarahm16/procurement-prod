@@ -1,3 +1,7 @@
+/// A client's status isn't stored — it's worked out from their contracts
+/// (view ClientStatus / vw_ClientStatus in schema.prisma). The one thing set
+/// by hand is a pause: paused_at set → "Paused", whatever the contracts say.
+/// Clearing it puts the client back on whatever the contracts say.
 model Clients {
   id                 Int                     @id(map: "PK__Clients__3213E83F189F30A2") @default(autoincrement())
   client             String                  @db.VarChar(100)
@@ -16,10 +20,13 @@ model Clients {
   brand              String                  @db.VarChar(4)
   legal_name         String                  @db.VarChar(100)
   sarlaccId          String?                 @db.VarChar(100)
-  status             String                  @db.VarChar(20)
+  paused_at          DateTime?               @db.Date
+  paused_reason      String?                 @db.VarChar(200)
+  paused_by          Int?
   sandbox            Boolean                 @default(false)
   created_at         DateTime                @default(now())
   tax_treatment      String                  @default("Billed separately") @db.VarChar(30)
+  PausedBy           Employees?              @relation("ClientPausedBy", fields: [paused_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   Contacts           ClientContacts[]
   ClientServiceLines ClientServiceLines[]
   SOWs               ClientServiceLineSOWs[]

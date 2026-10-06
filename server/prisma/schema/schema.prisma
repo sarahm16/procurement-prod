@@ -147,6 +147,48 @@ view SiteStatus {
   @@map("vw_SiteStatus")
 }
 
+/// One row per contract: its status from its own dates.
+/// Definition: prisma/sql/vw_ContractStatus.sql
+view ContractStatus {
+  contract_id     Int       @id
+  client_id       Int
+  service_line_id Int
+  service_line    String
+  project_name    String
+  /// active | upcoming | ended
+  status          String
+  is_active       Boolean
+  /// active or upcoming
+  is_current      Boolean
+  auto_renew      Boolean
+  starts_on       DateTime? @db.Date
+  /// null when open-ended or auto-renewing
+  ends_on         DateTime? @db.Date
+
+  @@map("vw_ContractStatus")
+}
+
+/// One row per client, rolled up from ContractStatus, with the manual pause
+/// on top.
+///   status           paused | active | upcoming | inactive | none
+///   contract_status  the same without the pause — what the contracts say
+/// Definition: prisma/sql/vw_ClientStatus.sql
+view ClientStatus {
+  client_id          Int       @id
+  status             String
+  contract_status    String
+  active_contracts   Int
+  upcoming_contracts Int
+  ended_contracts    Int
+  total_contracts    Int
+  next_start_date    DateTime? @db.Date
+  last_end_date      DateTime? @db.Date
+  paused_at          DateTime? @db.Date
+  paused_reason      String?
+
+  @@map("vw_ClientStatus")
+}
+
 datasource db {
   provider          = "sqlserver"
   url               = env("DATABASE_URL")

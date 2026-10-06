@@ -17,6 +17,7 @@ model Employees {
   MobilizationFeesCreated WorkOrderMobilizationFees[] @relation("MobilizationFeeCreatedBy")
   MobilizationFeesSent    WorkOrderMobilizationFees[] @relation("MobilizationFeeSentBy")
   MobilizationFeesPaid    WorkOrderMobilizationFees[] @relation("MobilizationFeePaidBy")
+  ClientsPaused           Clients[]                   @relation("ClientPausedBy")
 }
 
 model InternalRoles {
