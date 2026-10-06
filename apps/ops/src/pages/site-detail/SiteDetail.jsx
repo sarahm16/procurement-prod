@@ -1,6 +1,4 @@
 import { useParams } from "react-router-dom";
-import { createContext, useEffect, useState } from "react";
-import axios from "axios";
 
 // Layout Components
 import DetailPageHeader from "../../components/DetailPageLayout/DetailPageHeader";
@@ -12,7 +10,6 @@ import {
   useSiteDetails,
   useSiteNotes,
   useSiteActivity,
-  useSiteActions,
 } from "./SiteDetailProvider";
 
 // Tabs
@@ -20,6 +17,52 @@ import SiteDetailsTab from "./tabs/SiteDetailsTab/SiteDetailsTab";
 import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
 import SiteSourcingTab from "./tabs/SourcingTab/SiteSourcingTab";
 import SiteAttachmentsTab from "./tabs/AttachmentsTab/AttachmentsTab";
+
+/** "2026-11-01" → "Nov 1, 2026" without the timezone shifting the day. */
+const fmtDay = (ymd) =>
+  ymd
+    ? new Date(`${ymd}T00:00:00Z`).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      })
+    : null;
+
+/**
+ * The short note next to the status chip. The status itself is worked out
+ * from the site's service lines, so the note says which part of that matters:
+ * how many lines are running, when it starts, or when it stopped.
+ */
+function statusHint(d) {
+  const active = d?.active_lines ?? 0;
+  const total = active + (d?.upcoming_lines ?? 0) + (d?.ended_lines ?? 0);
+  switch (d?.status_key) {
+    case "active":
+      return total > active
+        ? `${active} of ${total} service lines active`
+        : null;
+    case "upcoming":
+      return d.next_start_date ? `Starts ${fmtDay(d.next_start_date)}` : null;
+    case "inactive":
+      return d.last_end_date
+        ? `Last service ended ${fmtDay(d.last_end_date)}`
+        : null;
+    default:
+      return null;
+  }
+}
+
+/** Address without "undefined, undefined" while the site is loading. */
+const formatAddress = (d) => {
+  const cityLine = [
+    d?.mailing_city,
+    [d?.mailing_state, d?.mailing_zipcode].filter(Boolean).join(" "),
+  ]
+    .filter(Boolean)
+    .join(", ");
+  return [d?.mailing_address, cityLine].filter(Boolean).join(", ") || null;
+};
 
 function SiteDetail() {
   const { id } = useParams();
@@ -35,19 +78,6 @@ function SiteDetailLayout() {
   const details = useSiteDetails();
   const notes = useSiteNotes();
   const activity = useSiteActivity();
-  const [statusOptions, setStatusOptions] = useState([]);
-
-  const { updateStatus } = useSiteActions();
-
-  const fetchSiteStatuses = async () => {
-    const response = await axios.get(`/api/sites/statuses`);
-    console.log("fetched statuses", response.data);
-    setStatusOptions(response.data);
-  };
-
-  useEffect(() => {
-    fetchSiteStatuses();
-  }, []);
 
   return (
     <DetailPageLayout
@@ -55,14 +85,17 @@ function SiteDetailLayout() {
         <DetailPageHeader
           title={`Site ${details?.store ?? ""}`}
           subtitle={`Details for ${details?.store ?? ""}`}
+          // Read-only: no statusOptions / onStatusChange. A site is Active
+          // when one of its service lines is — change the lines on the
+          // Details tab, not the site.
           status={details?.status}
-          statusOptions={statusOptions}
-          onStatusChange={updateStatus}
+          statusHint={statusHint(details)}
+          statusTooltip="Worked out from this site's service lines. To change it, add or remove the site on a contract from the Service Lines card."
           breadcrumbs={[
             { label: "Sites", href: "/sites" },
             { label: details?.store },
           ]}
-          address={`${details?.mailing_address}, ${details?.mailing_city}, ${details?.mailing_state} ${details?.mailing_zipcode}`}
+          address={formatAddress(details)}
         />
       }
       notes={notes}
@@ -86,7 +119,12 @@ function SiteDetailLayout() {
           content: (
             <ActivityLog
               entries={activity}
-              fieldLabels={{ status_id: "Status" }}
+              fieldLabels={{
+                status_id: "Status", // older entries, from the manual status
+                status: "Status",
+                service_line_status: "Service line",
+                service_line_dates: "Service line",
+              }}
             />
           ),
         },

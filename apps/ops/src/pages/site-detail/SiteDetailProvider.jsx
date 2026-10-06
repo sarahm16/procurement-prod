@@ -19,6 +19,23 @@ const AttachmentsContext = createContext();
 const SourcingContext = createContext();
 const ActionsContext = createContext();
 
+/**
+ * The site-level status fields GET /api/sites/:id and the line-dates endpoint
+ * both send. Kept in one list so a line change can refresh the header without
+ * a refetch.
+ */
+const SITE_STATUS_FIELDS = [
+  "status",
+  "status_name",
+  "status_color",
+  "status_key",
+  "active_lines",
+  "upcoming_lines",
+  "ended_lines",
+  "next_start_date",
+  "last_end_date",
+];
+
 export function SiteDetailProvider({ id, children }) {
   const { user } = useAuthenticatedUser();
 
@@ -35,16 +52,11 @@ export function SiteDetailProvider({ id, children }) {
     let active = true;
 
     axios.get(`/api/sites/${id}`).then(({ data }) => {
-      console.log(data);
       if (!active) return;
-      setDetails({
-        ...data,
-        status: data?.status || {
-          name: "Active",
-          id: 1,
-          description: "",
-        },
-      });
+      // No fallback status: the server always sends the real, derived one.
+      // (The old `{ name: "Active" }` default made sites with no contracts
+      // look active.)
+      setDetails(data);
       setActivity(data.activity_log);
       setNotes(data.notes);
       setContacts(data.contacts);
@@ -63,7 +75,6 @@ export function SiteDetailProvider({ id, children }) {
       setSourcingLoading(true);
       try {
         const { data } = await axios.get(`/api/sites/${id}/sourcing`);
-        console.log("fetched sourcing data", data);
         setSourcing(data);
       } catch (e) {
         loadedRef.current = false; // let it retry
@@ -98,31 +109,11 @@ export function SiteDetailProvider({ id, children }) {
   // Details Actions
   const updateDetails = useCallback(
     async (draft) => {
-      const { data } = await axios.put(`/api/sites/${id}`, {
+      await axios.put(`/api/sites/${id}`, {
         user_id: user?.id,
         changes: draft,
       });
       setDetails((prev) => ({ ...prev, ...draft }));
-    },
-    [id, user?.id],
-  );
-
-  const updateStatus = useCallback(
-    async (newStatus) => {
-      try {
-        const { data } = await axios.put(`/api/sites/${id}/status`, {
-          status_id: newStatus.id,
-          user_id: user?.id,
-        });
-        console.log("status update response", data);
-
-        setDetails((prev) => ({
-          ...prev,
-          ...data,
-        }));
-      } catch (error) {
-        console.error("Error updating status:", error);
-      }
     },
     [id, user?.id],
   );
@@ -142,13 +133,10 @@ export function SiteDetailProvider({ id, children }) {
 
   const updateContact = useCallback(
     async (contactId, draft) => {
-      const { data } = await axios.put(
-        `/api/sites/${id}/contacts/${contactId}`,
-        {
-          user_id: user?.id,
-          changes: draft,
-        },
-      );
+      await axios.put(`/api/sites/${id}/contacts/${contactId}`, {
+        user_id: user?.id,
+        changes: draft,
+      });
       setContacts((prev) =>
         prev.map((contact) =>
           contact.id === contactId ? { ...contact, ...draft } : contact,
@@ -172,27 +160,53 @@ export function SiteDetailProvider({ id, children }) {
     [id, user?.id],
   );
 
-  const updateServiceLineStatus = useCallback(
-    async (contractSiteId, statusId) => {
+  /**
+   * Take the site off a contract, change its last day, or put it back.
+   *
+   *   updateServiceLineDates(csId, { end_date: "2026-10-31" })  // remove
+   *   updateServiceLineDates(csId, { end_date: null })          // put back
+   *
+   * Statuses aren't set — they follow from the dates. The server answers with
+   * the line and the site's new rolled-up status, both patched in here so
+   * the card and the header update together. Throws on failure so the caller
+   * can show the error.
+   */
+  const updateServiceLineDates = useCallback(
+    async (contractSiteId, dates) => {
       const { data } = await axios.put(
-        `/api/sites/${id}/contract-sites/${contractSiteId}/status`,
-        { status_id: statusId, user_id: user?.id },
+        `/api/sites/${id}/contract-sites/${contractSiteId}`,
+        { ...dates, user_id: user?.id },
       );
-      console.log("update service line status", data);
-      // update local state — find the service line by contract_site_id, update its status
-      setDetails((prev) => ({
-        ...prev,
-        service_lines: prev.service_lines?.map((line) =>
-          line.contract_site_id === contractSiteId
-            ? {
-                ...line,
-                status: data.status,
-                status_id: data.status_id,
-                status_color: data.status_color,
-              }
-            : line,
-        ),
-      }));
+
+      setDetails((prev) => {
+        const siteFields = Object.fromEntries(
+          SITE_STATUS_FIELDS.filter((k) => k in (data.site ?? {})).map((k) => [
+            k,
+            data.site[k],
+          ]),
+        );
+        return {
+          ...prev,
+          ...siteFields,
+          service_lines: prev.service_lines?.map((line) =>
+            line.contract_site_id === contractSiteId && data.line
+              ? { ...line, ...data.line }
+              : line,
+          ),
+        };
+      });
+
+      // A removed line drops out of sourcing, so reload that tab next visit.
+      loadedRef.current = false;
+
+      // Pick up the new activity entry quietly; the change itself is already
+      // on screen, so a failure here isn't worth bothering anyone about.
+      axios
+        .get(`/api/sites/${id}`)
+        .then(({ data: fresh }) => setActivity(fresh.activity_log ?? []))
+        .catch(() => {});
+
+      return data;
     },
     [id, user?.id],
   );
@@ -203,8 +217,7 @@ export function SiteDetailProvider({ id, children }) {
       addContact,
       updateContact,
       deleteContact,
-      updateStatus,
-      updateServiceLineStatus,
+      updateServiceLineDates,
       loadSourcing,
       assignVendor,
     }),
@@ -213,8 +226,7 @@ export function SiteDetailProvider({ id, children }) {
       addContact,
       updateContact,
       deleteContact,
-      updateStatus,
-      updateServiceLineStatus,
+      updateServiceLineDates,
       loadSourcing,
       assignVendor,
     ],
@@ -255,4 +267,4 @@ export const useSiteContacts = () =>
 export const useSiteActions = () => useCtx(ActionsContext, "useSiteActions");
 export const useAttachments = () =>
   useCtx(AttachmentsContext, "useAttachments");
-const useSiteSourcing = () => useCtx(SourcingContext, "useSiteSourcing");
+export const useSiteSourcing = () => useCtx(SourcingContext, "useSiteSourcing");

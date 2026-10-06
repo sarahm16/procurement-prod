@@ -2,12 +2,12 @@ import { useState } from "react";
 import {
   Box,
   Typography,
-  Chip,
   Menu,
   MenuItem,
   Breadcrumbs,
   Link,
   Divider,
+  Tooltip,
   useTheme,
   alpha,
 } from "@mui/material";
@@ -16,7 +16,11 @@ import PlaceIcon from "@mui/icons-material/Place";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 // ─── StatusChip ───────────────────────────────────────────────────────────────
-function StatusChip({ status, statusOptions = [], onStatusChange }) {
+/**
+ * Editable when given `statusOptions`, read-only otherwise. A read-only chip
+ * can carry a `tooltip` explaining where the status comes from.
+ */
+function StatusChip({ status, statusOptions = [], onStatusChange, tooltip }) {
   const theme = useTheme();
   const [anchorEl, setAnchorEl] = useState(null);
   const isInteractive = statusOptions.length > 0;
@@ -30,62 +34,72 @@ function StatusChip({ status, statusOptions = [], onStatusChange }) {
     handleClose();
   };
 
-  return (
-    <>
+  const chip = (
+    <Box
+      onClick={handleOpen}
+      sx={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 0.5,
+        px: 1.25,
+        py: 0.4,
+        borderRadius: "6px",
+        border: `1.5px solid ${alpha(status?.color || "#000", 0.35)}`,
+        backgroundColor: alpha(status?.color || "#000", 0.08),
+        cursor: isInteractive ? "pointer" : "default",
+        transition: "all 0.15s ease",
+        "&:hover": isInteractive
+          ? {
+              backgroundColor: alpha(status?.color || "#000", 0.14),
+              borderColor: alpha(status?.color || "#000", 0.6),
+            }
+          : {},
+      }}
+    >
       <Box
-        onClick={handleOpen}
         sx={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 0.5,
-          px: 1.25,
-          py: 0.4,
-          borderRadius: "6px",
-          border: `1.5px solid ${alpha(status?.color || "#000", 0.35)}`,
-          backgroundColor: alpha(status?.color || "#000", 0.08),
-          cursor: isInteractive ? "pointer" : "default",
-          transition: "all 0.15s ease",
-          "&:hover": isInteractive
-            ? {
-                backgroundColor: alpha(status?.color || "#000", 0.14),
-                borderColor: alpha(status?.color || "#000", 0.6),
-              }
-            : {},
+          width: 6,
+          height: 6,
+          borderRadius: "50%",
+          backgroundColor: status?.color || "#000",
+          flexShrink: 0,
+        }}
+      />
+      <Typography
+        sx={{
+          fontFamily: '"Barlow", sans-serif',
+          fontWeight: 600,
+          fontSize: "0.7rem",
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: status?.color || "#000",
+          lineHeight: 1,
         }}
       >
-        <Box
+        {status?.name}
+      </Typography>
+      {isInteractive && (
+        <ExpandMoreIcon
           sx={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            backgroundColor: status?.color || "#000",
-            flexShrink: 0,
+            fontSize: 14,
+            color: status?.color || "#000",
+            opacity: 0.7,
+            ml: 0.25,
           }}
         />
-        <Typography
-          sx={{
-            fontFamily: '"Barlow", sans-serif',
-            fontWeight: 600,
-            fontSize: "0.7rem",
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: status?.color || "#000",
-            lineHeight: 1,
-          }}
-        >
-          {status?.name}
-        </Typography>
-        {isInteractive && (
-          <ExpandMoreIcon
-            sx={{
-              fontSize: 14,
-              color: status?.color || "#000",
-              opacity: 0.7,
-              ml: 0.25,
-            }}
-          />
-        )}
-      </Box>
+      )}
+    </Box>
+  );
+
+  return (
+    <>
+      {tooltip && !isInteractive ? (
+        <Tooltip title={tooltip} arrow enterDelay={300}>
+          {chip}
+        </Tooltip>
+      ) : (
+        chip
+      )}
 
       {isInteractive && (
         <Menu
@@ -193,9 +207,13 @@ function MetaItem({ label, value, icon }) {
  * Props:
  *   title         {string}    — primary heading
  *   subtitle      {string}    — secondary line (optional)
- *   status        {object}    — current status value
- *   statusOptions {object[]}  — selectable statuses
+ *   status        {object}    — current status value ({ name, color, ... })
+ *   statusOptions {object[]}  — selectable statuses; omit for a read-only chip
  *   onStatusChange{fn}        — called with new status object when changed
+ *   statusHint    {string}    — short note shown after the chip (optional),
+ *                               e.g. "2 of 3 service lines active"
+ *   statusTooltip {string}    — hover text on a read-only chip (optional),
+ *                               e.g. where the status comes from
  *   breadcrumbs   {Array}     — [{ label, href }]
  *   meta          {Array}     — [{ label, value, icon }]
  *   address       {string}    — optional address with pin icon
@@ -207,6 +225,8 @@ export default function DetailPageHeader({
   status,
   statusOptions = [],
   onStatusChange,
+  statusHint,
+  statusTooltip,
   breadcrumbs = [],
   meta = [],
   address,
@@ -327,7 +347,21 @@ export default function DetailPageHeader({
                 status={status}
                 statusOptions={statusOptions}
                 onStatusChange={onStatusChange}
+                tooltip={statusTooltip}
               />
+            )}
+
+            {status && statusHint && (
+              <Typography
+                sx={{
+                  fontFamily: '"Barlow", sans-serif',
+                  fontWeight: 500,
+                  fontSize: "0.78rem",
+                  color: "text.secondary",
+                }}
+              >
+                {statusHint}
+              </Typography>
             )}
           </Box>
 
