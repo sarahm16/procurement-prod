@@ -6,105 +6,123 @@ import axios from "axios";
 import ListDataGrid from "../../components/ListPageLayout/ListDataGrid";
 import ListPageLayout from "../../components/ListPageLayout/ListPageLayout";
 import ListToolbar from "../../components/ListPageLayout/ListToolbar";
-
-// MUI Components
-import Chip from "@mui/material/Chip";
-import Box from "@mui/material/Box";
+import ServiceLineChips, {
+  StatusCell,
+} from "../../components/ServiceLineChips";
 
 const CLIENT_ENTITY_TYPE_ID = 3; // whatever your Clients entity type id is
 
-const statusColors = {
-  Active: "#16a34a",
-  Paused: "#d97706",
-  Pending: "#2563eb",
-  Archived: "#6b7280",
+/**
+ * GET /api/clients returns, per client:
+ *   status: { key, name, color }   — worked out from contracts, or Paused
+ *   status_key, status_name, status_color, contract_status_name,
+ *   paused_at, paused_reason, paused_by_name
+ *   service_lines: [{ id, name }]  — the lines the client is set up for
+ */
+
+const STATUS_OPTIONS = [
+  { value: "active", label: "Active" },
+  { value: "upcoming", label: "Upcoming" },
+  { value: "paused", label: "Paused" },
+  { value: "inactive", label: "Inactive" },
+  { value: "none", label: "No contracts" },
+];
+
+/** Char(n) columns come back space-padded; treat "" as missing. */
+const clean = (v) => (typeof v === "string" ? v.trim() || null : (v ?? null));
+
+/** "2026-10-06" → "Oct 6, 2026" without the timezone shifting the day. */
+const fmtDay = (ymd) =>
+  ymd
+    ? new Date(`${ymd}T00:00:00Z`).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      })
+    : "";
+
+/** Hover text on the status: why a client is paused, or what's coming. */
+const statusHint = (row) => {
+  if (row.status_key === "paused") {
+    const since = row.paused_at ? ` since ${fmtDay(row.paused_at)}` : "";
+    const by = row.paused_by_name ? ` by ${row.paused_by_name}` : "";
+    const reason = row.paused_reason ? ` — ${row.paused_reason}` : "";
+    return `Paused${since}${by}${reason}. Contracts: ${row.contract_status_name ?? "—"}.`;
+  }
+  if (row.status_key === "upcoming" && row.next_start_date)
+    return `First contract starts ${fmtDay(row.next_start_date)}`;
+  if (row.status_key === "inactive" && row.last_end_date)
+    return `Last contract ended ${fmtDay(row.last_end_date)}`;
+  return null;
 };
 
-// The static columns that always exist
+const toChipLines = (row) =>
+  (row.service_lines ?? [])
+    .filter((sl) => sl?.name)
+    .map((sl) => ({ key: sl.id, name: sl.name }));
+
+// Same order as the sites list: name, address parts, status, service lines.
 const baseColumns = [
-  { field: "client", headerName: "Client", flex: 1.5, minWidth: 180 },
+  { field: "client", headerName: "Client", flex: 1.2, minWidth: 160 },
   {
-    field: "location",
-    headerName: "Location",
-    flex: 1.2,
-    minWidth: 160,
-    valueGetter: (value, row) => {
-      const city = row.mailing_city?.trim();
-      const state = row.mailing_state?.trim();
-      if (city && state) return `${city}, ${state}`;
-      return city || state || "—";
-    },
+    field: "mailing_address",
+    headerName: "Address",
+    flex: 1.3,
+    minWidth: 170,
+    valueGetter: (value, row) =>
+      [clean(value), clean(row.mailing_address2)].filter(Boolean).join(", ") ||
+      "—",
+  },
+  {
+    field: "mailing_city",
+    headerName: "City",
+    flex: 0.8,
+    minWidth: 110,
+    valueGetter: (value) => clean(value) ?? "—",
+  },
+  {
+    field: "mailing_state",
+    headerName: "State",
+    width: 80,
+    valueGetter: (value) => clean(value) ?? "—",
+  },
+  {
+    field: "mailing_zipcode",
+    headerName: "Zip",
+    width: 90,
+    valueGetter: (value) => clean(value) ?? "—",
+  },
+  {
+    field: "status_key",
+    headerName: "Status",
+    width: 130,
+    // Sort/export by the label, not the key (or the status object).
+    valueGetter: (value, row) => row.status_name ?? "No contracts",
+    renderCell: (params) => (
+      <StatusCell
+        name={params.value}
+        color={params.row.status_color}
+        hint={statusHint(params.row)}
+      />
+    ),
   },
   {
     field: "service_lines",
     headerName: "Service Lines",
-    flex: 1.5,
-    minWidth: 220,
+    flex: 1.8,
+    minWidth: 280,
     sortable: false,
-    renderCell: (params) => {
-      const lines = params.row.service_lines || [];
-      if (lines.length === 0) return "—";
-      const visible = lines.slice(0, 2);
-      const remaining = lines.length - visible.length;
-      return (
-        <Box
-          sx={{
-            display: "flex",
-            gap: 0.5,
-            alignItems: "center",
-            flexWrap: "nowrap",
-            overflow: "hidden",
-          }}
-        >
-          {visible.map((line) => (
-            <Chip
-              key={line.id}
-              label={line.name}
-              size="small"
-              variant="outlined"
-              sx={{ height: 22, fontSize: "0.7rem" }}
-            />
-          ))}
-          {remaining > 0 && (
-            <Chip
-              label={`+${remaining}`}
-              size="small"
-              sx={{ height: 22, fontSize: "0.7rem", fontWeight: 600 }}
-            />
-          )}
-        </Box>
-      );
-    },
+    // Sorting/filtering/export need a primitive, not the object array.
+    valueGetter: (value, row) =>
+      toChipLines(row)
+        .map((l) => l.name)
+        .join(", "),
+    renderCell: (params) => (
+      <ServiceLineChips lines={toChipLines(params.row)} />
+    ),
   },
 ];
-
-const statusColumn = {
-  field: "status",
-  headerName: "Status",
-  flex: 0.8,
-  minWidth: 120,
-  renderCell: (params) => {
-    const status = params.row.status;
-    if (!status) return "—";
-    const color = statusColors[status] || "#6b7280";
-    return (
-      <Chip
-        label={status}
-        size="small"
-        sx={{
-          backgroundColor: color + "22",
-          color,
-          borderColor: color + "55",
-          border: "1px solid",
-          fontWeight: 600,
-          fontSize: "0.7rem",
-          letterSpacing: "0.04em",
-          height: 22,
-        }}
-      />
-    );
-  },
-};
 
 function Clients() {
   const navigate = useNavigate();
@@ -116,7 +134,6 @@ function Clients() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [serviceLineFilter, setServiceLineFilter] = useState("all");
-  const [roleFilter, setRoleFilter] = useState("all");
 
   const fetchClients = async () => {
     setLoading(true);
@@ -125,10 +142,8 @@ function Clients() {
         axios.get("/api/clients"),
         axios.get(`/api/roleEntityTypes/${CLIENT_ENTITY_TYPE_ID}`), // applicable roles
       ]);
-      console.log("Fetched clients:", clientsRes.data);
-      console.log("Fetched client roles:", rolesRes.data);
-      setClients(clientsRes.data);
-      setClientRoles(rolesRes.data);
+      setClients(Array.isArray(clientsRes.data) ? clientsRes.data : []);
+      setClientRoles(Array.isArray(rolesRes.data) ? rolesRes.data : []);
     } catch (error) {
       console.error("Error fetching clients:", error);
     }
@@ -139,7 +154,7 @@ function Clients() {
     fetchClients();
   }, []);
 
-  // Build one column per applicable role, generated at runtime.
+  // One column per applicable role, after the shared columns.
   const roleColumns = useMemo(
     () =>
       clientRoles.map((role) => ({
@@ -159,33 +174,29 @@ function Clients() {
     [clientRoles],
   );
 
-  // Assemble: base columns, then the dynamic role columns, then status last.
   const columns = useMemo(
-    () => [...baseColumns, ...roleColumns, statusColumn],
+    () => [...baseColumns, ...roleColumns],
     [roleColumns],
   );
 
   const onRowClick = (row) => navigate(`/clients/${row.id}`);
 
-  // filter option lists derived from data
-  const statusOptions = useMemo(
-    () =>
-      [...new Set(clients.map((c) => c.status).filter(Boolean))].map((s) => ({
-        value: s,
-        label: s,
-      })),
-    [clients],
-  );
   const serviceLineOptions = useMemo(() => {
     const map = new Map();
     for (const c of clients)
       for (const sl of c.service_lines || []) map.set(sl.id, sl.name);
-    return [...map.entries()].map(([value, label]) => ({ value, label }));
+    return [...map.entries()]
+      .sort((a, b) => String(a[1]).localeCompare(String(b[1])))
+      .map(([value, label]) => ({ value, label }));
   }, [clients]);
+
+  // Value is internal_role_id — what role_assignments carry. (It used to be
+  // the RoleEntityTypes row id, which never matched, so the filter emptied
+  // the grid.)
   const roleOptions = useMemo(
     () =>
       clientRoles.map((r) => ({
-        value: r.id,
+        value: r.internal_role_id,
         label: r.InternalRole?.name ?? "Role",
       })),
     [clientRoles],
@@ -195,11 +206,23 @@ function Clients() {
     const q = search.trim().toLowerCase();
     return clients.filter((c) => {
       if (q) {
-        const hay =
-          `${c.client ?? ""} ${c.mailing_city ?? ""} ${c.mailing_state ?? ""}`.toLowerCase();
+        const hay = [
+          c.client,
+          c.legal_name,
+          c.mailing_address,
+          c.mailing_address2,
+          c.mailing_city,
+          clean(c.mailing_state),
+          c.mailing_zipcode,
+          ...(c.service_lines ?? []).map((sl) => sl.name),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
         if (!hay.includes(q)) return false;
       }
-      if (statusFilter !== "all" && c.status !== statusFilter) return false;
+      if (statusFilter !== "all" && (c.status_key ?? "none") !== statusFilter)
+        return false;
       if (
         serviceLineFilter !== "all" &&
         !(c.service_lines || []).some(
@@ -207,16 +230,10 @@ function Clients() {
         )
       )
         return false;
-      if (
-        roleFilter !== "all" &&
-        !(c.role_assignments || []).some(
-          (a) => a.internal_role_id === Number(roleFilter),
-        )
-      )
-        return false;
+
       return true;
     });
-  }, [clients, search, statusFilter, serviceLineFilter, roleFilter]);
+  }, [clients, search, statusFilter, serviceLineFilter]);
 
   return (
     <ListPageLayout
@@ -224,14 +241,8 @@ function Clients() {
         <ListToolbar
           search={search}
           onSearchChange={setSearch}
-          searchPlaceholder="Search clients…"
+          searchPlaceholder="Search clients, addresses, zip codes…"
           filters={[
-            {
-              label: "Role",
-              value: roleFilter,
-              onChange: setRoleFilter,
-              options: roleOptions,
-            },
             {
               label: "Service Line",
               value: serviceLineFilter,
@@ -242,7 +253,7 @@ function Clients() {
               label: "Status",
               value: statusFilter,
               onChange: setStatusFilter,
-              options: statusOptions,
+              options: STATUS_OPTIONS,
             },
           ]}
         />
@@ -253,6 +264,7 @@ function Clients() {
         columns={columns}
         onRowClick={onRowClick}
         loading={loading}
+        exportFileName="clients"
       />
     </ListPageLayout>
   );

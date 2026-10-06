@@ -22,9 +22,36 @@ const ActivityContext = createContext();
 const ActionsContext = createContext();
 const SitesContext = createContext();
 
+/**
+ * The client's status fields from the API. Status is worked out from the
+ * client's contracts (or Paused, set by hand), so it's read-only here —
+ * pause/unpause patch these from the server's answer.
+ */
+const STATUS_FIELDS = [
+  "status",
+  "status_key",
+  "status_name",
+  "status_color",
+  "contract_status_key",
+  "contract_status_name",
+  "active_contracts",
+  "upcoming_contracts",
+  "ended_contracts",
+  "total_contracts",
+  "next_start_date",
+  "last_end_date",
+  "is_paused",
+  "paused_at",
+  "paused_reason",
+  "paused_by_name",
+];
+const pickStatus = (data) =>
+  Object.fromEntries(
+    STATUS_FIELDS.filter((k) => k in (data ?? {})).map((k) => [k, data[k]]),
+  );
+
 export function ClientDetailProvider({ id, children }) {
   const { user } = useAuthenticatedUser();
-  console.log("authenticated user in ClientDetailProvider:", user);
 
   const [details, setDetails] = useState({});
   const [contacts, setContacts] = useState([]);
@@ -40,14 +67,13 @@ export function ClientDetailProvider({ id, children }) {
     axios
       .get(`/api/clients/${id}`)
       .then(({ data }) => {
-        console.log("ClientDetailProvider data:", data);
         if (!active) return;
         setNotes(data.notes);
 
         // Details Tab
         setDetails({
           id: data.id,
-          status: data.status,
+          ...pickStatus(data),
           client: data.client,
           legal_name: data.legal_name,
           mailing_address: data.mailing_address,
@@ -63,7 +89,7 @@ export function ClientDetailProvider({ id, children }) {
         });
         setActivity(data.activity_log);
         setContacts(data.contacts);
-        setServiceLines(data.service_lines);
+        setServiceLines(data.service_lines ?? []);
       })
       .catch((e) => console.error("Error fetching client details:", e));
 
@@ -131,7 +157,51 @@ export function ClientDetailProvider({ id, children }) {
     [id, user?.id],
   );
 
-  // TO DO: Create Service Lines actions
+  // Service Lines Actions
+  //
+  // Both answer with the client's full list of lines (with statuses), so the
+  // card just takes what comes back. They throw on failure — the card shows
+  // the server's message (e.g. "Snow has 2 active contracts. End them first.").
+  const addServiceLine = useCallback(
+    async (serviceLineId) => {
+      const { data } = await axios.post(`/api/clients/${id}/service-lines`, {
+        service_line_id: serviceLineId,
+        user_id: user?.id,
+      });
+      setServiceLines(data);
+    },
+    [id, user?.id],
+  );
+
+  const removeServiceLine = useCallback(
+    async (serviceLineId) => {
+      const { data } = await axios.delete(
+        `/api/clients/${id}/service-lines/${serviceLineId}`,
+        { data: { user_id: user?.id } },
+      );
+      setServiceLines(data);
+    },
+    [id, user?.id],
+  );
+
+  // Pause Actions — the one status set by hand. Throw on failure.
+  const pauseClient = useCallback(
+    async (reason) => {
+      const { data } = await axios.put(`/api/clients/${id}/pause`, {
+        reason,
+        user_id: user?.id,
+      });
+      setDetails((prev) => ({ ...prev, ...pickStatus(data) }));
+    },
+    [id, user?.id],
+  );
+
+  const unpauseClient = useCallback(async () => {
+    const { data } = await axios.put(`/api/clients/${id}/unpause`, {
+      user_id: user?.id,
+    });
+    setDetails((prev) => ({ ...prev, ...pickStatus(data) }));
+  }, [id, user?.id]);
 
   // Notes Actions
   const addNote = useCallback(async (note) => {
@@ -142,7 +212,6 @@ export function ClientDetailProvider({ id, children }) {
   // Contracts Actions
   const loadContracts = useCallback(async () => {
     const { data } = await axios.get(`/api/clients/${id}/contracts`);
-    console.log("Loaded contracts for client in context provider:", data);
     setContracts(data);
   }, [id]);
 
@@ -179,7 +248,12 @@ export function ClientDetailProvider({ id, children }) {
       addContact,
       updateContact,
       deleteContact,
-      // TO DO: Add Service Lines actions
+      // Service Lines actions
+      addServiceLine,
+      removeServiceLine,
+      // Status
+      pauseClient,
+      unpauseClient,
 
       // Contracts actions
       loadContracts,
@@ -195,6 +269,10 @@ export function ClientDetailProvider({ id, children }) {
     addContact,
     updateContact,
     deleteContact,
+    addServiceLine,
+    removeServiceLine,
+    pauseClient,
+    unpauseClient,
     loadContracts,
     updateContract,
     loadSites,
