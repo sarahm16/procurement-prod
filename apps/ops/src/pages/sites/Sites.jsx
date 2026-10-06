@@ -1,46 +1,97 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { Box, Chip, Typography } from "@mui/material";
+import { Box, Chip, Tooltip, Typography, alpha } from "@mui/material";
 
 import ListDataGrid from "../../components/ListPageLayout/ListDataGrid";
 import ListPageLayout from "../../components/ListPageLayout/ListPageLayout";
 import ListToolbar from "../../components/ListPageLayout/ListToolbar";
+// Adjust this path to wherever constants/ lives relative to this page.
+import { getServiceLineConfig } from "../../*/constants/serviceLineConfig";
 
 /**
- * The sites API returns `service_lines` as an array of objects:
- *   { contract_site_id, service_line, status_id, status, status_color }
+ * GET /api/sites returns, per site:
+ *   service_lines: [{ contract_site_id, service_line, status, status_color,
+ *                     status_key, is_current, starts_on, ends_on }]
+ *   status: { key, name, color }   — the site's rolled-up status
  *
- * It used to return an array of plain strings. Normalizing both shapes here
- * means the grid renders correctly regardless of which version of the API is
- * answering, and guarantees we never hand React an object as a child (the
- * "Objects are not valid as a React child" error).
+ * Line and site statuses are worked out server-side from contract dates
+ * (vw_ServiceLineStatus / vw_SiteStatus). This page only displays them.
  */
+
+/** "2026-11-01" → "Nov 1, 2026" without the timezone shifting the day. */
+const fmtDay = (ymd) =>
+  ymd
+    ? new Date(`${ymd}T00:00:00Z`).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      })
+    : "";
+
+/** Char(n) columns come back space-padded; treat "" as missing. */
+const clean = (v) => (typeof v === "string" ? v.trim() || null : (v ?? null));
+
 const normalizeServiceLine = (sl) => {
   if (sl == null) return null;
-
-  if (typeof sl === "string") {
-    return {
-      contract_site_id: null,
-      service_line: sl,
-      status: null,
-      status_color: null,
-    };
-  }
-
-  const name = sl.service_line ?? sl.name ?? null;
+  const name = typeof sl === "string" ? sl : (sl.service_line ?? sl.name);
   if (!name) return null;
-
   return {
     contract_site_id: sl.contract_site_id ?? null,
     service_line: String(name),
     status: sl.status ?? null,
-    status_color: sl.status_color ?? null,
+    status_key: sl.status_key ?? "active",
+    // Older API shapes had no is_current; treat those lines as current.
+    is_current: sl.is_current ?? true,
+    starts_on: sl.starts_on ?? null,
+    ends_on: sl.ends_on ?? null,
   };
 };
 
-const getServiceLines = (site) =>
-  (site?.service_lines ?? []).map(normalizeServiceLine).filter(Boolean);
+/** Lines the site has TODAY (active + upcoming). Removed/ended are hidden. */
+const getCurrentLines = (site) =>
+  (site?.service_lines ?? [])
+    .map(normalizeServiceLine)
+    .filter((sl) => sl && sl.is_current);
+
+const lineTooltip = (sl) => {
+  if (sl.status_key === "upcoming") return `Starts ${fmtDay(sl.starts_on)}`;
+  if (sl.ends_on) return `Active · last day ${fmtDay(sl.ends_on)}`;
+  return "Active";
+};
+
+const SITE_STATUS_OPTIONS = [
+  { value: "active", label: "Active" },
+  { value: "upcoming", label: "Upcoming" },
+  { value: "inactive", label: "Inactive" },
+  { value: "none", label: "No contracts" },
+];
+
+/** One service line chip: the line's own icon and colour from the config. */
+function LineChip({ line }) {
+  const { color, icon: Icon } = getServiceLineConfig(line.service_line);
+  const upcoming = line.status_key === "upcoming";
+  return (
+    <Tooltip title={lineTooltip(line)} arrow enterDelay={300}>
+      <Chip
+        icon={<Icon />}
+        label={line.service_line}
+        size="small"
+        sx={{
+          height: 24,
+          fontWeight: 600,
+          fontSize: "0.72rem",
+          color: "text.primary",
+          bgcolor: alpha(color, upcoming ? 0.05 : 0.12),
+          border: `1px ${upcoming ? "dashed" : "solid"} ${alpha(color, 0.45)}`,
+          opacity: upcoming ? 0.85 : 1,
+          "& .MuiChip-icon": { color, fontSize: 15, ml: 0.75 },
+        }}
+      />
+    </Tooltip>
+  );
+}
 
 function Sites() {
   const navigate = useNavigate();
@@ -50,6 +101,7 @@ function Sites() {
   const [search, setSearch] = useState("");
   const [clientFilter, setClientFilter] = useState("all");
   const [serviceLineFilter, setServiceLineFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   useEffect(() => {
     setLoading(true);
@@ -74,11 +126,11 @@ function Sites() {
       .map(([value, label]) => ({ value, label }));
   }, [sites]);
 
-  // Distinct service line NAMES — pulled off the normalized objects.
+  // Distinct service line names among CURRENT lines.
   const serviceLineOptions = useMemo(() => {
     const set = new Set();
     for (const s of sites) {
-      for (const sl of getServiceLines(s)) set.add(sl.service_line);
+      for (const sl of getCurrentLines(s)) set.add(sl.service_line);
     }
     return [...set].sort().map((name) => ({ value: name, label: name }));
   }, [sites]);
@@ -87,11 +139,22 @@ function Sites() {
     const q = search.trim().toLowerCase();
     return sites.filter((s) => {
       if (q) {
-        const lines = getServiceLines(s)
+        const lines = getCurrentLines(s)
           .map((sl) => sl.service_line)
           .join(" ");
-        const hay =
-          `${s.store ?? ""} ${s.client ?? ""} ${s.mailing_city ?? ""} ${s.mailing_state ?? ""} ${lines}`.toLowerCase();
+        const hay = [
+          s.store,
+          s.client,
+          s.mailing_address,
+          s.mailing_address2,
+          s.mailing_city,
+          clean(s.mailing_state),
+          s.mailing_zipcode,
+          lines,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
         if (!hay.includes(q)) return false;
       }
 
@@ -100,13 +163,16 @@ function Sites() {
 
       if (
         serviceLineFilter !== "all" &&
-        !getServiceLines(s).some((sl) => sl.service_line === serviceLineFilter)
+        !getCurrentLines(s).some((sl) => sl.service_line === serviceLineFilter)
       )
+        return false;
+
+      if (statusFilter !== "all" && (s.status_key ?? "none") !== statusFilter)
         return false;
 
       return true;
     });
-  }, [sites, search, clientFilter, serviceLineFilter]);
+  }, [sites, search, clientFilter, serviceLineFilter, statusFilter]);
 
   const columns = useMemo(
     () => [
@@ -114,54 +180,108 @@ function Sites() {
         field: "store",
         headerName: "Site",
         flex: 1,
-        minWidth: 120,
+        minWidth: 130,
         valueGetter: (value) => value || "Unnamed site",
       },
       {
         field: "client",
         headerName: "Client",
-        flex: 1.2,
-        minWidth: 150,
+        flex: 1,
+        minWidth: 140,
         // `client` is serialized to a plain string server-side; fall back
         // gracefully if an object ever slips through.
         valueGetter: (value) =>
           typeof value === "string" ? value || "—" : (value?.client ?? "—"),
       },
       {
-        field: "location",
-        headerName: "Location",
-        flex: 1.2,
-        minWidth: 160,
-        valueGetter: (value, row) => {
-          const city = row.mailing_city?.trim();
-          const state = row.mailing_state?.trim(); // Char(50) — trim the padding
-          if (city && state) return `${city}, ${state}`;
-          return city || state || "—";
+        field: "mailing_address",
+        headerName: "Address",
+        flex: 1.3,
+        minWidth: 170,
+        valueGetter: (value, row) =>
+          [clean(value), clean(row.mailing_address2)]
+            .filter(Boolean)
+            .join(", ") || "—",
+      },
+      {
+        field: "mailing_city",
+        headerName: "City",
+        flex: 0.8,
+        minWidth: 110,
+        valueGetter: (value) => clean(value) ?? "—",
+      },
+      {
+        field: "mailing_state",
+        headerName: "State",
+        width: 80,
+        valueGetter: (value) => clean(value) ?? "—",
+      },
+      {
+        field: "mailing_zipcode",
+        headerName: "Zip",
+        width: 90,
+        valueGetter: (value) => clean(value) ?? "—",
+      },
+      {
+        field: "status_key",
+        headerName: "Status",
+        width: 130,
+        // Sort/export by the label, not the key.
+        valueGetter: (value, row) => row.status_name ?? "No contracts",
+        renderCell: (params) => {
+          const color = params.row.status_color ?? "#9CA3AF";
+          return (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.75,
+                height: "100%",
+              }}
+            >
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  bgcolor: color,
+                  flexShrink: 0,
+                }}
+              />
+              <Typography sx={{ fontSize: "0.8rem", fontWeight: 500 }}>
+                {params.value}
+              </Typography>
+            </Box>
+          );
         },
       },
       {
         field: "service_lines",
         headerName: "Service Lines",
-        flex: 1.6,
-        minWidth: 240,
+        flex: 1.8,
+        minWidth: 280,
         sortable: false,
         // Sorting/filtering/export need a primitive, not the object array.
         valueGetter: (value, row) =>
-          getServiceLines(row)
+          getCurrentLines(row)
             .map((sl) => sl.service_line)
             .join(", "),
         renderCell: (params) => {
-          const lines = getServiceLines(params.row);
+          const lines = getCurrentLines(params.row);
 
           if (lines.length === 0)
             return (
-              <Typography sx={{ color: "text.disabled", fontSize: "0.8rem" }}>
-                —
-              </Typography>
+              <Box
+                sx={{ display: "flex", alignItems: "center", height: "100%" }}
+              >
+                <Typography sx={{ color: "text.disabled", fontSize: "0.8rem" }}>
+                  —
+                </Typography>
+              </Box>
             );
 
           const visible = lines.slice(0, 3);
-          const extra = lines.length - visible.length;
+          const rest = lines.slice(3);
 
           return (
             <Box
@@ -169,32 +289,28 @@ function Sites() {
                 display: "flex",
                 gap: 0.5,
                 alignItems: "center",
+                height: "100%",
                 flexWrap: "nowrap",
                 overflow: "hidden",
               }}
             >
               {visible.map((sl, i) => (
-                <Chip
+                <LineChip
                   key={sl.contract_site_id ?? `${sl.service_line}-${i}`}
-                  label={sl.service_line}
-                  title={sl.status ?? undefined}
-                  size="small"
-                  variant="outlined"
-                  sx={{
-                    height: 22,
-                    ...(sl.status_color && {
-                      borderColor: sl.status_color,
-                      color: sl.status_color,
-                    }),
-                  }}
+                  line={sl}
                 />
               ))}
-              {extra > 0 && (
-                <Chip
-                  label={`+${extra}`}
-                  size="small"
-                  sx={{ height: 22, fontWeight: 600 }}
-                />
+              {rest.length > 0 && (
+                <Tooltip
+                  title={rest.map((sl) => sl.service_line).join(", ")}
+                  arrow
+                >
+                  <Chip
+                    label={`+${rest.length}`}
+                    size="small"
+                    sx={{ height: 24, fontWeight: 600, fontSize: "0.72rem" }}
+                  />
+                </Tooltip>
               )}
             </Box>
           );
@@ -210,7 +326,7 @@ function Sites() {
         <ListToolbar
           search={search}
           onSearchChange={setSearch}
-          searchPlaceholder="Search sites…"
+          searchPlaceholder="Search sites, addresses, zip codes…"
           filters={[
             {
               label: "Client",
@@ -223,6 +339,12 @@ function Sites() {
               value: serviceLineFilter,
               onChange: setServiceLineFilter,
               options: serviceLineOptions,
+            },
+            {
+              label: "Status",
+              value: statusFilter,
+              onChange: setStatusFilter,
+              options: SITE_STATUS_OPTIONS,
             },
           ]}
         />
