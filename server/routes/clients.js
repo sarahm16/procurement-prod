@@ -6,6 +6,7 @@ import { logActivity } from "../utils/logActivity.js";
 import serializeContact from "../serializer/serializeContact.js";
 import makeContactRoutes from "./makeContactRoutes.js";
 import serializeRoleAssignment from "../serializer/roleAssignmentSerializer.js";
+import { serializeContract } from "./contracts.js";
 
 const CONTRACT_ENTITY_TYPE_ID = 5; // set to your actual Contracts entity type id
 
@@ -72,19 +73,97 @@ const serializeClientStatus = (row, pausedByName = null) => {
   };
 };
 
-/** One contract's status fields, from a vw_ContractStatus row. */
-const serializeContractStatus = (row) => {
-  const key = row?.status ?? null;
-  const meta = CONTRACT_STATUS[key] ?? { name: null, color: null };
-  return {
-    status_key: key,
-    status: meta.name,
-    status_color: meta.color,
-    is_active: row?.is_active ?? false,
-    starts_on: ymd(row?.starts_on),
-    ends_on: ymd(row?.ends_on),
-  };
+// ─── Client service lines ────────────────────────────────────────────────────
+//
+// One row per service line the client is set up for (ClientServiceLines) or
+// has ever had a contract on. The status comes from that line's contracts
+// (vw_ContractStatus), the site counts from vw_ServiceLineStatus:
+//
+//   active    at least one active contract on this line
+//   upcoming  none active, at least one starting later
+//   ended     only ended contracts
+//   none      set up for the client, no contract yet
+
+const LINE_STATUS = {
+  ...CONTRACT_STATUS,
+  none: { name: "No contract", color: "#9CA3AF" },
 };
+const LINE_RANK = { active: 0, upcoming: 1, none: 2, ended: 3 };
+
+/** Latest of a list of "YYYY-MM-DD" strings, or null. */
+const maxYmd = (list) => list.filter(Boolean).sort().at(-1) ?? null;
+const minYmd = (list) => list.filter(Boolean).sort()[0] ?? null;
+
+async function loadClientServiceLines(db, clientId) {
+  const [setUp, contracts, sites] = await Promise.all([
+    db.clientServiceLines.findMany({
+      where: { client_id: clientId },
+      include: { ServiceLine: { select: { id: true, name: true } } },
+    }),
+    db.contractStatus.findMany({ where: { client_id: clientId } }),
+    db.serviceLineStatus.findMany({
+      where: { client_id: clientId, is_current: true },
+      select: { service_line_id: true, site_id: true, status: true },
+    }),
+  ]);
+
+  const byLine = new Map();
+  const lineFor = (id, name) => {
+    if (!byLine.has(id))
+      byLine.set(id, { id, name, on_client: false, contracts: [], sites: [] });
+    return byLine.get(id);
+  };
+
+  for (const csl of setUp)
+    lineFor(csl.service_line_id, csl.ServiceLine?.name).on_client = true;
+  for (const c of contracts)
+    lineFor(c.service_line_id, c.service_line).contracts.push(c);
+  for (const s of sites) byLine.get(s.service_line_id)?.sites.push(s);
+
+  return [...byLine.values()]
+    .map(({ contracts: cs, sites: ss, ...line }) => {
+      const of = (k) => cs.filter((c) => c.status === k);
+      const active = of("active");
+      const upcoming = of("upcoming");
+      const ended = of("ended");
+      const key = active.length
+        ? "active"
+        : upcoming.length
+          ? "upcoming"
+          : ended.length
+            ? "ended"
+            : "none";
+      const distinctSites = (k) =>
+        new Set(ss.filter((s) => s.status === k).map((s) => s.site_id)).size;
+
+      return {
+        ...line,
+        status_key: key,
+        status: LINE_STATUS[key].name,
+        status_color: LINE_STATUS[key].color,
+        active_contracts: active.length,
+        upcoming_contracts: upcoming.length,
+        ended_contracts: ended.length,
+        active_sites: distinctSites("active"),
+        upcoming_sites: distinctSites("upcoming"),
+        // When the first upcoming contract starts.
+        next_start_date: minYmd(upcoming.map((c) => ymd(c.starts_on))),
+        // The last day of the active contracts — null if any of them runs
+        // open-ended (no end date, or auto-renew).
+        ends_on:
+          active.length && active.every((c) => c.ends_on)
+            ? maxYmd(active.map((c) => ymd(c.ends_on)))
+            : null,
+        last_end_date: maxYmd(ended.map((c) => ymd(c.ends_on))),
+        is_current: key !== "ended",
+      };
+    })
+    .sort(
+      (a, b) =>
+        LINE_RANK[a.status_key] - LINE_RANK[b.status_key] ||
+        String(a.name).localeCompare(String(b.name)),
+    );
+}
 
 // The pause columns are written only through /pause and /unpause, never
 // spread raw onto a response.
@@ -108,11 +187,13 @@ const serializeClientById = (
   notes,
   activityLog,
   contacts,
+  serviceLines,
 ) => {
-  const { PausedBy, ...rest } = client;
+  const { PausedBy, ClientServiceLines, ...rest } = client;
   return {
     ...stripPauseColumns(rest),
-    service_lines: client.ClientServiceLines.map((csl) => csl.ServiceLine),
+    // With status and counts per line — see loadClientServiceLines.
+    service_lines: serviceLines,
     notes: notes.map(serializeNote),
     activity_log: (activityLog || []).map(serializeActivityLogEntry),
     contacts: (contacts || []).map(serializeContact),
@@ -207,50 +288,52 @@ function clientsRouter(prisma) {
   router.get("/:id", async (req, res) => {
     const { id } = req.params;
     try {
-      const [client, statusRow, notes, activityLog] = await Promise.all([
-        prisma.clients.findUnique({
-          where: { id: Number(id) },
-          include: {
-            ClientServiceLines: {
-              include: {
-                ServiceLine: true,
+      const [client, statusRow, notes, activityLog, serviceLines] =
+        await Promise.all([
+          prisma.clients.findUnique({
+            where: { id: Number(id) },
+            include: {
+              ClientServiceLines: {
+                include: {
+                  ServiceLine: true,
+                },
+              },
+              Contacts: {
+                include: {
+                  ContactRole: true,
+                },
+              },
+              PausedBy: { select: { name: true } },
+            },
+          }),
+          prisma.clientStatus.findFirst({ where: { client_id: Number(id) } }),
+          prisma.notes.findMany({
+            where: {
+              entity_type_id: entity_type_id, // Client entity type
+              entity_id: Number(id),
+              parent_note_id: null,
+            },
+            include: {
+              Author: true,
+              Replies: {
+                include: { Author: true },
+              },
+              NoteTaggedUsers: {
+                include: { TaggedUser: true },
               },
             },
-            Contacts: {
-              include: {
-                ContactRole: true,
-              },
+          }),
+          prisma.activityLog.findMany({
+            where: {
+              entity_type_id: entity_type_id, // Client entity type
+              entity_id: Number(id),
             },
-            PausedBy: { select: { name: true } },
-          },
-        }),
-        prisma.clientStatus.findFirst({ where: { client_id: Number(id) } }),
-        prisma.notes.findMany({
-          where: {
-            entity_type_id: entity_type_id, // Client entity type
-            entity_id: Number(id),
-            parent_note_id: null,
-          },
-          include: {
-            Author: true,
-            Replies: {
-              include: { Author: true },
+            include: {
+              Employee: true,
             },
-            NoteTaggedUsers: {
-              include: { TaggedUser: true },
-            },
-          },
-        }),
-        prisma.activityLog.findMany({
-          where: {
-            entity_type_id: entity_type_id, // Client entity type
-            entity_id: Number(id),
-          },
-          include: {
-            Employee: true,
-          },
-        }),
-      ]);
+          }),
+          loadClientServiceLines(prisma, Number(id)),
+        ]);
       // Without this, a bad id threw on client.ClientServiceLines.
       if (!client) return res.status(404).json({ error: "Client not found" });
 
@@ -261,6 +344,7 @@ function clientsRouter(prisma) {
           notes,
           activityLog,
           client.Contacts,
+          serviceLines,
         ),
       );
     } catch (error) {
@@ -286,14 +370,16 @@ function clientsRouter(prisma) {
       const contracts = await prisma.contracts.findMany({
         where: { client_id: Number(id) },
         include: {
-          ServiceLine: { select: { name: true } },
-          Software: { select: { name: true, id: true } },
+          ServiceLine: { select: { id: true, name: true } },
+          ServiceType: { select: { id: true, name: true } },
+          Software: { select: { id: true, name: true } },
         },
+        orderBy: { start_date: "desc" },
       });
 
       // Pull role assignments for these contracts (polymorphic — separate query)
       const contractIds = contracts.map((c) => c.id);
-      const [roleAssignments, statusRows] = await Promise.all([
+      const [roleAssignments, statusRows, siteRows] = await Promise.all([
         prisma.roleAssignments.findMany({
           where: {
             entity_type_id: CONTRACT_ENTITY_TYPE_ID,
@@ -307,7 +393,22 @@ function clientsRouter(prisma) {
         prisma.contractStatus.findMany({
           where: { client_id: Number(id) },
         }),
+        // Sites on each contract today, for the Sites column.
+        prisma.serviceLineStatus.findMany({
+          where: { client_id: Number(id), is_current: true },
+          select: { contract_id: true, status: true },
+        }),
       ]);
+      const sitesByContract = new Map();
+      for (const r of siteRows) {
+        const c = sitesByContract.get(r.contract_id) ?? {
+          active_sites: 0,
+          upcoming_sites: 0,
+        };
+        if (r.status === "active") c.active_sites += 1;
+        if (r.status === "upcoming") c.upcoming_sites += 1;
+        sitesByContract.set(r.contract_id, c);
+      }
       const statusByContract = new Map(
         statusRows.map((r) => [r.contract_id, r]),
       );
@@ -315,8 +416,11 @@ function clientsRouter(prisma) {
       // Attach each contract's assignments and its status (active, upcoming
       // or ended — worked out from its dates)
       const withAssignments = contracts.map((contract) => ({
-        ...contract,
-        ...serializeContractStatus(statusByContract.get(contract.id)),
+        ...serializeContract(
+          contract,
+          statusByContract.get(contract.id),
+          sitesByContract.get(contract.id),
+        ),
         role_assignments: roleAssignments
           .filter((ra) => ra.entity_id === contract.id)
           .map((ra) => ({
@@ -684,6 +788,127 @@ function clientsRouter(prisma) {
       res.json(await freshStatus(clientId));
     } catch (error) {
       console.error("Error unpausing client:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  // POST /api/clients/:id/service-lines
+  // Body: { service_line_id, user_id }
+  // Sets the client up for a service line. Returns the client's lines.
+  router.post("/:id/service-lines", async (req, res) => {
+    const clientId = Number(req.params.id);
+    const serviceLineId = Number(req.body?.service_line_id);
+    const { user_id } = req.body ?? {};
+    if (!serviceLineId)
+      return res.status(400).json({ error: "Pick a service line" });
+
+    try {
+      const [client, line, existing] = await Promise.all([
+        prisma.clients.findUnique({
+          where: { id: clientId },
+          select: { id: true },
+        }),
+        prisma.serviceLines.findUnique({
+          where: { id: serviceLineId },
+          select: { id: true, name: true },
+        }),
+        prisma.clientServiceLines.findUnique({
+          where: {
+            client_id_service_line_id: {
+              client_id: clientId,
+              service_line_id: serviceLineId,
+            },
+          },
+        }),
+      ]);
+      if (!client) return res.status(404).json({ error: "Client not found" });
+      if (!line)
+        return res.status(404).json({ error: "Service line not found" });
+
+      if (!existing) {
+        await prisma.$transaction(async (tx) => {
+          await tx.clientServiceLines.create({
+            data: { client_id: clientId, service_line_id: serviceLineId },
+          });
+          await logActivity(tx, {
+            entityTypeId: entity_type_id,
+            entityId: clientId,
+            fieldChanged: "service_line",
+            previousValue: null,
+            newValue: `Added ${line.name}`,
+            changedBy: user_id ?? null,
+            action: "UPDATE",
+          });
+        });
+      }
+
+      res.json(await loadClientServiceLines(prisma, clientId));
+    } catch (error) {
+      console.error("Error adding client service line:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  // DELETE /api/clients/:id/service-lines/:slid
+  // Body: { user_id }
+  // Takes a service line off the client. Refused while the client has an
+  // active or upcoming contract on it — end the contract first. Ended
+  // contracts stay on record, so the line still shows under past lines.
+  router.delete("/:id/service-lines/:slid", async (req, res) => {
+    const clientId = Number(req.params.id);
+    const serviceLineId = Number(req.params.slid);
+    const { user_id } = req.body ?? {};
+
+    try {
+      const [existing, current] = await Promise.all([
+        prisma.clientServiceLines.findUnique({
+          where: {
+            client_id_service_line_id: {
+              client_id: clientId,
+              service_line_id: serviceLineId,
+            },
+          },
+          include: { ServiceLine: { select: { name: true } } },
+        }),
+        prisma.contractStatus.count({
+          where: {
+            client_id: clientId,
+            service_line_id: serviceLineId,
+            is_current: true,
+          },
+        }),
+      ]);
+      if (!existing)
+        return res.json(await loadClientServiceLines(prisma, clientId));
+      if (current > 0) {
+        return res.status(409).json({
+          error: `${existing.ServiceLine?.name ?? "This line"} has ${current} active or upcoming contract${current === 1 ? "" : "s"}. End ${current === 1 ? "it" : "them"} first.`,
+        });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.clientServiceLines.delete({
+          where: {
+            client_id_service_line_id: {
+              client_id: clientId,
+              service_line_id: serviceLineId,
+            },
+          },
+        });
+        await logActivity(tx, {
+          entityTypeId: entity_type_id,
+          entityId: clientId,
+          fieldChanged: "service_line",
+          previousValue: existing.ServiceLine?.name ?? null,
+          newValue: `Removed ${existing.ServiceLine?.name ?? ""}`.trim(),
+          changedBy: user_id ?? null,
+          action: "UPDATE",
+        });
+      });
+
+      res.json(await loadClientServiceLines(prisma, clientId));
+    } catch (error) {
+      console.error("Error removing client service line:", error);
       res.status(500).json({ error: "Internal Server Error" });
     }
   });
