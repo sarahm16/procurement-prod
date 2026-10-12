@@ -17,6 +17,7 @@ model Sites {
   // contract sites — see view SiteStatus (vw_SiteStatus) in schema.prisma.
 
   ContractSites    ContractSites[]
+  SchedulePhases   ContractSchedulePhases[]
   Attachments      SiteAttachments[]
   Contacts         SiteContacts[]
     WorkOrders       WorkOrders[]

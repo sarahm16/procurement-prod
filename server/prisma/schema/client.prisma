@@ -26,6 +26,7 @@ model Clients {
   sandbox            Boolean                 @default(false)
   created_at         DateTime                @default(now())
   tax_treatment      String                  @default("Billed separately") @db.VarChar(30)
+  invoice_portal     String?                 @db.VarChar(200)
   PausedBy           Employees?              @relation("ClientPausedBy", fields: [paused_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   Contacts           ClientContacts[]
   ClientServiceLines ClientServiceLines[]
@@ -42,6 +43,7 @@ model Companies {
   created_at DateTime @default(now())
   Client     Clients? @relation(fields: [client_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK__Companies__clien__3E1D39E1")
   Sites      Sites[]
+  Contracts  Contracts[]
 }
 
 model ClientContacts {

@@ -12,10 +12,76 @@ model Contracts {
   created_at              DateTime        @default(now())
   service_type_id         Int?
 
+  // ── Handoff: job identity ──────────────────────────────────────────────
+  company_id                Int?                     // operating brand (child of the client)
+  executive_summary         String?   @db.NVarChar(2000)
+
+  // ── Handoff: money and billing ─────────────────────────────────────────
+  // Defaults copy HandoffRules when a contract is created; these DB defaults
+  // only fill rows that existed before the migration.
+  approved_on               DateTime? @db.Date
+  sub_budget_percent        Decimal   @default(50) @db.Decimal(5, 2)
+  target_margin_percent     Decimal   @default(50) @db.Decimal(5, 2)
+  deposit_percent           Decimal   @default(50) @db.Decimal(5, 2)
+  deposit_invoiced_on       DateTime? @db.Date
+  deposit_due_on            DateTime? @db.Date
+  deposit_received_on       DateTime? @db.Date
+  deposit_exception_reason  String?   @db.VarChar(300)
+  deposit_exception_by      Int?
+  deposit_exception_on      DateTime? @db.Date
+  final_invoiced_on         DateTime? @db.Date
+  final_due_on              DateTime? @db.Date
+  final_received_on         DateTime? @db.Date
+
+  // ── Handoff: scope and schedule ────────────────────────────────────────
+  scope_of_work             String?   @db.NVarChar(Max)
+  handoff_on                DateTime? @db.Date   // stamped by "Submit handoff"
+  handoff_submitted_by      Int?
+  lead_time_days            Int       @default(21)
+  target_start_on           DateTime? @db.Date
+  client_required_on        DateTime? @db.Date
+  client_sla                String?   @db.VarChar(200)
+  lead_time_override_reason String?   @db.VarChar(300)
+  production_rate_per_day   Decimal?  @db.Decimal(10, 2)
+  production_days           Int?                 // pre-filled from value ÷ rate, editable
+  planned_finish_on         DateTime? @db.Date
+
+  // ── Handoff: systems and communication ─────────────────────────────────
+  internal_system_id        Int?                 // Sarlac / UtilizeCore (software_id = client's platform)
+  update_cadence            String    @default("AM and PM, with photos") @db.VarChar(100)
+  communication_plan        String?   @db.NVarChar(1000)
+
+  // ── Handoff: subcontractor, risk and compliance ────────────────────────
+  sub_award_business_days   Int       @default(10)
+  sub_awarded_on            DateTime? @db.Date
+  client_payment_terms      String?   @db.VarChar(50)
+  sub_payment_terms         String?   @db.VarChar(50)
+  permits_required          Boolean   @default(false)
+  traffic_control_required  Boolean   @default(false)
+  inspections_required      Boolean   @default(false)
+  safety_notes              String?   @db.NVarChar(1000)
+
+  // ── Handoff: closeout ──────────────────────────────────────────────────
+  substantial_completion_on DateTime? @db.Date
+  completion_notice_on      DateTime? @db.Date
+  client_accepted_on        DateTime? @db.Date
+  closed_on                 DateTime? @db.Date
+  warranty_expires_on       DateTime? @db.Date
+  follow_up_on              DateTime? @db.Date
+
   Client                  Clients         @relation(fields: [client_id], references: [id], onUpdate: NoAction)
   ServiceLine             ServiceLines    @relation(fields: [service_line_id], references: [id], onUpdate: NoAction)
   ServiceType             ServiceTypes?   @relation(fields: [service_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  Software                Softwares?      @relation(fields: [software_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  // Two links to Softwares, so both are named. Naming doesn't change the
+  // existing foreign key.
+  Software                Softwares?      @relation("ContractClientPlatform", fields: [software_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  InternalSystem          Softwares?      @relation("ContractInternalSystem", fields: [internal_system_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Company                 Companies?      @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  DepositExceptionBy      Employees?      @relation("ContractDepositExceptionBy", fields: [deposit_exception_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  HandoffSubmittedBy      Employees?      @relation("ContractHandoffSubmittedBy", fields: [handoff_submitted_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  
+  ChecklistItems          ContractChecklistItems[]
+  SchedulePhases          ContractSchedulePhases[]
   
   ContractSites           ContractSites[]
 }
@@ -69,4 +135,77 @@ model ContractSiteServices {
   ContractSite            ContractSites         @relation(fields: [contract_site_id], references: [id], onUpdate: NoAction)
   ServiceLineService      ServiceLineServices   @relation(fields: [service_line_service_id], references: [id], onUpdate: NoAction)
   VendorServicePricing    VendorServicePricing[]
+}
+
+/// Company-wide handoff rules from the CEO's Job Handoff Standards deck.
+/// Read when a contract is created to fill its handoff defaults; changing a
+/// rule affects new contracts only. One row per rule, value stored as text
+/// and parsed by the app (see `description` for the unit).
+model HandoffRules {
+  id          Int        @id @default(autoincrement())
+  key         String     @unique @db.VarChar(50)
+  value       String     @db.VarChar(200)
+  description String?    @db.VarChar(300)
+  updated_at  DateTime   @default(now()) @updatedAt
+  updated_by  Int?
+  UpdatedBy   Employees? @relation("HandoffRuleUpdatedBy", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// The handoff checklist: one editable list of items, grouped as in the deck
+/// (operations, subcontractor file, risk, field / system / accounting
+/// closeout). Retire an item with is_active = false — never delete it, so old
+/// contracts keep their history.
+///
+/// auto_source: when set, the item ticks itself from that data instead of by
+/// hand — a Contracts date column ("deposit_received_on"), or "vendor_w9" /
+/// "vendor_coi" for the primary vendor's compliance records.
+model HandoffChecklistItems {
+  id           Int                      @id @default(autoincrement())
+  key          String                   @unique @db.VarChar(50)
+  group        String                   @db.VarChar(30)
+  label        String                   @db.VarChar(150)
+  sort_order   Int                      @default(0)
+  auto_source  String?                  @db.VarChar(50)
+  project_only Boolean                  @default(false)
+  is_active    Boolean                  @default(true)
+  created_at   DateTime                 @default(now())
+  Contracts    ContractChecklistItems[]
+
+  @@index([group, sort_order])
+}
+
+/// One row per item ticked on a contract. No row = not done yet.
+model ContractChecklistItems {
+  id          Int                   @id @default(autoincrement())
+  contract_id Int
+  item_id     Int
+  done_on     DateTime              @db.Date
+  done_by     Int?
+  note        String?               @db.VarChar(300)
+  created_at  DateTime              @default(now())
+  Contract    Contracts             @relation(fields: [contract_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Item        HandoffChecklistItems @relation(fields: [item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  DoneBy      Employees?            @relation("ChecklistItemDoneBy", fields: [done_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([contract_id, item_id])
+}
+
+/// The production schedule from the handoff (deck slide 5): Day 1, Day 2,
+/// additional days, final day. A new contract gets two rows from the app
+/// ("Day 1 — mobilization + work area", "Final day — punch, cleanup and
+/// completion photos"); people add the ones in between. site_id is optional:
+/// set it when a phase belongs to one site of a multi-site contract.
+model ContractSchedulePhases {
+  id          Int       @id @default(autoincrement())
+  contract_id Int
+  sort_order  Int       @default(0)
+  label       String    @db.VarChar(50)
+  description String?   @db.NVarChar(500)
+  planned_on  DateTime? @db.Date
+  site_id     Int?
+  created_at  DateTime  @default(now())
+  Contract    Contracts @relation(fields: [contract_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Site        Sites?    @relation(fields: [site_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([contract_id, sort_order])
 }

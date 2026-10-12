@@ -18,6 +18,10 @@ model Employees {
   MobilizationFeesSent    WorkOrderMobilizationFees[] @relation("MobilizationFeeSentBy")
   MobilizationFeesPaid    WorkOrderMobilizationFees[] @relation("MobilizationFeePaidBy")
   ClientsPaused           Clients[]                   @relation("ClientPausedBy")
+  ContractDepositExceptions Contracts[]               @relation("ContractDepositExceptionBy")
+  ContractHandoffsSubmitted Contracts[]               @relation("ContractHandoffSubmittedBy")
+  HandoffRulesUpdated       HandoffRules[]            @relation("HandoffRuleUpdatedBy")
+  ChecklistItemsDone        ContractChecklistItems[]  @relation("ChecklistItemDoneBy")
 }
 
 model InternalRoles {
