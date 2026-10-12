@@ -14,6 +14,7 @@ import ClientDetail from "../pages/client-detail/ClientDetail";
 import SiteDetail from "../pages/site-detail/SiteDetail";
 import VendorDetail from "../pages/vendor-detail/NewVendorDetail";
 import WorkorderDetail from "../pages/workorder-detail/WorkOrderDetail";
+import ContractDetail from "../pages/contract-detail/ContractDetail";
 
 // MUI Icons
 import LocationOnIcon from "@mui/icons-material/LocationOn";
@@ -62,6 +63,13 @@ const routesConfig = [
     icon: <BusinessIcon />,
     showInLayout: false,
   },
+  {
+    title: "Contract Detail",
+    path: "/contracts/:id",
+    element: <ContractDetail />,
+    icon: <AssignmentIcon />,
+    showInLayout: false,
+  },
   // Site routes
   {
     title: "Site List",
@@ -93,6 +101,7 @@ const routesConfig = [
     showInLayout: false,
   },
   // Work Order routes
+
   {
     title: "Work Order List",
     path: "/workorders",

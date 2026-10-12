@@ -24,6 +24,7 @@ import ClientDocumentationTab from "./tabs/ClientDocumentationTab";
 import ClientDetailsTab from "./tabs/ClientDetailsTab";
 import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
 import ClientSitesTab from "./tabs/ClientSitesTab";
+import ClientContractsTab from "./tabs/ClientContractsTab/ClientContractsTab";
 
 import {
   ClientDetailProvider,
@@ -234,7 +235,7 @@ function ClientDetailLayout() {
       onAddNote={addNote}
       tabs={[
         { label: "Details", content: <ClientDetailsTab /> },
-        { label: "Documentation", content: <ClientDocumentationTab /> },
+        { label: "Contracts", content: <ClientContractsTab /> },
         { label: "Sites", content: <ClientSitesTab /> },
         {
           label: "Activity",
