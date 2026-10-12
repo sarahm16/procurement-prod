@@ -13,6 +13,8 @@
  * match "assignable" as an id.
  */
 
+import { DOC_TYPES, hasCompletedDoc } from "../utils/complianceDocs.js";
+
 const DAY = 86400000;
 const COI_SOON_DAYS = 30;
 
@@ -24,12 +26,16 @@ const COI_SOON_DAYS = 30;
 // which stops new statuses from silently becoming assignable.
 const NON_ASSIGNABLE_STATUSES = ["Terminated", "Lead - DNC", "Duplicate"];
 
-const COMPLIANCE_TYPES = { w9: "W-9", msa: "MSA", ach: "ACH" };
+const COMPLIANCE_TYPES = {
+  w9: DOC_TYPES.W9,
+  msa: DOC_TYPES.MSA,
+  ach: DOC_TYPES.ACH,
+};
 
 const num = (v) => (v == null ? null : Number(v));
 
-const hasDoc = (docs, type) =>
-  docs.some((d) => d.document_type === type && d.date_completed != null);
+// const hasDoc = (docs, type) =>
+//   docs.some((d) => d.document_type === type && d.date_completed != null);
 
 /**
  * Three states, matching the grid: true (verified and comfortably current),
@@ -69,9 +75,9 @@ const serializeAssignableVendor = (v) => ({
   trade_ids: (v.VendorTrades ?? []).map((vt) => vt.trade_id),
 
   compliance: {
-    w9: hasDoc(v.ComplianceDocuments ?? [], COMPLIANCE_TYPES.w9),
-    msa: hasDoc(v.ComplianceDocuments ?? [], COMPLIANCE_TYPES.msa),
-    ach: hasDoc(v.ComplianceDocuments ?? [], COMPLIANCE_TYPES.ach),
+    w9: hasCompletedDoc(v.ComplianceDocuments ?? [], COMPLIANCE_TYPES.w9),
+    msa: hasCompletedDoc(v.ComplianceDocuments ?? [], COMPLIANCE_TYPES.msa),
+    ach: hasCompletedDoc(v.ComplianceDocuments ?? [], COMPLIANCE_TYPES.ach),
     coi: coiState(v.COIs ?? []),
   },
 

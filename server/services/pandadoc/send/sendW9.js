@@ -20,7 +20,6 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  */
 export async function sendW9(vendor, { user_id } = {}) {
   const token = await getValidUserToken(user_id);
-  console.log("user token", token);
 
   console.log("vendor contacts", vendor.contacts || vendor.Contacts);
 
@@ -84,7 +83,7 @@ export async function sendW9(vendor, { user_id } = {}) {
       entityId: vendor.id,
       fieldChanged: "compliance_document",
       previousValue: null,
-      newValue: `Sent ACH to ${vendor.company}`, // "Sent W9..." in sendW9
+      newValue: `Sent W9 to ${vendor.company}`, // "Sent W9..." in sendW9
       changedBy: user_id ?? null,
       action: "CREATE",
     });

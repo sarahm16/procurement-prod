@@ -20,7 +20,6 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  */
 export async function sendMsa(vendor, { user_id } = {}) {
   const token = await getValidUserToken(user_id);
-  console.log("user token", token);
 
   console.log("vendor contacts", vendor.contacts || vendor.Contacts);
 

@@ -10,6 +10,7 @@ import {
   registerMobilizationFeeRoutes,
   serializeMobilizationFee,
 } from "./mobilizationFeeRoutes.js";
+import { DOC_TYPES, hasCompletedDoc } from "../utils/complianceDocs.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -30,7 +31,7 @@ const VALID_CATEGORIES = [
 const getPrimaryContact = (contacts = []) =>
   contacts.find((c) => c.contact_role_id === 1) ?? contacts[0] ?? null;
 
-const COMPLIANCE_TYPES = ["ACH", "W9"]; // standard MSA not required for work orders
+const COMPLIANCE_TYPES = [DOC_TYPES.ACH, DOC_TYPES.W9]; // standard MSA not required for work orders
 
 const sumField = (rows = [], field) =>
   rows.reduce((t, r) => t + (Number(r[field]) || 0), 0) || null;
@@ -53,10 +54,7 @@ const serializeVendor = (vendor) => {
   const cois = vendor.COIs ?? [];
 
   // PandaDoc-sent docs are valid when completed
-  const hasValidDoc = (type) =>
-    docs.some(
-      (doc) => doc.document_type === type && doc.status === "completed",
-    );
+  const hasValidDoc = (type) => hasCompletedDoc(docs, type);
 
   // COI is valid when a record exists that is verified AND not expired
   const now = new Date();

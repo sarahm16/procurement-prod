@@ -3,6 +3,18 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import serializeNote from "../serializer/noteSerializer.js";
 import serializeActivityLogEntry from "../serializer/activityLogSerializer.js";
 import { logActivity } from "../utils/logActivity.js";
+import {
+  addBusinessDays,
+  handoffDefaults,
+  handoffKind,
+  internalSystemIdFor,
+  loadHandoffRules,
+  productionDaysFor,
+  toDate,
+  todayPacific,
+  ymd,
+} from "../utils/handoff.js";
+import makeContractHandoffRoutes from "./contractHandoffRoutes.js";
 
 const CONTRACT_ENTITY_TYPE_ID = 5; // Contracts entity type id
 
@@ -24,31 +36,159 @@ const LINE_STATUS = {
   contract_ended: { name: "Contract ended", color: "#6B7280" },
 };
 
-/** Dates out as "YYYY-MM-DD" — a Date would show the previous day in Pacific. */
-const ymd = (d) => (d ? new Date(d).toISOString().slice(0, 10) : null);
-
 /** Decimals out as plain numbers. */
 const num = (v) => (v == null ? null : Number(v));
 
-/** Fields the contract page can edit, and how each is read from the body. */
-const FIELDS = {
-  project_name: (v) => String(v ?? "").trim(),
-  service_type_id: (v) => (v === "" || v == null ? null : Number(v)),
-  software_id: (v) => (v === "" || v == null ? null : Number(v)),
-  start_date: (v) => (v ? new Date(`${String(v).slice(0, 10)}T00:00:00Z`) : v),
-  end_date: (v) => (v ? new Date(`${String(v).slice(0, 10)}T00:00:00Z`) : null),
-  auto_renew: (v) => Boolean(v),
-  value: (v) => (v === "" || v == null ? null : Number(v)),
-  annual_increase_percent: (v) => (v === "" || v == null ? null : Number(v)),
+// ─── Editable fields ─────────────────────────────────────────────────────────
+//
+// Every field the contract page can save, by kind. handoff_on and
+// handoff_submitted_by aren't here: only "Submit handoff" sets them.
+
+const TEXT_FIELDS = {
+  // field: [max length, required]
+  project_name: [255, true],
+  executive_summary: [2000],
+  scope_of_work: [null],
+  client_sla: [200],
+  lead_time_override_reason: [300],
+  deposit_exception_reason: [300],
+  update_cadence: [100, true],
+  communication_plan: [1000],
+  client_payment_terms: [50],
+  sub_payment_terms: [50],
+  safety_notes: [1000],
+};
+const ID_FIELDS = [
+  "service_type_id",
+  "software_id",
+  "internal_system_id",
+  "company_id",
+  "deposit_exception_by",
+];
+const INT_FIELDS = {
+  // field: [min, required]
+  lead_time_days: [0, true],
+  sub_award_business_days: [0, true],
+  production_days: [1, false],
+};
+const MONEY_FIELDS = ["value", "production_rate_per_day"];
+const PERCENT_FIELDS = {
+  // field: required
+  sub_budget_percent: true,
+  target_margin_percent: true,
+  deposit_percent: true,
+  annual_increase_percent: false,
+};
+const BOOL_FIELDS = [
+  "auto_renew",
+  "permits_required",
+  "traffic_control_required",
+  "inspections_required",
+];
+export const DATE_FIELDS = [
+  "start_date",
+  "end_date",
+  "approved_on",
+  "deposit_invoiced_on",
+  "deposit_due_on",
+  "deposit_received_on",
+  "deposit_exception_on",
+  "final_invoiced_on",
+  "final_due_on",
+  "final_received_on",
+  "handoff_on",
+  "target_start_on",
+  "client_required_on",
+  "planned_finish_on",
+  "sub_awarded_on",
+  "substantial_completion_on",
+  "completion_notice_on",
+  "client_accepted_on",
+  "closed_on",
+  "warranty_expires_on",
+  "follow_up_on",
+];
+const EDITABLE_DATES = DATE_FIELDS.filter((f) => f !== "handoff_on");
+const DECIMAL_FIELDS = [...MONEY_FIELDS, ...Object.keys(PERCENT_FIELDS)];
+
+const EDITABLE = new Set([
+  ...Object.keys(TEXT_FIELDS),
+  ...ID_FIELDS,
+  ...Object.keys(INT_FIELDS),
+  ...DECIMAL_FIELDS,
+  ...BOOL_FIELDS,
+  ...EDITABLE_DATES,
+]);
+
+const blank = (v) => v === undefined || v === null || v === "";
+
+/**
+ * Read one field from a request body. Returns { value } or { error }.
+ * Errors are written for the person editing, not the developer.
+ */
+const parseField = (k, v) => {
+  if (k in TEXT_FIELDS) {
+    const [max, required] = TEXT_FIELDS[k];
+    const t = blank(v) ? null : String(v).trim() || null;
+    if (required && !t) return { error: `${k} can't be empty` };
+    if (t && max && t.length > max)
+      return { error: `${k} is too long (max ${max} characters)` };
+    return { value: t };
+  }
+  if (ID_FIELDS.includes(k)) {
+    if (blank(v)) return { value: null };
+    const n = Number(v);
+    return Number.isInteger(n) ? { value: n } : { error: `${k} isn't valid` };
+  }
+  if (k in INT_FIELDS) {
+    const [min, required] = INT_FIELDS[k];
+    if (blank(v))
+      return required ? { error: `${k} is required` } : { value: null };
+    const n = Number(v);
+    return Number.isInteger(n) && n >= min
+      ? { value: n }
+      : { error: `${k} must be a whole number of at least ${min}` };
+  }
+  if (k in PERCENT_FIELDS) {
+    if (blank(v))
+      return PERCENT_FIELDS[k]
+        ? { error: `${k} is required` }
+        : { value: null };
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 && n <= 100
+      ? { value: n }
+      : { error: `${k} must be between 0 and 100` };
+  }
+  if (MONEY_FIELDS.includes(k)) {
+    if (blank(v))
+      return k === "value" ? { error: "value is required" } : { value: null };
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0
+      ? { value: n }
+      : { error: `${k} must be a positive number` };
+  }
+  if (BOOL_FIELDS.includes(k)) return { value: Boolean(v) };
+  if (DATE_FIELDS.includes(k)) {
+    if (blank(v))
+      return k === "start_date"
+        ? { error: "The contract needs a start date" }
+        : { value: null };
+    const d = toDate(v);
+    return d ? { value: d } : { error: `${k} isn't a valid date` };
+  }
+  return { error: `${k} can't be edited` };
 };
 
 /** Comparable form of a field value, for "did it change" and the log. */
 const show = (key, v) => {
   if (v == null || v === "") return "";
-  if (key.endsWith("_date")) return ymd(v);
+  if (DATE_FIELDS.includes(key)) return ymd(v);
   if (typeof v === "object" && "toNumber" in v) return String(v.toNumber());
+  if (DECIMAL_FIELDS.includes(key)) return String(Number(v));
   return String(v).trim();
 };
+
+const round2 = (n) => Math.round(n * 100) / 100;
 
 /**
  * Site counts per contract from vw_ServiceLineStatus rows
@@ -68,22 +208,65 @@ const countSites = (rows) => {
   return counts;
 };
 
-/** One contract, flat, with its status and site counts. */
-export const serializeContract = (contract, statusRow, siteCounts) => {
-  const { Client, ServiceLine, ServiceType, Software, ContractSites, ...rest } =
-    contract;
+/**
+ * One contract, flat, with its status, site counts and the handoff numbers
+ * worked out from its fields. `extra.sourcing` = sub vs client price totals
+ * (loadContract adds it; the client's contract list doesn't).
+ */
+export const serializeContract = (
+  contract,
+  statusRow,
+  siteCounts,
+  extra = {},
+) => {
+  const {
+    Client,
+    ServiceLine,
+    ServiceType,
+    Software,
+    InternalSystem,
+    Company,
+    DepositExceptionBy,
+    HandoffSubmittedBy,
+    ContractSites,
+    ChecklistItems,
+    SchedulePhases,
+    ...rest
+  } = contract;
   const key = statusRow?.status ?? null;
   const meta = CONTRACT_STATUS[key] ?? { name: null, color: null };
+
+  const dates = Object.fromEntries(
+    DATE_FIELDS.filter((f) => f in rest).map((f) => [f, ymd(rest[f])]),
+  );
+  const decimals = Object.fromEntries(
+    DECIMAL_FIELDS.filter((f) => f in rest).map((f) => [f, num(rest[f])]),
+  );
+  const value = decimals.value ?? 0;
+  const pct = (p) => (p == null ? null : round2((value * p) / 100));
+
+  // Subcontractor award deadline: N business days from approval (or the
+  // handoff, if approval wasn't recorded).
+  const awardFrom = rest.approved_on ?? rest.handoff_on ?? null;
+  const awardDeadline =
+    awardFrom && rest.sub_award_business_days != null
+      ? addBusinessDays(awardFrom, rest.sub_award_business_days)
+      : null;
+
+  const sourcing = extra.sourcing ?? null;
+
   return {
     ...rest,
-    start_date: ymd(rest.start_date),
-    end_date: ymd(rest.end_date),
-    value: num(rest.value),
-    annual_increase_percent: num(rest.annual_increase_percent),
+    ...dates,
+    ...decimals,
     client: Client?.client ?? null,
     service_line: ServiceLine?.name ?? null,
     service_type: ServiceType?.name ?? null,
     software: Software?.name ?? null,
+    internal_system: InternalSystem?.name ?? null,
+    company: Company?.company ?? null,
+    deposit_exception_by_name: DepositExceptionBy?.name ?? null,
+    handoff_submitted_by_name: HandoffSubmittedBy?.name ?? null,
     status: meta.name ? { key, name: meta.name, color: meta.color } : null,
     status_key: key,
     status_name: meta.name,
@@ -93,6 +276,36 @@ export const serializeContract = (contract, statusRow, siteCounts) => {
     ends_on: ymd(statusRow?.ends_on),
     active_sites: siteCounts?.active_sites ?? 0,
     upcoming_sites: siteCounts?.upcoming_sites ?? 0,
+
+    // ── Handoff, worked out (never stored) ──
+    handoff_kind: handoffKind(ServiceType?.name), // project | on_demand | planned_maintenance | null
+    handoff_submitted: Boolean(rest.handoff_on),
+    sub_ceiling: pct(decimals.sub_budget_percent),
+    deposit_amount: pct(decimals.deposit_percent),
+    final_percent:
+      decimals.deposit_percent == null ? null : 100 - decimals.deposit_percent,
+    final_amount:
+      decimals.deposit_percent == null
+        ? null
+        : pct(100 - decimals.deposit_percent),
+    production_days_computed: productionDaysFor(
+      value,
+      decimals.production_rate_per_day,
+    ),
+    sub_award_deadline_on: ymd(awardDeadline),
+    sub_award_overdue: Boolean(
+      awardDeadline && !rest.sub_awarded_on && awardDeadline < todayPacific(),
+    ),
+    // Sourcing: what we pay the primary vendors vs what the client pays, on
+    // the sites on the contract today. Compared as a % because prices are
+    // per service, not contract totals.
+    sub_price_total: sourcing?.sub_total ?? null,
+    client_price_total: sourcing?.client_total ?? null,
+    sub_price_percent: sourcing?.percent ?? null,
+    within_sub_budget:
+      sourcing?.percent == null || decimals.sub_budget_percent == null
+        ? null
+        : sourcing.percent <= decimals.sub_budget_percent,
   };
 };
 
@@ -101,6 +314,10 @@ const CONTRACT_INCLUDE = {
   ServiceLine: { select: { id: true, name: true } },
   ServiceType: { select: { id: true, name: true } },
   Software: { select: { id: true, name: true } },
+  InternalSystem: { select: { id: true, name: true } },
+  Company: { select: { id: true, company: true } },
+  DepositExceptionBy: { select: { id: true, name: true } },
+  HandoffSubmittedBy: { select: { id: true, name: true } },
 };
 
 const dbError = (res, error, what) => {
@@ -121,16 +338,54 @@ export default function contractsRouter(prisma) {
 
   /** A contract as the detail page reads it, or null. */
   const loadContract = async (id) => {
-    const [contract, statusRow, siteRows] = await Promise.all([
+    const [contract, statusRow, siteRows, pricing] = await Promise.all([
       prisma.contracts.findUnique({ where: { id }, include: CONTRACT_INCLUDE }),
       prisma.contractStatus.findFirst({ where: { contract_id: id } }),
       prisma.serviceLineStatus.findMany({
         where: { contract_id: id, is_current: true },
-        select: { contract_id: true, status: true },
+        select: { contract_id: true, contract_site_id: true, status: true },
+      }),
+      // Primary vendors' prices on this contract (Sourcing).
+      prisma.vendorServicePricing.findMany({
+        where: {
+          VendorContractSite: {
+            is_primary: true,
+            ContractSite: { contract_id: id },
+          },
+        },
+        select: {
+          vendor_price: true,
+          VendorContractSite: { select: { contract_site_id: true } },
+          ContractSiteServices: { select: { client_price: true } },
+        },
       }),
     ]);
     if (!contract) return null;
-    return serializeContract(contract, statusRow, countSites(siteRows).get(id));
+
+    const current = new Set(siteRows.map((r) => r.contract_site_id));
+    let sub = 0;
+    let client = 0;
+    for (const p of pricing) {
+      if (!current.has(p.VendorContractSite?.contract_site_id)) continue;
+      sub += Number(p.vendor_price ?? 0);
+      client += Number(p.ContractSiteServices?.client_price ?? 0);
+    }
+    const sourcing = pricing.length
+      ? {
+          sub_total: round2(sub),
+          client_total: round2(client),
+          percent: client > 0 ? Math.round((sub / client) * 1000) / 10 : null,
+        }
+      : null;
+
+    return serializeContract(
+      contract,
+      statusRow,
+      countSites(siteRows).get(id),
+      {
+        sourcing,
+      },
+    );
   };
 
   // GET /api/contracts
@@ -191,38 +446,41 @@ export default function contractsRouter(prisma) {
     if (!changes || typeof changes !== "object")
       return res.status(400).json({ error: "No changes provided" });
 
-    const requested = Object.entries(changes).filter(([k]) => k in FIELDS);
+    const requested = Object.entries(changes).filter(([k]) => EDITABLE.has(k));
     if (!requested.length)
       return res.status(400).json({ error: "No valid fields to update" });
 
-    let data;
-    try {
-      data = Object.fromEntries(requested.map(([k, v]) => [k, FIELDS[k](v)]));
-    } catch {
-      return res.status(400).json({ error: "Some values aren't valid" });
+    const data = {};
+    for (const [k, v] of requested) {
+      const r = parseField(k, v);
+      if (r.error) return res.status(400).json({ error: r.error, field: k });
+      data[k] = r.value;
     }
-    for (const k of ["start_date", "end_date"])
-      if (data[k] instanceof Date && Number.isNaN(data[k].getTime()))
-        return res.status(400).json({ error: `${k} isn't a valid date` });
-    if ("project_name" in data && !data.project_name)
-      return res.status(400).json({ error: "The contract needs a name" });
-    if ("start_date" in data && !data.start_date)
-      return res.status(400).json({ error: "The contract needs a start date" });
-    for (const k of ["value", "annual_increase_percent"])
-      if (k in data && data[k] != null && Number.isNaN(data[k]))
-        return res.status(400).json({ error: `${k} must be a number` });
 
     try {
       const existing = await prisma.contracts.findUnique({ where: { id } });
       if (!existing)
         return res.status(404).json({ error: "Contract not found" });
 
-      const start = data.start_date ?? existing.start_date;
-      const end = "end_date" in data ? data.end_date : existing.end_date;
-      if (end && start && end < start)
-        return res
-          .status(400)
-          .json({ error: "The end date can't be before the start date" });
+      // Pairs of dates that can't run backwards.
+      const pick = (k) => (k in data ? data[k] : existing[k]);
+      for (const [from, to, msg] of [
+        [
+          "start_date",
+          "end_date",
+          "The end date can't be before the start date",
+        ],
+        [
+          "target_start_on",
+          "planned_finish_on",
+          "The planned finish can't be before the target start",
+        ],
+      ]) {
+        const a = pick(from);
+        const b = pick(to);
+        if (a && b && new Date(b) < new Date(a))
+          return res.status(400).json({ error: msg, field: to });
+      }
 
       const changed = Object.entries(data).filter(
         ([k, v]) => show(k, existing[k]) !== show(k, v),
@@ -314,14 +572,42 @@ export default function contractsRouter(prisma) {
   });
 
   // POST /api/contracts
+  // A new contract starts with the handoff defaults from HandoffRules (and
+  // our internal system by service type). Anything in the body wins.
   router.post("/", async (req, res) => {
     try {
-      const contract = await prisma.contracts.create({ data: req.body });
+      const body = req.body ?? {};
+      const [rules, line, type] = await Promise.all([
+        loadHandoffRules(prisma),
+        body.service_line_id
+          ? prisma.serviceLines.findUnique({
+              where: { id: Number(body.service_line_id) },
+              select: { name: true },
+            })
+          : null,
+        body.service_type_id
+          ? prisma.serviceTypes.findUnique({
+              where: { id: Number(body.service_type_id) },
+              select: { name: true },
+            })
+          : null,
+      ]);
+      const defaults = handoffDefaults(rules, { serviceLineName: line?.name });
+      if (body.internal_system_id == null) {
+        const sys = await internalSystemIdFor(prisma, handoffKind(type?.name));
+        if (sys) defaults.internal_system_id = sys;
+      }
+      const contract = await prisma.contracts.create({
+        data: { ...defaults, ...body },
+      });
       res.status(201).json(contract);
     } catch (error) {
       dbError(res, error, "creating contract");
     }
   });
+
+  // Handoff: submit, checklist, schedule phases.
+  router.use(makeContractHandoffRoutes(prisma, { loadContract }));
 
   return router;
 }
