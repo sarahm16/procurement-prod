@@ -62,16 +62,6 @@ function ClientDetailsTab() {
         }}
       >
         <Column>
-          <ClientServiceLinesCard />
-          <Contacts
-            contacts={contacts}
-            addContact={addContact}
-            updateContact={updateContact}
-            deleteContact={deleteContact}
-          />
-        </Column>
-
-        <Column>
           <RoleAssignment entity_type_id={3} entity_id={Number(id)} />
           <InfoCard
             title="Client Info"
@@ -271,6 +261,15 @@ function ClientDetailsTab() {
               editable
             />
           </InfoCard>
+        </Column>
+        <Column>
+          <ClientServiceLinesCard />
+          <Contacts
+            contacts={contacts}
+            addContact={addContact}
+            updateContact={updateContact}
+            deleteContact={deleteContact}
+          />
         </Column>
       </Box>
     </InfoGrid>

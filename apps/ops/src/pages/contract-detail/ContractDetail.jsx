@@ -12,6 +12,7 @@ import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
 
 // Tabs
 import ContractDetailsTab from "./tabs/ContractDetailsTab";
+import ContractHandoffTab from "./tabs/ContractHandoffTab";
 import ContractSitesTab from "./tabs/ContractSitesTab";
 import ContractAttachmentsTab from "./tabs/ContractAttachmentsTab";
 
@@ -61,12 +62,55 @@ const sitesText = (c) =>
 const FIELD_LABELS = {
   project_name: "Name",
   service_type_id: "Service type",
-  software_id: "Software",
+  software_id: "Client platform",
+  internal_system_id: "Our system of record",
+  company_id: "Operating brand",
   start_date: "Start date",
   end_date: "End date",
   auto_renew: "Auto renew",
-  value: "Value",
+  value: "Gross contract value",
   annual_increase_percent: "Annual increase %",
+  executive_summary: "Executive summary",
+  scope_of_work: "Scope of work",
+  approved_on: "Approved",
+  sub_budget_percent: "Subcontractor budget %",
+  target_margin_percent: "Required gross margin %",
+  deposit_percent: "Deposit %",
+  deposit_invoiced_on: "Deposit invoiced",
+  deposit_due_on: "Deposit due",
+  deposit_received_on: "Deposit received",
+  deposit_exception_reason: "Deposit exception",
+  deposit_exception_by: "Exception approved by",
+  deposit_exception_on: "Exception approved on",
+  final_invoiced_on: "Final invoiced",
+  final_due_on: "Final due",
+  final_received_on: "Final received",
+  lead_time_days: "Lead time (days)",
+  target_start_on: "Target start",
+  client_required_on: "Client required date",
+  client_sla: "Client SLA",
+  lead_time_override_reason: "Lead-time override reason",
+  production_rate_per_day: "Daily production rate",
+  production_days: "Production days",
+  planned_finish_on: "Planned finish",
+  update_cadence: "Update cadence",
+  communication_plan: "Communication plan",
+  sub_award_business_days: "Award window (business days)",
+  sub_awarded_on: "Subcontractor awarded",
+  client_payment_terms: "Client payment terms",
+  sub_payment_terms: "Sub payment terms",
+  permits_required: "Permits required",
+  traffic_control_required: "Traffic control required",
+  inspections_required: "Inspections required",
+  safety_notes: "Safety and site rules",
+  substantial_completion_on: "Substantial completion",
+  completion_notice_on: "Completion notice sent",
+  client_accepted_on: "Client accepted",
+  closed_on: "Handoff closed",
+  warranty_expires_on: "Warranty expires",
+  follow_up_on: "Follow-up",
+  handoff: "Handoff",
+  checklist: "Checklist",
 };
 
 function ContractDetail() {
@@ -122,6 +166,12 @@ function ContractDetailLayout() {
                     value: contract.service_line ?? "—",
                   },
                   { label: "Sites", value: sitesText(contract) },
+                  {
+                    label: "Handoff",
+                    value: contract.handoff_on
+                      ? `Submitted ${fmtDay(contract.handoff_on)}`
+                      : "Not submitted",
+                  },
                 ]
               : []
           }
@@ -131,6 +181,7 @@ function ContractDetailLayout() {
       onAddNote={addNote}
       tabs={[
         { label: "Details", content: <ContractDetailsTab /> },
+        { label: "Handoff", content: <ContractHandoffTab /> },
         { label: "Sites", content: <ContractSitesTab /> },
         { label: "Attachments", content: <ContractAttachmentsTab /> },
         {
