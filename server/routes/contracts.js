@@ -5,11 +5,11 @@ import serializeActivityLogEntry from "../serializer/activityLogSerializer.js";
 import { logActivity } from "../utils/logActivity.js";
 import {
   addBusinessDays,
+  BILLING_TRIGGERS,
   handoffDefaults,
   handoffKind,
   internalSystemIdFor,
   loadHandoffRules,
-  productionDaysFor,
   toDate,
   todayPacific,
   ymd,
@@ -51,27 +51,27 @@ const TEXT_FIELDS = {
   scope_of_work: [null],
   client_sla: [200],
   lead_time_override_reason: [300],
-  deposit_exception_reason: [300],
   update_cadence: [100, true],
   communication_plan: [1000],
   client_payment_terms: [50],
   sub_payment_terms: [50],
+  invoicing_notes: [1000],
   safety_notes: [1000],
+  warranty_terms: [1000],
 };
 const ID_FIELDS = [
   "service_type_id",
   "software_id",
   "internal_system_id",
   "company_id",
-  "deposit_exception_by",
 ];
 const INT_FIELDS = {
   // field: [min, required]
   lead_time_days: [0, true],
   sub_award_business_days: [0, true],
-  production_days: [1, false],
+  warranty_months: [0, false],
 };
-const MONEY_FIELDS = ["value", "production_rate_per_day"];
+const MONEY_FIELDS = ["value"];
 const PERCENT_FIELDS = {
   // field: required
   sub_budget_percent: true,
@@ -85,28 +85,13 @@ const BOOL_FIELDS = [
   "traffic_control_required",
   "inspections_required",
 ];
+const CHOICE_FIELDS = { billing_trigger: BILLING_TRIGGERS };
 export const DATE_FIELDS = [
   "start_date",
   "end_date",
   "approved_on",
-  "deposit_invoiced_on",
-  "deposit_due_on",
-  "deposit_received_on",
-  "deposit_exception_on",
-  "final_invoiced_on",
-  "final_due_on",
-  "final_received_on",
+  "complete_by_on",
   "handoff_on",
-  "target_start_on",
-  "client_required_on",
-  "planned_finish_on",
-  "sub_awarded_on",
-  "substantial_completion_on",
-  "completion_notice_on",
-  "client_accepted_on",
-  "closed_on",
-  "warranty_expires_on",
-  "follow_up_on",
 ];
 const EDITABLE_DATES = DATE_FIELDS.filter((f) => f !== "handoff_on");
 const DECIMAL_FIELDS = [...MONEY_FIELDS, ...Object.keys(PERCENT_FIELDS)];
@@ -117,6 +102,7 @@ const EDITABLE = new Set([
   ...Object.keys(INT_FIELDS),
   ...DECIMAL_FIELDS,
   ...BOOL_FIELDS,
+  ...Object.keys(CHOICE_FIELDS),
   ...EDITABLE_DATES,
 ]);
 
@@ -168,6 +154,12 @@ const parseField = (k, v) => {
       : { error: `${k} must be a positive number` };
   }
   if (BOOL_FIELDS.includes(k)) return { value: Boolean(v) };
+  if (k in CHOICE_FIELDS) {
+    if (blank(v)) return { error: `${k} is required` };
+    return CHOICE_FIELDS[k].includes(v)
+      ? { value: v }
+      : { error: `${k} must be one of: ${CHOICE_FIELDS[k].join(", ")}` };
+  }
   if (DATE_FIELDS.includes(k)) {
     if (blank(v))
       return k === "start_date"
@@ -226,11 +218,9 @@ export const serializeContract = (
     Software,
     InternalSystem,
     Company,
-    DepositExceptionBy,
     HandoffSubmittedBy,
     ContractSites,
     ChecklistItems,
-    SchedulePhases,
     ...rest
   } = contract;
   const key = statusRow?.status ?? null;
@@ -245,13 +235,14 @@ export const serializeContract = (
   const value = decimals.value ?? 0;
   const pct = (p) => (p == null ? null : round2((value * p) / 100));
 
-  // Subcontractor award deadline: N business days from approval (or the
-  // handoff, if approval wasn't recorded).
+  // Source by: N business days from approval (or the handoff, if approval
+  // wasn't recorded). The sourcing itself happens per site / work order.
   const awardFrom = rest.approved_on ?? rest.handoff_on ?? null;
-  const awardDeadline =
+  const sourceBy =
     awardFrom && rest.sub_award_business_days != null
       ? addBusinessDays(awardFrom, rest.sub_award_business_days)
       : null;
+  const withDeposit = rest.billing_trigger === "deposit_and_completion";
 
   const sourcing = extra.sourcing ?? null;
 
@@ -265,7 +256,6 @@ export const serializeContract = (
     software: Software?.name ?? null,
     internal_system: InternalSystem?.name ?? null,
     company: Company?.company ?? null,
-    deposit_exception_by_name: DepositExceptionBy?.name ?? null,
     handoff_submitted_by_name: HandoffSubmittedBy?.name ?? null,
     status: meta.name ? { key, name: meta.name, color: meta.color } : null,
     status_key: key,
@@ -281,20 +271,20 @@ export const serializeContract = (
     handoff_kind: handoffKind(ServiceType?.name), // project | on_demand | planned_maintenance | null
     handoff_submitted: Boolean(rest.handoff_on),
     sub_ceiling: pct(decimals.sub_budget_percent),
-    deposit_amount: pct(decimals.deposit_percent),
+    deposit_amount: withDeposit ? pct(decimals.deposit_percent) : null,
     final_percent:
-      decimals.deposit_percent == null ? null : 100 - decimals.deposit_percent,
-    final_amount:
-      decimals.deposit_percent == null
-        ? null
-        : pct(100 - decimals.deposit_percent),
-    production_days_computed: productionDaysFor(
-      value,
-      decimals.production_rate_per_day,
-    ),
-    sub_award_deadline_on: ymd(awardDeadline),
-    sub_award_overdue: Boolean(
-      awardDeadline && !rest.sub_awarded_on && awardDeadline < todayPacific(),
+      withDeposit && decimals.deposit_percent != null
+        ? 100 - decimals.deposit_percent
+        : null,
+    source_by_on: ymd(sourceBy),
+    // Sites on the contract today, and how many have a primary vendor.
+    sites_total: extra.sites_total ?? null,
+    sites_sourced: extra.sites_sourced ?? null,
+    source_by_overdue: Boolean(
+      sourceBy &&
+      extra.sites_total != null &&
+      extra.sites_sourced < extra.sites_total &&
+      sourceBy < todayPacific(),
     ),
     // Sourcing: what we pay the primary vendors vs what the client pays, on
     // the sites on the contract today. Compared as a % because prices are
@@ -316,7 +306,6 @@ const CONTRACT_INCLUDE = {
   Software: { select: { id: true, name: true } },
   InternalSystem: { select: { id: true, name: true } },
   Company: { select: { id: true, company: true } },
-  DepositExceptionBy: { select: { id: true, name: true } },
   HandoffSubmittedBy: { select: { id: true, name: true } },
 };
 
@@ -363,6 +352,14 @@ export default function contractsRouter(prisma) {
     if (!contract) return null;
 
     const current = new Set(siteRows.map((r) => r.contract_site_id));
+    const sourcedRows = current.size
+      ? await prisma.vendorContractSites.findMany({
+          where: { is_primary: true, contract_site_id: { in: [...current] } },
+          select: { contract_site_id: true },
+        })
+      : [];
+    const sitesSourced = new Set(sourcedRows.map((r) => r.contract_site_id))
+      .size;
     let sub = 0;
     let client = 0;
     for (const p of pricing) {
@@ -384,6 +381,8 @@ export default function contractsRouter(prisma) {
       countSites(siteRows).get(id),
       {
         sourcing,
+        sites_total: current.size,
+        sites_sourced: sitesSourced,
       },
     );
   };
@@ -425,8 +424,19 @@ export default function contractsRouter(prisma) {
       if (!contract)
         return res.status(404).json({ error: "Contract not found" });
 
+      // The client's brands, for the Operating brand dropdown.
+      const companyOptions = await prisma.companies.findMany({
+        where: { client_id: contract.client_id },
+        select: { id: true, company: true },
+        orderBy: { company: "asc" },
+      });
+
       res.json({
         ...contract,
+        company_options: companyOptions.map((c) => ({
+          id: c.id,
+          name: c.company,
+        })),
         notes: notes.map(serializeNote),
         activity_log: activityLog.map(serializeActivityLogEntry),
       });
@@ -469,11 +479,6 @@ export default function contractsRouter(prisma) {
           "start_date",
           "end_date",
           "The end date can't be before the start date",
-        ],
-        [
-          "target_start_on",
-          "planned_finish_on",
-          "The planned finish can't be before the target start",
         ],
       ]) {
         const a = pick(from);
@@ -577,14 +582,8 @@ export default function contractsRouter(prisma) {
   router.post("/", async (req, res) => {
     try {
       const body = req.body ?? {};
-      const [rules, line, type] = await Promise.all([
+      const [rules, type] = await Promise.all([
         loadHandoffRules(prisma),
-        body.service_line_id
-          ? prisma.serviceLines.findUnique({
-              where: { id: Number(body.service_line_id) },
-              select: { name: true },
-            })
-          : null,
         body.service_type_id
           ? prisma.serviceTypes.findUnique({
               where: { id: Number(body.service_type_id) },
@@ -592,9 +591,10 @@ export default function contractsRouter(prisma) {
             })
           : null,
       ]);
-      const defaults = handoffDefaults(rules, { serviceLineName: line?.name });
+      const kind = handoffKind(type?.name);
+      const defaults = handoffDefaults(rules, { kind });
       if (body.internal_system_id == null) {
-        const sys = await internalSystemIdFor(prisma, handoffKind(type?.name));
+        const sys = await internalSystemIdFor(prisma, kind);
         if (sys) defaults.internal_system_id = sys;
       }
       const contract = await prisma.contracts.create({
@@ -606,7 +606,7 @@ export default function contractsRouter(prisma) {
     }
   });
 
-  // Handoff: submit, checklist, schedule phases.
+  // Handoff: submit and checklist.
   router.use(makeContractHandoffRoutes(prisma, { loadContract }));
 
   return router;
