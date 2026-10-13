@@ -16,7 +16,6 @@ const CONTRACT_ENTITY_TYPE_ID = 5;
 const DetailsContext = createContext();
 const SitesContext = createContext();
 const ChecklistContext = createContext();
-const PhasesContext = createContext();
 const NotesContext = createContext();
 const ActivityContext = createContext();
 const ActionsContext = createContext();
@@ -29,7 +28,6 @@ export function ContractDetailProvider({ id, children }) {
   const [notFound, setNotFound] = useState(false);
   const [sites, setSites] = useState(null); // null = not loaded yet
   const [checklist, setChecklist] = useState(null); // null = not loaded yet
-  const [phases, setPhases] = useState(null); // null = not loaded yet
   const [notes, setNotes] = useState([]);
   const [activity, setActivity] = useState([]);
 
@@ -50,7 +48,6 @@ export function ContractDetailProvider({ id, children }) {
     let active = true;
     setSites(null);
     setChecklist(null);
-    setPhases(null);
     setNotFound(false);
     fetchContract().catch((e) => {
       if (!active) return;
@@ -98,7 +95,6 @@ export function ContractDetailProvider({ id, children }) {
       user_id: user?.id,
     });
     setDetails((prev) => ({ ...prev, ...data }));
-    setPhases(null); // the first and last phases were just added
     setChecklist(null);
     refreshActivity();
   }, [id, user?.id, refreshActivity]);
@@ -127,51 +123,6 @@ export function ContractDetailProvider({ id, children }) {
     [id, user?.id, refreshActivity],
   );
 
-  // ── Schedule phases (every call answers with the whole list) ──
-  const loadPhases = useCallback(async () => {
-    const { data } = await axios.get(`/api/contracts/${id}/phases`);
-    setPhases(data);
-  }, [id]);
-
-  const addPhase = useCallback(
-    async (phase) => {
-      const { data } = await axios.post(`/api/contracts/${id}/phases`, phase);
-      setPhases(data);
-    },
-    [id],
-  );
-
-  const updatePhase = useCallback(
-    async (phaseId, changes) => {
-      const { data } = await axios.put(
-        `/api/contracts/${id}/phases/${phaseId}`,
-        changes,
-      );
-      setPhases(data);
-    },
-    [id],
-  );
-
-  const deletePhase = useCallback(
-    async (phaseId) => {
-      const { data } = await axios.delete(
-        `/api/contracts/${id}/phases/${phaseId}`,
-      );
-      setPhases(data);
-    },
-    [id],
-  );
-
-  const reorderPhases = useCallback(
-    async (ids) => {
-      const { data } = await axios.put(`/api/contracts/${id}/phases/order`, {
-        ids,
-      });
-      setPhases(data);
-    },
-    [id],
-  );
-
   const addNote = useCallback(
     async (note) => {
       const { data } = await axios.post(`/api/notes`, {
@@ -191,11 +142,6 @@ export function ContractDetailProvider({ id, children }) {
       loadSites,
       loadChecklist,
       setChecklistItem,
-      loadPhases,
-      addPhase,
-      updatePhase,
-      deletePhase,
-      reorderPhases,
       addNote,
     }),
     [
@@ -204,11 +150,6 @@ export function ContractDetailProvider({ id, children }) {
       loadSites,
       loadChecklist,
       setChecklistItem,
-      loadPhases,
-      addPhase,
-      updatePhase,
-      deletePhase,
-      reorderPhases,
       addNote,
     ],
   );
@@ -220,13 +161,11 @@ export function ContractDetailProvider({ id, children }) {
         <DetailsContext.Provider value={details}>
           <SitesContext.Provider value={sites}>
             <ChecklistContext.Provider value={checklist}>
-              <PhasesContext.Provider value={phases}>
-                <NotesContext.Provider value={notes}>
-                  <ActivityContext.Provider value={activity}>
-                    {children}
-                  </ActivityContext.Provider>
-                </NotesContext.Provider>
-              </PhasesContext.Provider>
+              <NotesContext.Provider value={notes}>
+                <ActivityContext.Provider value={activity}>
+                  {children}
+                </ActivityContext.Provider>
+              </NotesContext.Provider>
             </ChecklistContext.Provider>
           </SitesContext.Provider>
         </DetailsContext.Provider>
@@ -247,8 +186,6 @@ export const useContractDetails = () =>
 export const useContractSites = () => useCtx(SitesContext, "useContractSites");
 export const useContractChecklist = () =>
   useCtx(ChecklistContext, "useContractChecklist");
-export const useContractPhases = () =>
-  useCtx(PhasesContext, "useContractPhases");
 export const useContractNotes = () => useCtx(NotesContext, "useContractNotes");
 export const useContractActivity = () =>
   useCtx(ActivityContext, "useContractActivity");

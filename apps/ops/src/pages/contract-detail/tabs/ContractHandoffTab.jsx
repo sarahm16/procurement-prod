@@ -1,17 +1,17 @@
 // contract-detail/tabs/ContractHandoffTab.jsx
 //
-// The handoff as work to get through: submit it, tick off the checklist, and
-// keep the production schedule. The fields themselves live on the Details tab.
+// The handoff from sales to ops, before any work order exists: submit it and
+// tick off what has to be true first. Doing the work is tracked on the work
+// orders, not here.
 //
-//   ┌ Handoff: submitted / Submit button · progress · key dates ┐
-//   ├ Checklist (by group)              ├ Production schedule    ┤
-import { useEffect, useMemo, useState } from "react";
+//   ┌ Handoff: submitted / Submit button · checklist progress · key dates ┐
+//   └ Checklist                                                            ┘
+import { useEffect, useState } from "react";
 import {
   Alert,
   Box,
   Button,
   Checkbox,
-  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -19,49 +19,34 @@ import {
   DialogTitle,
   IconButton,
   LinearProgress,
-  MenuItem,
   TextField,
   Tooltip,
   Typography,
   alpha,
   useTheme,
 } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
-import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import AutoModeIcon from "@mui/icons-material/AutoMode";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import SendIcon from "@mui/icons-material/Send";
 import TaskAltIcon from "@mui/icons-material/TaskAlt";
 
-import { fmtDay, fmtShortDay, todayYmd } from "../format";
+import { fmtDay, todayYmd } from "../format";
+import { BILLING_TRIGGER_OPTIONS } from "./ContractDetailsTab";
 import {
   useContractActions,
   useContractChecklist,
   useContractDetails,
-  useContractPhases,
-  useContractSites,
 } from "../ContractDetailProvider";
 
 /** Where a self-ticking item gets its tick, in words. */
 const AUTO_SOURCE_LABEL = {
-  approved_on: "the Approved date",
-  deposit_received_on: "the Deposit received date",
-  sub_awarded_on: "the Subcontractor awarded date",
-  substantial_completion_on: "the Substantial completion date",
-  closed_on: "the Handoff closed date",
-  client_accepted_on: "the Client accepted date",
-  final_invoiced_on: "the Final invoiced date",
-  final_due_on: "the Final due date",
-  vendor_w9: "the primary vendors' W-9s",
-  vendor_coi: "the primary vendors' COIs",
+  approved_on: "the Approved date (Details → Contract term)",
 };
 
 const errorText = (e, fallback) => e?.response?.data?.error ?? fallback;
 
 /** A plain card with a header, matching the InfoCard look. */
-function Panel({ title, count, action, children, sx }) {
+function Panel({ title, count, children }) {
   const theme = useTheme();
   return (
     <Box
@@ -70,7 +55,6 @@ function Panel({ title, count, action, children, sx }) {
         borderRadius: 4,
         backgroundColor: "background.paper",
         overflow: "hidden",
-        ...sx,
       }}
     >
       {title && (
@@ -109,8 +93,6 @@ function Panel({ title, count, action, children, sx }) {
               {count}
             </Typography>
           )}
-          <Box sx={{ flex: 1 }} />
-          {action}
         </Box>
       )}
       {children}
@@ -120,9 +102,9 @@ function Panel({ title, count, action, children, sx }) {
 
 // ─── Summary: submit + progress + key dates ──────────────────────────────────
 
-function KeyDate({ label, value, tone }) {
+function KeyDate({ label, value, sub, tone }) {
   return (
-    <Box sx={{ minWidth: 110 }}>
+    <Box sx={{ minWidth: 120 }}>
       <Typography
         sx={{
           fontSize: "0.68rem",
@@ -147,6 +129,11 @@ function KeyDate({ label, value, tone }) {
       >
         {value ?? "—"}
       </Typography>
+      {sub && (
+        <Typography sx={{ fontSize: "0.72rem", color: "text.secondary" }}>
+          {sub}
+        </Typography>
+      )}
     </Box>
   );
 }
@@ -161,6 +148,9 @@ function HandoffSummary({ contract: c, checklist }) {
   const pct = checklist?.total
     ? Math.round((checklist.done / checklist.total) * 100)
     : 0;
+  const billing = BILLING_TRIGGER_OPTIONS.find(
+    (o) => o.id === c.billing_trigger,
+  )?.name;
 
   const submit = async () => {
     setBusy(true);
@@ -222,7 +212,7 @@ function HandoffSummary({ contract: c, checklist }) {
                 <Typography
                   sx={{ fontSize: "0.78rem", color: "text.secondary" }}
                 >
-                  Needs a value, a scope of work and a site
+                  Needs a value, scope, invoicing and a site
                 </Typography>
               </Box>
               <Button
@@ -241,7 +231,7 @@ function HandoffSummary({ contract: c, checklist }) {
         </Box>
 
         {/* Checklist progress */}
-        <Box sx={{ flex: 1, minWidth: 200 }}>
+        <Box sx={{ flex: 1, minWidth: 180 }}>
           <Box
             sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}
           >
@@ -261,15 +251,18 @@ function HandoffSummary({ contract: c, checklist }) {
 
         {/* Key dates */}
         <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-          <KeyDate label="Target start" value={fmtDay(c.target_start_on)} />
-          <KeyDate label="Planned finish" value={fmtDay(c.planned_finish_on)} />
           <KeyDate
-            label="Sub award by"
-            value={
-              c.sub_awarded_on ? "Awarded" : fmtDay(c.sub_award_deadline_on)
+            label="Source by"
+            value={fmtDay(c.source_by_on)}
+            sub={
+              c.sites_total
+                ? `${c.sites_sourced} of ${c.sites_total} sites sourced`
+                : null
             }
-            tone={c.sub_award_overdue ? "bad" : null}
+            tone={c.source_by_overdue ? "bad" : null}
           />
+          <KeyDate label="Complete by" value={fmtDay(c.complete_by_on)} />
+          <KeyDate label="Invoicing" value={billing} />
         </Box>
       </Box>
 
@@ -286,29 +279,13 @@ function HandoffSummary({ contract: c, checklist }) {
               {error}
             </Alert>
           )}
-          <Typography sx={{ fontSize: "0.85rem", mb: 1 }}>
-            Today becomes the handoff date. Anything still empty is filled in
-            from the handoff rules:
-          </Typography>
-          <Box component="ul" sx={{ fontSize: "0.85rem", pl: 2.5, my: 0 }}>
-            {c.handoff_kind === "project" ? (
-              <>
-                <li>Target start: today + {c.lead_time_days} days</li>
-                <li>Production days: value ÷ daily rate</li>
-                <li>
-                  Planned finish: start + production days, weekends skipped
-                </li>
-              </>
-            ) : (
-              <li>Target start: the client's required date</li>
-            )}
-            <li>Our system of record</li>
-            <li>The first and last schedule phases</li>
-          </Box>
-          <Typography
-            sx={{ fontSize: "0.78rem", color: "text.secondary", mt: 1 }}
-          >
-            Fields you've already filled in aren't changed.
+          <Typography sx={{ fontSize: "0.85rem" }}>
+            Today becomes the handoff date, and ops can start sourcing and
+            creating work orders. If our system of record is empty, it's set to{" "}
+            {c.handoff_kind === "planned_maintenance"
+              ? "UtilizeCore"
+              : "Sarlacc"}
+            .
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -388,9 +365,9 @@ function ChecklistItem({ item, onToggle, onEdit, busy }) {
             />
           )}
         </Typography>
-        {(meta.length > 0 || item.detail) && (
+        {meta.length > 0 && (
           <Typography sx={{ fontSize: "0.72rem", color: "text.secondary" }}>
-            {item.detail ?? meta.join(" · ")}
+            {meta.join(" · ")}
           </Typography>
         )}
       </Box>
@@ -541,311 +518,16 @@ function Checklist({ checklist }) {
   );
 }
 
-// ─── Production schedule ─────────────────────────────────────────────────────
-
-function PhaseDialog({ phase, sites, onClose, onSave }) {
-  const [draft, setDraft] = useState(phase);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
-  useEffect(() => setDraft(phase), [phase]);
-  if (!phase) return null;
-  const set = (k) => (e) => setDraft((d) => ({ ...d, [k]: e.target.value }));
-
-  return (
-    <Dialog open onClose={() => !busy && onClose()} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ fontWeight: 700 }}>
-        {phase.id ? "Edit phase" : "Add a phase"}
-      </DialogTitle>
-      <DialogContent
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 2,
-          pt: "8px !important",
-        }}
-      >
-        {error && <Alert severity="error">{error}</Alert>}
-        <TextField
-          label="Label"
-          size="small"
-          value={draft?.label ?? ""}
-          onChange={set("label")}
-          placeholder="e.g. Day 2"
-          inputProps={{ maxLength: 50 }}
-          autoFocus
-        />
-        <TextField
-          label="What happens"
-          size="small"
-          multiline
-          minRows={2}
-          value={draft?.description ?? ""}
-          onChange={set("description")}
-          placeholder="Work area + quantity"
-          inputProps={{ maxLength: 500 }}
-        />
-        <TextField
-          label="Planned date"
-          type="date"
-          size="small"
-          value={draft?.planned_on ?? ""}
-          onChange={set("planned_on")}
-          InputLabelProps={{ shrink: true }}
-        />
-        <TextField
-          select
-          label="Site"
-          size="small"
-          value={draft?.site_id ?? ""}
-          onChange={set("site_id")}
-          helperText="Only if this phase is at one site"
-        >
-          <MenuItem value="">
-            <em>All sites</em>
-          </MenuItem>
-          {sites.map((s) => (
-            <MenuItem key={s.site_id} value={s.site_id}>
-              {s.store || "Unnamed site"}
-            </MenuItem>
-          ))}
-        </TextField>
-      </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button color="inherit" onClick={onClose} disabled={busy}>
-          Cancel
-        </Button>
-        <Button
-          variant="contained"
-          disabled={busy || !draft?.label?.trim()}
-          onClick={async () => {
-            setBusy(true);
-            setError(null);
-            try {
-              await onSave({
-                label: draft.label,
-                description: draft.description ?? null,
-                planned_on: draft.planned_on || null,
-                site_id: draft.site_id === "" ? null : (draft.site_id ?? null),
-              });
-              onClose();
-            } catch (e) {
-              setError(errorText(e, "Couldn't save the phase."));
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          {busy ? "Saving…" : "Save"}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
-function Schedule({ phases }) {
-  const theme = useTheme();
-  const sites = useContractSites();
-  const { loadSites, addPhase, updatePhase, deletePhase, reorderPhases } =
-    useContractActions();
-  const [editing, setEditing] = useState(null);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    if (sites === null) loadSites().catch(() => {});
-  }, [sites, loadSites]);
-  const currentSites = useMemo(
-    () => (sites ?? []).filter((s) => s.is_current),
-    [sites],
-  );
-
-  const run = async (fn) => {
-    setError(null);
-    try {
-      await fn();
-    } catch (e) {
-      setError(errorText(e, "Couldn't update the schedule."));
-    }
-  };
-
-  const move = (i, dir) => {
-    const ids = phases.map((p) => p.id);
-    [ids[i], ids[i + dir]] = [ids[i + dir], ids[i]];
-    run(() => reorderPhases(ids));
-  };
-
-  return (
-    <Panel
-      title="Production schedule"
-      count={phases ? String(phases.length) : null}
-      action={
-        <Tooltip title="Add a phase">
-          <IconButton
-            size="small"
-            onClick={() =>
-              setEditing({
-                label: "",
-                description: "",
-                planned_on: "",
-                site_id: "",
-              })
-            }
-          >
-            <AddIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      }
-    >
-      {error && (
-        <Alert
-          severity="error"
-          onClose={() => setError(null)}
-          sx={{ borderRadius: 0 }}
-        >
-          {error}
-        </Alert>
-      )}
-      {phases === null ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-          <CircularProgress size={22} />
-        </Box>
-      ) : phases.length === 0 ? (
-        <Typography
-          sx={{ px: 2.5, py: 2, fontSize: "0.82rem", color: "text.disabled" }}
-        >
-          No phases yet. Submitting the handoff adds the first and last day.
-        </Typography>
-      ) : (
-        phases.map((p, i) => (
-          <Box
-            key={p.id}
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1.5,
-              px: 2.5,
-              py: 1.25,
-              borderTop: i ? `1px solid ${theme.palette.divider}` : "none",
-              "&:hover .phase-actions": { opacity: 1 },
-            }}
-          >
-            <Box
-              sx={{
-                width: 26,
-                height: 26,
-                borderRadius: "50%",
-                flexShrink: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "0.75rem",
-                fontWeight: 700,
-                color: "primary.main",
-                backgroundColor: alpha(theme.palette.primary.main, 0.1),
-              }}
-            >
-              {i + 1}
-            </Box>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography
-                component="div"
-                sx={{ fontSize: "0.86rem", fontWeight: 600 }}
-              >
-                {p.label}
-                {p.site && (
-                  <Chip
-                    label={p.site}
-                    size="small"
-                    sx={{ ml: 1, height: 18, fontSize: "0.68rem" }}
-                  />
-                )}
-              </Typography>
-              {p.description && (
-                <Typography
-                  sx={{ fontSize: "0.75rem", color: "text.secondary" }}
-                >
-                  {p.description}
-                </Typography>
-              )}
-            </Box>
-            <Typography
-              sx={{
-                fontSize: "0.8rem",
-                fontWeight: 600,
-                color: p.planned_on ? "text.primary" : "text.disabled",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {fmtShortDay(p.planned_on) ?? "No date"}
-            </Typography>
-            <Box
-              className="phase-actions"
-              sx={{
-                display: "flex",
-                opacity: { xs: 1, md: 0.35 },
-                transition: "opacity .15s",
-              }}
-            >
-              <IconButton
-                size="small"
-                disabled={i === 0}
-                onClick={() => move(i, -1)}
-                aria-label="Move up"
-              >
-                <ArrowUpwardIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-              <IconButton
-                size="small"
-                disabled={i === phases.length - 1}
-                onClick={() => move(i, 1)}
-                aria-label="Move down"
-              >
-                <ArrowDownwardIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-              <IconButton
-                size="small"
-                onClick={() => setEditing({ ...p, site_id: p.site_id ?? "" })}
-                aria-label={`Edit ${p.label}`}
-              >
-                <EditOutlinedIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-              <IconButton
-                size="small"
-                onClick={() => run(() => deletePhase(p.id))}
-                aria-label={`Delete ${p.label}`}
-              >
-                <DeleteOutlineIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </Box>
-          </Box>
-        ))
-      )}
-
-      <PhaseDialog
-        phase={editing}
-        sites={currentSites}
-        onClose={() => setEditing(null)}
-        onSave={(body) =>
-          editing?.id ? updatePhase(editing.id, body) : addPhase(body)
-        }
-      />
-    </Panel>
-  );
-}
-
 // ─── Tab ─────────────────────────────────────────────────────────────────────
 
 export default function ContractHandoffTab() {
   const contract = useContractDetails();
   const checklist = useContractChecklist();
-  const phases = useContractPhases();
-  const { loadChecklist, loadPhases } = useContractActions();
+  const { loadChecklist } = useContractActions();
 
   useEffect(() => {
     if (checklist === null) loadChecklist().catch((e) => console.error(e));
   }, [checklist, loadChecklist]);
-  useEffect(() => {
-    if (phases === null) loadPhases().catch((e) => console.error(e));
-  }, [phases, loadPhases]);
 
   if (!contract)
     return (
@@ -861,23 +543,11 @@ export default function ContractHandoffTab() {
         display: "flex",
         flexDirection: "column",
         gap: 3,
+        maxWidth: 1100,
       }}
     >
       <HandoffSummary contract={contract} checklist={checklist} />
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: {
-            xs: "minmax(0,1fr)",
-            lg: "minmax(0,7fr) minmax(0,5fr)",
-          },
-          gap: 3,
-          alignItems: "start",
-        }}
-      >
-        <Checklist checklist={checklist} />
-        <Schedule phases={phases} />
-      </Box>
+      <Checklist checklist={checklist} />
     </Box>
   );
 }

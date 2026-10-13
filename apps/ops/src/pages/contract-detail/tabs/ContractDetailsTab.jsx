@@ -1,15 +1,15 @@
 // contract-detail/tabs/ContractDetailsTab.jsx
 //
-// Every contract and handoff field, grouped the way the handoff deck groups
-// them. Each card edits and saves on its own. Project-only fields (deposit,
-// lead time, production) hide on On Demand and PM contracts.
+// The agreement with the client and the plan for carrying it out. Doing the
+// work (dates, sourcing, billing events, closeout) lives on work orders.
+// Each card edits and saves on its own.
 //
-//   Left (the work)         Right (the money and the people)
-//   ─ Job                   ─ Contract term
-//   ─ Scope of work         ─ Money and billing
-//   ─ Schedule              ─ Subcontractor and risk
-//   ─ Closeout              ─ Systems and communication
-//                           ─ Team
+//   Left (what and how)            Right (money and people)
+//   ─ Job                          ─ Contract term
+//   ─ Scope of work                ─ Money plan
+//   ─ Sourcing and timing          ─ Invoicing
+//   ─ Requirements to plan for     ─ Systems and communication
+//   ─ Warranty                     ─ Team
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Alert, Box, CircularProgress } from "@mui/material";
@@ -17,7 +17,6 @@ import { Alert, Box, CircularProgress } from "@mui/material";
 import InfoGrid from "../../../components/InfoGrid";
 import RoleAssignment from "../../../components/RoleAssignment";
 import { ServiceLineChip } from "../../../components/ServiceLineChips";
-import { useEmployees } from "../../../*/hooks/useEmployees";
 import FieldCard from "../components/FieldCard";
 import { fmtDay, fmtMoney } from "../format";
 import {
@@ -27,6 +26,13 @@ import {
 
 const CONTRACT_ENTITY_TYPE_ID = 5;
 
+export const BILLING_TRIGGER_OPTIONS = [
+  { id: "upon_completion", name: "Upon completion" },
+  { id: "deposit_and_completion", name: "Deposit, then balance at completion" },
+  { id: "monthly", name: "Monthly" },
+  { id: "per_visit", name: "Per visit" },
+];
+
 /** Two independent columns, so cards of different heights don't leave gaps. */
 const Column = ({ children }) => (
   <Box sx={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
@@ -34,10 +40,11 @@ const Column = ({ children }) => (
   </Box>
 );
 
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
 export default function ContractDetailsTab() {
   const contract = useContractDetails();
   const { updateDetails } = useContractActions();
-  const { data: employees = [] } = useEmployees();
 
   const [serviceTypes, setServiceTypes] = useState([]);
   const [softwares, setSoftwares] = useState([]);
@@ -58,11 +65,8 @@ export default function ContractDetailsTab() {
     () => ({
       clientPlatforms: softwares.filter((s) => !s.is_internal),
       internalSystems: softwares.filter((s) => s.is_internal),
-      employees: employees
-        .filter((e) => !e.terminated)
-        .map((e) => ({ id: e.id, name: e.name })),
     }),
-    [softwares, employees],
+    [softwares],
   );
 
   const save = async (changes) => {
@@ -114,7 +118,7 @@ export default function ContractDetailsTab() {
             alignItems: "start",
           }}
         >
-          {/* ───────────── Left: the work ───────────── */}
+          {/* ───────────── Left: what and how ───────────── */}
           <Column>
             <FieldCard
               {...card}
@@ -170,44 +174,48 @@ export default function ContractDetailsTab() {
                   type: "longtext",
                   rows: 6,
                   placeholder:
-                    "Each approved task, quantity, material, location, exclusion and acceptance requirement",
+                    "Approved tasks, materials, exclusions and acceptance requirements. Quantities per site go on the work orders.",
                 },
               ]}
             />
 
             <FieldCard
               {...card}
-              title="Schedule"
+              title="Sourcing and timing"
               fields={[
                 {
-                  label: "Handoff",
+                  label: "Source by",
                   type: "computed",
                   display: (x) =>
-                    x.handoff_on
-                      ? `${fmtDay(x.handoff_on)}${x.handoff_submitted_by_name ? ` · ${x.handoff_submitted_by_name}` : ""}`
-                      : "Not submitted",
+                    fmtDay(x.source_by_on) ?? "Set the approval date",
                   hint: (x) =>
-                    x.handoff_on ? null : "Submit from the Handoff tab",
+                    x.sites_total
+                      ? `${x.sites_sourced} of ${plural(x.sites_total, "site")} have a primary vendor`
+                      : null,
+                  tone: (x) => (x.source_by_overdue ? "bad" : null),
+                },
+                {
+                  key: "sub_award_business_days",
+                  label: "Sourcing window",
+                  type: "int",
+                  unit: "business days",
+                  required: true,
+                  hint: () => "From the approval date",
                 },
                 {
                   key: "lead_time_days",
-                  label: "Lead time",
+                  label: "Construction lead time",
                   type: "int",
                   unit: "days",
-                  projectOnly: true,
                   required: true,
+                  projectOnly: true,
+                  hint: () => "Earliest start after the handoff",
                 },
                 {
-                  key: "target_start_on",
-                  label: "Target start",
+                  key: "complete_by_on",
+                  label: "Complete all work by",
                   type: "date",
-                  hint: (x) =>
-                    x.handoff_kind === "project" ? "Handoff + lead time" : null,
-                },
-                {
-                  key: "client_required_on",
-                  label: "Client required date",
-                  type: "date",
+                  hint: () => "The client's deadline, if any",
                 },
                 {
                   key: "client_sla",
@@ -218,75 +226,78 @@ export default function ContractDetailsTab() {
                 },
                 {
                   key: "lead_time_override_reason",
-                  label: "Why the client's date wins",
+                  label: "Why the client's dates win",
                   type: "text",
                   max: 300,
                   projectOnly: true,
                 },
                 {
-                  key: "production_rate_per_day",
-                  label: "Daily production rate",
-                  type: "money",
-                  projectOnly: true,
-                },
-                {
-                  key: "production_days",
-                  label: "Production days",
-                  type: "int",
-                  min: 1,
-                  unit: "days",
-                  projectOnly: true,
+                  label: "Handoff",
+                  type: "computed",
+                  display: (x) =>
+                    x.handoff_on
+                      ? `${fmtDay(x.handoff_on)}${x.handoff_submitted_by_name ? ` · ${x.handoff_submitted_by_name}` : ""}`
+                      : "Not submitted",
                   hint: (x) =>
-                    x.production_days_computed
-                      ? `Value ÷ rate = ${x.production_days_computed} days`
-                      : null,
-                  tone: (x) =>
-                    x.production_days &&
-                    x.production_days_computed &&
-                    x.production_days !== x.production_days_computed
-                      ? "warn"
-                      : null,
-                },
-                {
-                  key: "planned_finish_on",
-                  label: "Planned finish",
-                  type: "date",
-                  hint: () => "Weekends skipped",
+                    x.handoff_on ? null : "Submit from the Handoff tab",
                 },
               ]}
             />
 
             <FieldCard
               {...card}
-              title="Closeout"
+              title="Requirements to plan for"
               fields={[
                 {
-                  key: "substantial_completion_on",
-                  label: "Substantial completion",
-                  type: "date",
+                  key: "permits_required",
+                  label: "Permits expected",
+                  type: "bool",
                 },
                 {
-                  key: "completion_notice_on",
-                  label: "Completion notice sent",
-                  type: "date",
+                  key: "traffic_control_required",
+                  label: "Traffic control expected",
+                  type: "bool",
                 },
                 {
-                  key: "client_accepted_on",
-                  label: "Client accepted",
-                  type: "date",
+                  key: "inspections_required",
+                  label: "Inspections expected",
+                  type: "bool",
                 },
-                { key: "closed_on", label: "Handoff closed", type: "date" },
                 {
-                  key: "warranty_expires_on",
-                  label: "Warranty expires",
-                  type: "date",
+                  key: "safety_notes",
+                  label: "Safety and site rules",
+                  type: "longtext",
+                  max: 1000,
+                  placeholder: "PPE, client site rules, licensing",
                 },
-                { key: "follow_up_on", label: "Follow-up", type: "date" },
+              ]}
+            />
+
+            <FieldCard
+              {...card}
+              title="Warranty"
+              fields={[
+                {
+                  key: "warranty_months",
+                  label: "Length",
+                  type: "int",
+                  unit: "months",
+                  hint: (x) =>
+                    x.warranty_months
+                      ? "From each work order's completion"
+                      : null,
+                },
+                {
+                  key: "warranty_terms",
+                  label: "Terms",
+                  type: "longtext",
+                  max: 1000,
+                },
               ]}
             />
           </Column>
 
-          {/* ───────── Right: the money and the people ───────── */}
+          {/* ───────── Right: money and people ───────── */}
           <Column>
             <FieldCard
               {...card}
@@ -310,12 +321,13 @@ export default function ContractDetailsTab() {
                   label: "Annual increase",
                   type: "percent",
                 },
+                { key: "approved_on", label: "Approved", type: "date" },
               ]}
             />
 
             <FieldCard
               {...card}
-              title="Money and billing"
+              title="Money plan"
               fields={[
                 {
                   key: "value",
@@ -323,7 +335,6 @@ export default function ContractDetailsTab() {
                   type: "money",
                   required: true,
                 },
-                { key: "approved_on", label: "Approved", type: "date" },
                 {
                   key: "sub_budget_percent",
                   label: "Subcontractor budget",
@@ -333,6 +344,12 @@ export default function ContractDetailsTab() {
                     x.sub_ceiling != null
                       ? `Ceiling ${fmtMoney(x.sub_ceiling)}`
                       : null,
+                },
+                {
+                  key: "target_margin_percent",
+                  label: "Required gross margin",
+                  type: "percent",
+                  required: true,
                 },
                 {
                   label: "Sub price vs client price",
@@ -349,111 +366,31 @@ export default function ContractDetailsTab() {
                         : `Over the ${x.sub_budget_percent}% budget`,
                   tone: (x) => (x.within_sub_budget === false ? "bad" : null),
                 },
+              ]}
+            />
+
+            <FieldCard
+              {...card}
+              title="Invoicing"
+              fields={[
                 {
-                  key: "target_margin_percent",
-                  label: "Required gross margin",
-                  type: "percent",
+                  key: "billing_trigger",
+                  label: "When we invoice",
+                  type: "select",
                   required: true,
+                  options: BILLING_TRIGGER_OPTIONS,
+                  hint: () => "Each work order is invoiced this way",
                 },
                 {
                   key: "deposit_percent",
                   label: "Deposit",
                   type: "percent",
                   required: true,
-                  projectOnly: true,
+                  showIf: (x) => x.billing_trigger === "deposit_and_completion",
                   hint: (x) =>
-                    x.deposit_amount != null
-                      ? `${fmtMoney(x.deposit_amount)} · final ${x.final_percent}% = ${fmtMoney(x.final_amount)}`
+                    x.final_percent != null
+                      ? `Balance of ${x.final_percent}% at completion`
                       : null,
-                },
-                {
-                  key: "deposit_invoiced_on",
-                  label: "Deposit invoiced",
-                  type: "date",
-                  projectOnly: true,
-                },
-                {
-                  key: "deposit_due_on",
-                  label: "Deposit due",
-                  type: "date",
-                  projectOnly: true,
-                },
-                {
-                  key: "deposit_received_on",
-                  label: "Deposit received",
-                  type: "date",
-                  projectOnly: true,
-                  hint: (x) =>
-                    x.deposit_received_on || x.deposit_exception_on
-                      ? null
-                      : "No mobilization until received",
-                  tone: (x) =>
-                    !x.deposit_received_on && !x.deposit_exception_on
-                      ? "warn"
-                      : null,
-                },
-                {
-                  key: "deposit_exception_reason",
-                  label: "Mobilize-before-deposit exception",
-                  type: "text",
-                  max: 300,
-                  projectOnly: true,
-                },
-                {
-                  key: "deposit_exception_by",
-                  label: "Exception approved by",
-                  type: "select",
-                  options: opts.employees,
-                  projectOnly: true,
-                },
-                {
-                  key: "deposit_exception_on",
-                  label: "Exception approved on",
-                  type: "date",
-                  projectOnly: true,
-                },
-                {
-                  key: "final_invoiced_on",
-                  label: "Final invoiced",
-                  type: "date",
-                },
-                { key: "final_due_on", label: "Final due", type: "date" },
-                {
-                  key: "final_received_on",
-                  label: "Final received",
-                  type: "date",
-                },
-              ]}
-            />
-
-            <FieldCard
-              {...card}
-              title="Subcontractor and risk"
-              fields={[
-                {
-                  key: "sub_award_business_days",
-                  label: "Award window",
-                  type: "int",
-                  unit: "business days",
-                  required: true,
-                },
-                {
-                  label: "Award deadline",
-                  type: "computed",
-                  display: (x) =>
-                    fmtDay(x.sub_award_deadline_on) ?? "Set the approval date",
-                  hint: (x) =>
-                    x.sub_awarded_on
-                      ? null
-                      : x.sub_award_overdue
-                        ? "Overdue"
-                        : null,
-                  tone: (x) => (x.sub_award_overdue ? "bad" : null),
-                },
-                {
-                  key: "sub_awarded_on",
-                  label: "Subcontractor awarded",
-                  type: "date",
                 },
                 {
                   key: "client_payment_terms",
@@ -463,33 +400,19 @@ export default function ContractDetailsTab() {
                   placeholder: "e.g. Net 30",
                 },
                 {
+                  key: "invoicing_notes",
+                  label: "Invoicing instructions",
+                  type: "longtext",
+                  max: 1000,
+                  placeholder:
+                    "Portal steps, PO on every invoice, who to send to…",
+                },
+                {
                   key: "sub_payment_terms",
                   label: "Sub payment terms",
                   type: "text",
                   max: 50,
                   placeholder: "e.g. Net 45",
-                },
-                {
-                  key: "permits_required",
-                  label: "Permits required",
-                  type: "bool",
-                },
-                {
-                  key: "traffic_control_required",
-                  label: "Traffic control required",
-                  type: "bool",
-                },
-                {
-                  key: "inspections_required",
-                  label: "Inspections required",
-                  type: "bool",
-                },
-                {
-                  key: "safety_notes",
-                  label: "Safety and site rules",
-                  type: "longtext",
-                  max: 1000,
-                  placeholder: "PPE, site-specific rules, licensing",
                 },
               ]}
             />

@@ -13,7 +13,9 @@
 //
 // Field types: text · longtext · date · money · percent · int · bool ·
 // select (options: [{ id, name }]) · computed (read-only, display(c)).
-// projectOnly fields hide unless the contract is a project (or its kind is
+// showIf(contract) hides a field when it returns false (e.g. deposit % only
+// when the contract bills a deposit). projectOnly fields hide unless the
+// contract is a project (or its kind is
 // unknown). onSave gets only this card's editable fields.
 import { isValidElement } from "react";
 import { Box, MenuItem, Switch, TextField, Typography } from "@mui/material";
@@ -186,7 +188,9 @@ export default function FieldCard({
   children,
 }) {
   const visible = fields.filter(
-    (f) => !f.projectOnly || kind === "project" || kind == null,
+    (f) =>
+      (!f.projectOnly || kind === "project" || kind == null) &&
+      (!f.showIf || f.showIf(contract)),
   );
   const editableKeys = visible
     .filter((f) => f.key && f.type !== "computed" && !f.readOnly)
