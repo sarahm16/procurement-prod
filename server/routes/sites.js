@@ -209,11 +209,21 @@ const serializeAttachment = (a) => ({
 // client can render it directly.
 const serializeClient = (client) => client?.client ?? null;
 
+// The site's client, with the client's segment — a site always has its
+// client's segment (read-only on the site).
+const CLIENT_SELECT = {
+  id: true,
+  client: true,
+  Segment: { select: { name: true } },
+};
+
 /** `lines` = serialized lines for this site; `statusRow` = its vw_SiteStatus row. */
-const serializeSite = (site, lines, statusRow) => ({
+const serializeSite = ({ Client, ...site }, lines, statusRow) => ({
   ...site,
   service_lines: lines,
-  client: serializeClient(site.Client),
+  client: serializeClient(Client),
+  // Inherited from the client; not editable on the site.
+  segment: Client?.Segment?.name ?? null,
   ...serializeSiteStatus(statusRow),
 });
 
@@ -268,7 +278,7 @@ export default function sitesRouter(prisma) {
     try {
       const [sites, lineRows, statusRows] = await Promise.all([
         prisma.Sites.findMany({
-          include: { Client: { select: { id: true, client: true } } },
+          include: { Client: { select: CLIENT_SELECT } },
         }),
         prisma.serviceLineStatus.findMany(),
         prisma.siteStatus.findMany(),
@@ -379,7 +389,7 @@ export default function sitesRouter(prisma) {
         prisma.Sites.findUnique({
           where: { id: siteId },
           include: {
-            Client: { select: { id: true, client: true } },
+            Client: { select: CLIENT_SELECT },
             Contacts: { include: { ContactRole: true } },
           },
         }),
@@ -427,7 +437,7 @@ export default function sitesRouter(prisma) {
     try {
       const site = await prisma.Sites.create({
         data,
-        include: { Client: { select: { id: true, client: true } } },
+        include: { Client: { select: CLIENT_SELECT } },
       });
       res.status(201).json(serializeSite(site, [], null));
     } catch (error) {
