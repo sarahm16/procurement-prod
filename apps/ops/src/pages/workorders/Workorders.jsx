@@ -14,6 +14,7 @@ import ListPageLayout from "../../components/ListPageLayout/ListPageLayout";
 import ListToolbar from "../../components/ListPageLayout/ListToolbar";
 import SlideOutPanel from "../../components/ListPageLayout/SlideOutPanel";
 import CreateWorkorderForm from "./CreateWorkorderForm";
+import ClientSegmentChip from "../../components/ClientSegmentChip/ClientSegmentChip";
 
 import AddIcon from "@mui/icons-material/Add";
 import RefreshIcon from "@mui/icons-material/Refresh";
@@ -205,6 +206,18 @@ function Workorders() {
         headerName: "Site",
         width: 160,
         valueGetter: (value, row) => row.Site?.store ?? "",
+      },
+
+      {
+        field: "segment",
+        headerName: "Segment",
+        width: 140,
+        valueGetter: (value) => value ?? "",
+        renderCell: ({ value }) => (
+          <Box sx={{ display: "flex", alignItems: "center", height: "100%" }}>
+            {value ? <ClientSegmentChip segment={value} /> : "—"}
+          </Box>
+        ),
       },
       {
         field: "type",

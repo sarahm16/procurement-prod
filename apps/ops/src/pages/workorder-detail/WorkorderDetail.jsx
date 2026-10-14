@@ -1,26 +1,16 @@
 // Libraries
 import { useParams } from "react-router-dom";
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-import axios from "axios";
 
 // Local Components
 import DetailPageHeader from "../../components/DetailPageLayout/DetailPageHeader";
 import DetailPageLayout from "../../components/DetailPageLayout/DetailPageLayout";
+import ClientSegmentChip from "../../components/ClientSegmentChip/ClientSegmentChip";
 
 // Tabs
 // import WorkOrderDetailsTab from "./tabs/DetailsTab/WorkOrderDetailsTab";
 import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
-// import WorkOrderDocumentationTab from "./tabs/Documentation/WorkOrderDocumentationTab";
 
 // Local Functions
-import { sendEmailFromHTML } from "../../*/api/microsoftApi";
 import { useWorkOrderStatuses } from "../../*/hooks/useWorkOrderStatuses";
 import useAuthenticatedUser from "../../*/hooks/useAuthenticatedUser";
 import {
@@ -34,6 +24,8 @@ import {
 import WorkOrderDetailsTab from "./tabs/DetailsTab/WorkOrderDetailsTab";
 import FieldActivityTab from "./tabs/FieldActivityTab/FieldActivityTab";
 import AttachmentsTab from "./tabs/AttachmentsTab/AttachmentsTab";
+
+import Tooltip from "@mui/material/Tooltip";
 
 function WorkOrderDetail() {
   const { id } = useParams();
@@ -74,6 +66,18 @@ function WorkOrderDetailLayout({ id }) {
           address={`${site.mailing_address ?? ""}, ${site.mailing_city ?? ""}, ${site.mailing_state ?? ""} ${site.mailing_zipcode ?? ""}`}
           onBack={() => console.log("Back button clicked")}
           actions={[]}
+          badges={
+            details?.segment ? (
+              <Tooltip
+                title={`From the client${details?.client ? ` (${details.client})` : ""} — change it there`}
+                arrow
+              >
+                <span>
+                  <ClientSegmentChip segment={details.segment} />
+                </span>
+              </Tooltip>
+            ) : null
+          }
         />
       }
       tabs={[

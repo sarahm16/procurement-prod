@@ -17,6 +17,8 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 },
 });
 
+const segmentOf = (wo) => wo?.Site?.Client?.Segment?.name ?? null;
+
 const entity_type_id = 4;
 
 const WORKORDER_ATTACHMENTS_CONTAINER = "workorder-attachments";
@@ -118,6 +120,7 @@ const serializeCommunication = (c) => ({
 const serializeWorkorderById = (workorder, notes, activityLog) => {
   return {
     client: workorder?.Site?.Client?.client,
+    segment: segmentOf(workorder),
     priority: workorder?.priority,
     external_id: workorder?.external_id,
     work_order_number: workorder?.work_order_number,
@@ -182,12 +185,14 @@ export default function workordersRouter(prisma) {
               store: true,
               mailing_city: true,
               mailing_state: true,
-              Client: { select: { client: true } },
+              Client: {
+                select: { client: true, Segment: { select: { name: true } } },
+              },
             },
           },
         },
       });
-      res.json(workorders);
+      res.json(workorders.map((wo) => ({ ...wo, segment: segmentOf(wo) })));
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         console.error("Prisma error fetching workorders:", error);
@@ -362,13 +367,15 @@ export default function workordersRouter(prisma) {
               store: true,
               mailing_city: true,
               mailing_state: true,
-              Client: { select: { client: true } },
+              Client: {
+                select: { client: true, Segment: { select: { name: true } } },
+              },
             },
           },
         },
       });
 
-      res.status(201).json(full);
+      res.status(201).json({ ...full, segment: segmentOf(full) });
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         if (error.code === "P2002") {
@@ -550,7 +557,13 @@ export default function workordersRouter(prisma) {
                 mailing_city: true,
                 mailing_state: true,
                 mailing_zipcode: true,
-                Client: { select: { client: true, id: true } },
+                Client: {
+                  select: {
+                    client: true,
+                    id: true,
+                    Segment: { select: { name: true } },
+                  },
+                },
                 Contacts: true,
               },
             },
