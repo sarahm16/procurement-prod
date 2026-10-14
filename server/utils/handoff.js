@@ -44,7 +44,7 @@ export const addBusinessDays = (date, n) => {
 };
 
 /**
- * The last day of a run of `days` production days starting on `start`,
+ * (For work orders.) The last day of a run of `days` production days starting on `start`,
  * skipping weekends. A start on a weekend rolls to Monday first.
  */
 export const productionFinish = (start, days) => {
@@ -98,11 +98,24 @@ export const loadHandoffRules = async (db) => {
   );
 };
 
+/** How each kind of job is invoiced unless the contract says otherwise. */
+export const BILLING_TRIGGERS = [
+  "upon_completion",
+  "deposit_and_completion",
+  "monthly",
+  "per_visit",
+];
+const DEFAULT_BILLING = {
+  project: "deposit_and_completion", // the deck: 50% deposit, 50% at completion
+  on_demand: "upon_completion",
+  planned_maintenance: "monthly",
+};
+
 /**
- * The handoff defaults a new contract starts with, from the rules. Only
- * fields the caller didn't send are filled.
+ * The handoff defaults a new contract starts with, from the rules and the
+ * kind of job. Only fields the caller didn't send are filled.
  */
-export const handoffDefaults = (rules, { serviceLineName } = {}) => {
+export const handoffDefaults = (rules, { kind } = {}) => {
   const out = {};
   const set = (k, v) => {
     if (v !== undefined && v !== null && v !== "") out[k] = v;
@@ -113,12 +126,7 @@ export const handoffDefaults = (rules, { serviceLineName } = {}) => {
   set("lead_time_days", rules.lead_time_days);
   set("sub_award_business_days", rules.sub_award_business_days);
   set("update_cadence", rules.update_cadence);
-  set(
-    "production_rate_per_day",
-    isAsphalt(serviceLineName)
-      ? rules.production_rate_asphalt
-      : rules.production_rate_default,
-  );
+  set("billing_trigger", DEFAULT_BILLING[kind] ?? "upon_completion");
   return out;
 };
 

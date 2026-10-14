@@ -76,6 +76,8 @@ export function ClientDetailProvider({ id, children }) {
           ...pickStatus(data),
           client: data.client,
           legal_name: data.legal_name,
+          segment_id: data.segment_id ?? null,
+          segment: data.segment ?? null,
           mailing_address: data.mailing_address,
           mailing_address2: data.mailing_address2,
           mailing_city: data.mailing_city,

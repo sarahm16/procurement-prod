@@ -64,7 +64,6 @@ const FIELD_LABELS = {
   service_type_id: "Service type",
   software_id: "Client platform",
   internal_system_id: "Our system of record",
-  company_id: "Operating brand",
   start_date: "Start date",
   end_date: "End date",
   auto_renew: "Auto renew",

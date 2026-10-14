@@ -27,6 +27,8 @@ model Clients {
   created_at         DateTime                @default(now())
   tax_treatment      String                  @default("Billed separately") @db.VarChar(30)
   invoice_portal     String?                 @db.VarChar(200)
+  segment_id         Int?                    // what kind of client: Government, Commercial, Residential
+  Segment            ClientSegments?         @relation(fields: [segment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   PausedBy           Employees?              @relation("ClientPausedBy", fields: [paused_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   Contacts           ClientContacts[]
   ClientServiceLines ClientServiceLines[]
@@ -43,7 +45,6 @@ model Companies {
   created_at DateTime @default(now())
   Client     Clients? @relation(fields: [client_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK__Companies__clien__3E1D39E1")
   Sites      Sites[]
-  Contracts  Contracts[]
 }
 
 model ClientContacts {
@@ -78,4 +79,14 @@ model ClientServiceLineSOWs {
   ServiceLine                   ServiceLines @relation(fields: [service_line_id], references: [id], onUpdate: NoAction, map: "FK__ClientSer__servi__6CD828CA")
 
   @@id([client_id, service_line_id], map: "PK_ClientServiceLineSOWs")
+}
+
+/// What kind of client this is (Government, Commercial, Residential). A
+/// table rather than fixed values, so options can be added or renamed
+/// without a migration.
+model ClientSegments {
+  id         Int       @id @default(autoincrement())
+  name       String    @unique @db.VarChar(50)
+  sort_order Int       @default(0)
+  Clients    Clients[]
 }

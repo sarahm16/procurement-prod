@@ -1,5 +1,7 @@
 // Libraries
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import axios from "axios";
 
 // Local Components
 import InfoGrid, { FieldRow, InfoCard } from "../../../components/InfoGrid";
@@ -11,6 +13,8 @@ import ClientServiceLinesCard from "./ClientServiceLinesCard";
 
 // MUI Components
 import Box from "@mui/material/Box";
+import MenuItem from "@mui/material/MenuItem";
+import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 // Context
@@ -46,6 +50,15 @@ function ClientDetailsTab() {
   const contacts = useClientContacts();
   const { updateDetails, addContact, updateContact, deleteContact } =
     useClientActions();
+
+  // Segment options (Government, Commercial, Residential).
+  const [segments, setSegments] = useState([]);
+  useEffect(() => {
+    axios
+      .get("/api/clients/segments")
+      .then(({ data }) => setSegments(Array.isArray(data) ? data : []))
+      .catch((e) => console.error("Error fetching client segments:", e));
+  }, []);
 
   return (
     <InfoGrid>
@@ -95,6 +108,42 @@ function ClientDetailsTab() {
               type="text"
               render={false}
               editable
+            />
+            <FieldRow
+              label="Segment"
+              value={details.segment_id}
+              fieldKey="segment_id"
+              render={(value, editing, { onChange }) =>
+                editing ? (
+                  <TextField
+                    select
+                    size="small"
+                    fullWidth
+                    value={value ?? ""}
+                    onChange={(e) =>
+                      onChange(
+                        "segment_id",
+                        e.target.value === "" ? null : e.target.value,
+                      )
+                    }
+                  >
+                    <MenuItem value="">
+                      <em>Not set</em>
+                    </MenuItem>
+                    {segments.map((sg) => (
+                      <MenuItem key={sg.id} value={sg.id}>
+                        {sg.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                ) : (
+                  <Typography sx={{ fontSize: "0.85rem" }}>
+                    {segments.find((sg) => sg.id === value)?.name ??
+                      details.segment ??
+                      "—"}
+                  </Typography>
+                )
+              }
             />
           </InfoCard>
           <InfoCard

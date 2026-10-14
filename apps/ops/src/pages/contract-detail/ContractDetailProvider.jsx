@@ -70,7 +70,7 @@ export function ContractDetailProvider({ id, children }) {
   /**
    * Save edited fields (send only the ones the card owns). The server saves
    * what changed and answers with the whole contract; it's merged in so the
-   * extra bits from the first load (company options) stay. Throws so the
+   * fields from the first load stay. Throws so the
    * card can show the error.
    */
   const updateDetails = useCallback(

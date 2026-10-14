@@ -146,14 +146,6 @@ export default function ContractDetailsTab() {
                   options: serviceTypes,
                 },
                 {
-                  key: "company_id",
-                  label: "Operating brand",
-                  type: "select",
-                  options: c.company_options ?? [],
-                  hint: (x) =>
-                    x.company_id ? null : "N/A — the parent company",
-                },
-                {
                   key: "executive_summary",
                   label: "Executive summary",
                   type: "longtext",

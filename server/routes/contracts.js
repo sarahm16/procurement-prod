@@ -59,12 +59,7 @@ const TEXT_FIELDS = {
   safety_notes: [1000],
   warranty_terms: [1000],
 };
-const ID_FIELDS = [
-  "service_type_id",
-  "software_id",
-  "internal_system_id",
-  "company_id",
-];
+const ID_FIELDS = ["service_type_id", "software_id", "internal_system_id"];
 const INT_FIELDS = {
   // field: [min, required]
   lead_time_days: [0, true],
@@ -217,7 +212,6 @@ export const serializeContract = (
     ServiceType,
     Software,
     InternalSystem,
-    Company,
     HandoffSubmittedBy,
     ContractSites,
     ChecklistItems,
@@ -255,7 +249,6 @@ export const serializeContract = (
     service_type: ServiceType?.name ?? null,
     software: Software?.name ?? null,
     internal_system: InternalSystem?.name ?? null,
-    company: Company?.company ?? null,
     handoff_submitted_by_name: HandoffSubmittedBy?.name ?? null,
     status: meta.name ? { key, name: meta.name, color: meta.color } : null,
     status_key: key,
@@ -305,7 +298,6 @@ const CONTRACT_INCLUDE = {
   ServiceType: { select: { id: true, name: true } },
   Software: { select: { id: true, name: true } },
   InternalSystem: { select: { id: true, name: true } },
-  Company: { select: { id: true, company: true } },
   HandoffSubmittedBy: { select: { id: true, name: true } },
 };
 
@@ -424,19 +416,8 @@ export default function contractsRouter(prisma) {
       if (!contract)
         return res.status(404).json({ error: "Contract not found" });
 
-      // The client's brands, for the Operating brand dropdown.
-      const companyOptions = await prisma.companies.findMany({
-        where: { client_id: contract.client_id },
-        select: { id: true, company: true },
-        orderBy: { company: "asc" },
-      });
-
       res.json({
         ...contract,
-        company_options: companyOptions.map((c) => ({
-          id: c.id,
-          name: c.company,
-        })),
         notes: notes.map(serializeNote),
         activity_log: activityLog.map(serializeActivityLogEntry),
       });

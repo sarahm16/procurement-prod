@@ -19,7 +19,6 @@ model Contracts {
   // existed before the column was added.
 
   // Identity
-  company_id                Int?                 // operating brand (child of the client)
   executive_summary         String?   @db.NVarChar(2000)
   scope_of_work             String?   @db.NVarChar(Max)
 
@@ -68,7 +67,6 @@ model Contracts {
   // existing foreign key.
   Software                Softwares?      @relation("ContractClientPlatform", fields: [software_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   InternalSystem          Softwares?      @relation("ContractInternalSystem", fields: [internal_system_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  Company                 Companies?      @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   HandoffSubmittedBy      Employees?      @relation("ContractHandoffSubmittedBy", fields: [handoff_submitted_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   
   ChecklistItems          ContractChecklistItems[]

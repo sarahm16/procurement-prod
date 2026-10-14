@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
+import Box from "@mui/material/Box";
+
 // Layout Components
 import ListDataGrid from "../../components/ListPageLayout/ListDataGrid";
 import ListPageLayout from "../../components/ListPageLayout/ListPageLayout";
@@ -9,6 +11,7 @@ import ListToolbar from "../../components/ListPageLayout/ListToolbar";
 import ServiceLineChips, {
   StatusCell,
 } from "../../components/ServiceLineChips";
+import ClientSegmentChip from "../../components/ClientSegmentChip/ClientSegmentChip";
 
 const CLIENT_ENTITY_TYPE_ID = 3; // whatever your Clients entity type id is
 
@@ -92,6 +95,17 @@ const baseColumns = [
     headerName: "Zip",
     width: 90,
     valueGetter: (value) => clean(value) ?? "—",
+  },
+  {
+    field: "segment",
+    headerName: "Segment",
+    width: 140,
+    valueGetter: (value) => value ?? "",
+    renderCell: ({ value }) => (
+      <Box sx={{ display: "flex", alignItems: "center", height: "100%" }}>
+        {value ? <ClientSegmentChip segment={value} /> : "—"}
+      </Box>
+    ),
   },
   {
     field: "status_key",

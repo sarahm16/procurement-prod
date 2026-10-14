@@ -1,4 +1,4 @@
-// components/ServiceLineChips/ServiceLineChips.jsx
+// components/ServiceLineChips.jsx
 //
 // Service lines as chips in their own icon + colour (constants/
 // serviceLineConfig), shared by every list so they all look the same.

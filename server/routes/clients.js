@@ -171,8 +171,10 @@ const stripPauseColumns = ({ paused_at, paused_reason, paused_by, ...rest }) =>
   rest;
 
 const serializeClient = (client, statusRow) => {
+  const { Segment, ...rest } = client;
   return {
-    ...stripPauseColumns(client),
+    ...stripPauseColumns(rest),
+    segment: Segment?.name ?? null,
     service_lines: client.ClientServiceLines.map((csl) => csl.ServiceLine),
     role_assignments: (client.role_assignments || []).map(
       serializeRoleAssignment,
@@ -189,9 +191,10 @@ const serializeClientById = (
   contacts,
   serviceLines,
 ) => {
-  const { PausedBy, ClientServiceLines, ...rest } = client;
+  const { PausedBy, ClientServiceLines, Segment, ...rest } = client;
   return {
     ...stripPauseColumns(rest),
+    segment: Segment?.name ?? null,
     // With status and counts per line — see loadClientServiceLines.
     service_lines: serviceLines,
     notes: notes.map(serializeNote),
@@ -211,6 +214,7 @@ function clientsRouter(prisma) {
     try {
       const clients = await prisma.clients.findMany({
         include: {
+          Segment: { select: { id: true, name: true } },
           ClientServiceLines: {
             include: {
               ServiceLine: true,
@@ -269,6 +273,22 @@ function clientsRouter(prisma) {
 
   // Fetch all scopes of work
   // GET /api/clients/scopes
+  // GET /api/clients/segments — the options for a client's segment
+  // (Government, Commercial, Residential). Before /:id so "segments" isn't
+  // read as an id.
+  router.get("/segments", async (req, res) => {
+    try {
+      const segments = await prisma.clientSegments.findMany({
+        orderBy: [{ sort_order: "asc" }, { name: "asc" }],
+        select: { id: true, name: true },
+      });
+      res.json(segments);
+    } catch (error) {
+      console.error("Error fetching client segments:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
   router.get("/scopes", async (req, res) => {
     try {
       const scopes = await prisma.clientServiceLineSOWs.findMany({
@@ -293,6 +313,7 @@ function clientsRouter(prisma) {
           prisma.clients.findUnique({
             where: { id: Number(id) },
             include: {
+              Segment: { select: { id: true, name: true } },
               ClientServiceLines: {
                 include: {
                   ServiceLine: true,
@@ -508,6 +529,7 @@ function clientsRouter(prisma) {
     // "status" removed — it's worked out from contracts now. Pausing is
     // PUT /:id/pause and /:id/unpause.
     "brand",
+    "segment_id",
     "mailing_address",
     "mailing_address2",
     "mailing_city",
@@ -547,6 +569,21 @@ function clientsRouter(prisma) {
       return res.status(400).json({ error: "No valid fields to update" });
     }
 
+    // Segment: a ClientSegments id, or empty to clear it.
+    if ("segment_id" in requested) {
+      const v = requested.segment_id;
+      requested.segment_id = v === "" || v == null ? null : Number(v);
+      if (requested.segment_id !== null) {
+        const ok =
+          Number.isInteger(requested.segment_id) &&
+          (await prisma.clientSegments.findUnique({
+            where: { id: requested.segment_id },
+            select: { id: true },
+          }));
+        if (!ok) return res.status(400).json({ error: "Unknown segment" });
+      }
+    }
+
     try {
       // Fetch existing values for just the fields being touched
       const existing = await prisma.clients.findUnique({
@@ -576,7 +613,23 @@ function clientsRouter(prisma) {
         });
 
         const fieldNames = changedFields.map(([k]) => k);
-        const summary = changedFields.map(([k, v]) => `${k}: ${v}`).join(", ");
+        // Log the segment by name, not its id.
+        const segmentName =
+          "segment_id" in data && data.segment_id != null
+            ? (
+                await tx.clientSegments.findUnique({
+                  where: { id: data.segment_id },
+                  select: { name: true },
+                })
+              )?.name
+            : null;
+        const summary = changedFields
+          .map(([k, v]) =>
+            k === "segment_id"
+              ? `segment: ${segmentName ?? "cleared"}`
+              : `${k}: ${v}`,
+          )
+          .join(", ");
 
         await logActivity(tx, {
           entityTypeId: entity_type_id,

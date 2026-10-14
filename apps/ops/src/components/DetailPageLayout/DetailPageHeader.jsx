@@ -217,6 +217,8 @@ function MetaItem({ label, value, icon }) {
  *   breadcrumbs   {Array}     — [{ label, href }]
  *   meta          {Array}     — [{ label, value, icon }]
  *   address       {string}    — optional address with pin icon
+ *   badges        {ReactNode} — small chips after the status (optional),
+ *                               e.g. the client's segment
  *   actions       {ReactNode} — right-side action buttons
  */
 export default function DetailPageHeader({
@@ -230,6 +232,7 @@ export default function DetailPageHeader({
   breadcrumbs = [],
   meta = [],
   address,
+  badges,
   actions,
 }) {
   const theme = useTheme();
@@ -363,6 +366,8 @@ export default function DetailPageHeader({
                 {statusHint}
               </Typography>
             )}
+
+            {badges}
           </Box>
 
           {/* Meta row */}

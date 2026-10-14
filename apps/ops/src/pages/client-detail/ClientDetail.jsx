@@ -18,6 +18,7 @@ import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
 // Layout
 import DetailPageHeader from "../../components/DetailPageLayout/DetailPageHeader";
 import DetailPageLayout from "../../components/DetailPageLayout/DetailPageLayout";
+import ClientSegmentPicker from "./ClientSegmentPicker";
 
 // Tabs
 import ClientDocumentationTab from "./tabs/ClientDocumentationTab";
@@ -221,7 +222,7 @@ function ClientDetailLayout() {
           // Read-only: no statusOptions / onStatusChange. The status comes
           // from the client's contracts; Pause is the only manual override.
           status={details?.status}
-          statusHint={statusHint(details)}
+          // statusHint={statusHint(details)}
           statusTooltip={statusTooltip(details)}
           actions={<PauseButton />}
           breadcrumbs={[
@@ -229,6 +230,7 @@ function ClientDetailLayout() {
             { label: details?.client },
           ]}
           address={formatAddress(details)}
+          badges={<ClientSegmentPicker />}
         />
       }
       notes={notes}
@@ -242,7 +244,11 @@ function ClientDetailLayout() {
           content: (
             <ActivityLog
               entries={activity}
-              fieldLabels={{ paused: "Status", service_line: "Service lines" }}
+              fieldLabels={{
+                paused: "Status",
+                service_line: "Service lines",
+                segment_id: "Segment",
+              }}
             />
           ),
         },

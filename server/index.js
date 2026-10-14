@@ -30,6 +30,7 @@ import roleAssignmentsRouter from "./routes/roleAssignments.js";
 import pandadocRouter from "./routes/pandadoc.js";
 import workordersRouter from "./routes/workorders.js";
 import sourcingRouter from "./routes/sourcing.js";
+import handoffRulesRouter from "./routes/handoffRules.js";
 
 import prisma from "./db.js";
 
@@ -71,6 +72,7 @@ app.use("/api/roleAssignments", roleAssignmentsRouter(prisma));
 app.use("/api/workorders", workordersRouter(prisma));
 app.use("/api/pandadoc", pandadocRouter);
 app.use("/api/sourcing", sourcingRouter(prisma));
+app.use("/api/handoff-rules", handoffRulesRouter(prisma));
 
 // Catch-all LAST — hands everything else to React Router
 // app.get("/*splat", (req, res) => {
