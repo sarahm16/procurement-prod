@@ -3,6 +3,8 @@ import { useParams } from "react-router-dom";
 // Layout Components
 import DetailPageHeader from "../../components/DetailPageLayout/DetailPageHeader";
 import DetailPageLayout from "../../components/DetailPageLayout/DetailPageLayout";
+import ClientSegmentChip from "../../components/ClientSegmentChip/ClientSegmentChip";
+import Tooltip from "@mui/material/Tooltip";
 
 // Context
 import {
@@ -89,6 +91,19 @@ function SiteDetailLayout() {
           // when one of its service lines is — change the lines on the
           // Details tab, not the site.
           status={details?.status}
+          // The client's segment — read-only here; it's changed on the client.
+          badges={
+            details?.segment ? (
+              <Tooltip
+                title={`From the client${details?.client ? ` (${details.client})` : ""} — change it there`}
+                arrow
+              >
+                <span>
+                  <ClientSegmentChip segment={details.segment} />
+                </span>
+              </Tooltip>
+            ) : null
+          }
           statusHint={statusHint(details)}
           statusTooltip="Worked out from this site's service lines. To change it, add or remove the site on a contract from the Service Lines card."
           breadcrumbs={[

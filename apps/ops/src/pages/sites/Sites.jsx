@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { Box, Chip, Tooltip, Typography, alpha } from "@mui/material";
+import Box from "@mui/material/Box";
 
 import ListDataGrid from "../../components/ListPageLayout/ListDataGrid";
 import ListPageLayout from "../../components/ListPageLayout/ListPageLayout";
 import ListToolbar from "../../components/ListPageLayout/ListToolbar";
-// Adjust this path to wherever constants/ lives relative to this page.
-import { getServiceLineConfig } from "../../*/constants/serviceLineConfig";
+import ClientSegmentChip from "../../components/ClientSegmentChip/ClientSegmentChip";
+import ServiceLineChips, {
+  StatusCell,
+} from "../../components/ServiceLineChips";
 
 /**
  * GET /api/sites returns, per site:
@@ -18,17 +20,6 @@ import { getServiceLineConfig } from "../../*/constants/serviceLineConfig";
  * Line and site statuses are worked out server-side from contract dates
  * (vw_ServiceLineStatus / vw_SiteStatus). This page only displays them.
  */
-
-/** "2026-11-01" → "Nov 1, 2026" without the timezone shifting the day. */
-const fmtDay = (ymd) =>
-  ymd
-    ? new Date(`${ymd}T00:00:00Z`).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        timeZone: "UTC",
-      })
-    : "";
 
 /** Char(n) columns come back space-padded; treat "" as missing. */
 const clean = (v) => (typeof v === "string" ? v.trim() || null : (v ?? null));
@@ -55,11 +46,15 @@ const getCurrentLines = (site) =>
     .map(normalizeServiceLine)
     .filter((sl) => sl && sl.is_current);
 
-const lineTooltip = (sl) => {
-  if (sl.status_key === "upcoming") return `Starts ${fmtDay(sl.starts_on)}`;
-  if (sl.ends_on) return `Active · last day ${fmtDay(sl.ends_on)}`;
-  return "Active";
-};
+/** Current lines in the shape ServiceLineChips takes. */
+const toChipLines = (row) =>
+  getCurrentLines(row).map((sl) => ({
+    key: sl.contract_site_id,
+    name: sl.service_line,
+    status_key: sl.status_key,
+    starts_on: sl.starts_on,
+    ends_on: sl.ends_on,
+  }));
 
 const SITE_STATUS_OPTIONS = [
   { value: "active", label: "Active" },
@@ -67,31 +62,6 @@ const SITE_STATUS_OPTIONS = [
   { value: "inactive", label: "Inactive" },
   { value: "none", label: "No contracts" },
 ];
-
-/** One service line chip: the line's own icon and colour from the config. */
-function LineChip({ line }) {
-  const { color, icon: Icon } = getServiceLineConfig(line.service_line);
-  const upcoming = line.status_key === "upcoming";
-  return (
-    <Tooltip title={lineTooltip(line)} arrow enterDelay={300}>
-      <Chip
-        icon={<Icon />}
-        label={line.service_line}
-        size="small"
-        sx={{
-          height: 24,
-          fontWeight: 600,
-          fontSize: "0.72rem",
-          color: "text.primary",
-          bgcolor: alpha(color, upcoming ? 0.05 : 0.12),
-          border: `1px ${upcoming ? "dashed" : "solid"} ${alpha(color, 0.45)}`,
-          opacity: upcoming ? 0.85 : 1,
-          "& .MuiChip-icon": { color, fontSize: 15, ml: 0.75 },
-        }}
-      />
-    </Tooltip>
-  );
-}
 
 function Sites() {
   const navigate = useNavigate();
@@ -223,37 +193,26 @@ function Sites() {
         valueGetter: (value) => clean(value) ?? "—",
       },
       {
+        field: "segment",
+        headerName: "Segment",
+        width: 140,
+        // From the site's client; read-only.
+        valueGetter: (value) => value ?? "",
+        renderCell: ({ value }) => (
+          <Box sx={{ display: "flex", alignItems: "center", height: "100%" }}>
+            {value ? <ClientSegmentChip segment={value} /> : "—"}
+          </Box>
+        ),
+      },
+      {
         field: "status_key",
         headerName: "Status",
         width: 130,
         // Sort/export by the label, not the key.
         valueGetter: (value, row) => row.status_name ?? "No contracts",
-        renderCell: (params) => {
-          const color = params.row.status_color ?? "#9CA3AF";
-          return (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 0.75,
-                height: "100%",
-              }}
-            >
-              <Box
-                sx={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  bgcolor: color,
-                  flexShrink: 0,
-                }}
-              />
-              <Typography sx={{ fontSize: "0.8rem", fontWeight: 500 }}>
-                {params.value}
-              </Typography>
-            </Box>
-          );
-        },
+        renderCell: (params) => (
+          <StatusCell name={params.value} color={params.row.status_color} />
+        ),
       },
       {
         field: "service_lines",
@@ -266,55 +225,9 @@ function Sites() {
           getCurrentLines(row)
             .map((sl) => sl.service_line)
             .join(", "),
-        renderCell: (params) => {
-          const lines = getCurrentLines(params.row);
-
-          if (lines.length === 0)
-            return (
-              <Box
-                sx={{ display: "flex", alignItems: "center", height: "100%" }}
-              >
-                <Typography sx={{ color: "text.disabled", fontSize: "0.8rem" }}>
-                  —
-                </Typography>
-              </Box>
-            );
-
-          const visible = lines.slice(0, 3);
-          const rest = lines.slice(3);
-
-          return (
-            <Box
-              sx={{
-                display: "flex",
-                gap: 0.5,
-                alignItems: "center",
-                height: "100%",
-                flexWrap: "nowrap",
-                overflow: "hidden",
-              }}
-            >
-              {visible.map((sl, i) => (
-                <LineChip
-                  key={sl.contract_site_id ?? `${sl.service_line}-${i}`}
-                  line={sl}
-                />
-              ))}
-              {rest.length > 0 && (
-                <Tooltip
-                  title={rest.map((sl) => sl.service_line).join(", ")}
-                  arrow
-                >
-                  <Chip
-                    label={`+${rest.length}`}
-                    size="small"
-                    sx={{ height: 24, fontWeight: 600, fontSize: "0.72rem" }}
-                  />
-                </Tooltip>
-              )}
-            </Box>
-          );
-        },
+        renderCell: (params) => (
+          <ServiceLineChips lines={toChipLines(params.row)} />
+        ),
       },
     ],
     [],
