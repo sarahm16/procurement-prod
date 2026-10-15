@@ -22,6 +22,8 @@ import CloseIcon from "@mui/icons-material/Close";
 import PeopleOutlineIcon from "@mui/icons-material/PeopleOutline";
 import axios from "axios";
 
+import SectionCard from "./SectionCard";
+
 const initials = (name) =>
   (name ?? "")
     .split(" ")
@@ -298,9 +300,11 @@ export default function Contacts({
 
         setContactRoles(res.data);
       })
-      .catch((error) => console.error("error fetching contact roles", errro));
+      .catch((error) => console.error("error fetching contact roles", error));
 
-    return () => (active = true);
+    return () => {
+      active = false;
+    };
   }, []);
 
   // primary first, then the rest
@@ -316,63 +320,22 @@ export default function Contacts({
   };
 
   return (
-    <Box sx={{ mt: 1 }}>
-      {/* Section header — prominent, matches the app's section style */}
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          mb: 1.5,
-        }}
-      >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 28,
-              height: 28,
-              borderRadius: 1,
-              backgroundColor: theme.palette.primary.main,
-              color: "#fff",
-            }}
-          >
-            <PeopleOutlineIcon sx={{ fontSize: 17 }} />
-          </Box>
-          <Typography
-            sx={{
-              fontFamily: '"Barlow Condensed", sans-serif',
-              fontWeight: 700,
-              fontSize: "1.1rem",
-              letterSpacing: "0.02em",
-            }}
-          >
-            Contacts
-          </Typography>
-          {contacts.length > 0 && (
-            <Chip
-              label={contacts.length}
-              size="small"
-              sx={{
-                height: 20,
-                fontSize: "0.7rem",
-                backgroundColor: alpha(theme.palette.text.primary, 0.08),
-              }}
-            />
-          )}
-        </Box>
+    <SectionCard
+      title="Contacts"
+      icon={<PeopleOutlineIcon />}
+      count={contacts.length}
+      actions={
         <Button
           size="small"
-          variant="outlined"
           startIcon={<PersonAddAltOutlinedIcon sx={{ fontSize: 16 }} />}
           onClick={() => setAdding(true)}
+          disabled={adding}
+          sx={{ py: 0.25 }}
         >
-          Add Contact
+          Add
         </Button>
-      </Box>
-
+      }
+    >
       {/* Add form */}
       {adding && (
         <Box
@@ -399,7 +362,7 @@ export default function Contacts({
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr 1fr",
+              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
               gap: 1,
             }}
           >
@@ -475,23 +438,14 @@ export default function Contacts({
 
       {/* Contact cards grid */}
       {sorted.length === 0 && !adding ? (
-        <Box
-          sx={{
-            border: `1px dashed ${theme.palette.divider}`,
-            borderRadius: 2,
-            py: 3,
-            textAlign: "center",
-          }}
-        >
-          <Typography sx={{ fontSize: "0.85rem", color: "text.disabled" }}>
-            No contacts yet.
-          </Typography>
-        </Box>
+        <Typography sx={{ fontSize: "0.85rem", color: "text.disabled" }}>
+          No contacts yet.
+        </Typography>
       ) : (
         <Box
           sx={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
             gap: 1.5,
           }}
         >
@@ -507,6 +461,6 @@ export default function Contacts({
           ))}
         </Box>
       )}
-    </Box>
+    </SectionCard>
   );
 }

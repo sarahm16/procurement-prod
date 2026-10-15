@@ -18,6 +18,8 @@ import EditIcon from "@mui/icons-material/Edit";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import ConfirmDialog from "../../../../components/ConfirmDialog";
+import SectionCard, { subLabelSx } from "../../../../components/SectionCard";
+import RequestQuoteOutlinedIcon from "@mui/icons-material/RequestQuoteOutlined";
 
 const money = (n) =>
   n == null || n === ""
@@ -116,30 +118,11 @@ export default function ServicesPricingCard({
 
   return (
     <>
-      {" "}
-      <Box
-        sx={{
-          border: `1px solid ${theme.palette.divider}`,
-          borderRadius: 2,
-          backgroundColor: "background.paper",
-          overflow: "hidden",
-          gridColumn: "1 / -1", // full width in the InfoGrid
-        }}
+      <SectionCard
+        title="Scope & Pricing"
+        icon={<RequestQuoteOutlinedIcon />}
+        disablePadding
       >
-        {/* Header */}
-        <Box
-          sx={{
-            px: 2,
-            py: 1.25,
-            borderBottom: `1px solid ${theme.palette.divider}`,
-            backgroundColor: alpha(theme.palette.primary.main, 0.03),
-          }}
-        >
-          <Typography sx={{ fontWeight: 700, fontSize: "0.95rem" }}>
-            Scope & Pricing
-          </Typography>
-        </Box>
-
         {/* Scope of work */}
         <Box
           sx={{
@@ -156,17 +139,7 @@ export default function ServicesPricingCard({
               mb: 0.5,
             }}
           >
-            <Typography
-              sx={{
-                fontSize: "0.68rem",
-                fontWeight: 600,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                color: "text.disabled",
-              }}
-            >
-              Scope of Work
-            </Typography>
+            <Typography sx={subLabelSx}>Scope of Work</Typography>
             {!editingScope ? (
               <IconButton size="small" onClick={() => setEditingScope(true)}>
                 <EditIcon sx={{ fontSize: 16 }} />
@@ -229,17 +202,7 @@ export default function ServicesPricingCard({
               mb: 1,
             }}
           >
-            <Typography
-              sx={{
-                fontSize: "0.68rem",
-                fontWeight: 600,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                color: "text.disabled",
-              }}
-            >
-              Services
-            </Typography>
+            <Typography sx={subLabelSx}>Services</Typography>
             <Button
               size="small"
               startIcon={<AddIcon sx={{ fontSize: 16 }} />}
@@ -467,7 +430,7 @@ export default function ServicesPricingCard({
             </>
           )}
         </Box>
-      </Box>
+      </SectionCard>
       <ConfirmDialog
         open={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}

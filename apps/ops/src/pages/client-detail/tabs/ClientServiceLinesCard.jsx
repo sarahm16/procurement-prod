@@ -48,6 +48,8 @@ import {
   useClientDetails,
   useClientServiceLines,
 } from "../ClientDetailProvider";
+import SectionCard from "../../../components/SectionCard";
+import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 
 /** "2026-10-31" → "Oct 31, 2026" without the timezone shifting the day. */
 const fmtDay = (ymd) =>
@@ -263,53 +265,12 @@ export default function ClientServiceLinesCard() {
   const menuBlocker = menu.line ? removeBlocker(menu.line) : null;
 
   return (
-    <Box
-      sx={{
-        border: `1px solid ${theme.palette.divider}`,
-        borderRadius: 4,
-        backgroundColor: "background.paper",
-        overflow: "hidden",
-      }}
-    >
-      {/* Header — matches the other cards on the page */}
-      <Box
-        sx={{
-          px: 2.5,
-          py: 1.5,
-          borderBottom: `1px solid ${theme.palette.divider}`,
-          backgroundColor: alpha(theme.palette.text.primary, 0.02),
-          display: "flex",
-          alignItems: "center",
-          gap: 1,
-        }}
-      >
-        <Typography
-          sx={{
-            fontWeight: 600,
-            fontSize: "0.85rem",
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "text.primary",
-          }}
-        >
-          Service Lines
-        </Typography>
-        {current.length > 0 && (
-          <Typography
-            sx={{
-              fontSize: "0.72rem",
-              fontWeight: 600,
-              color: "text.secondary",
-              backgroundColor: alpha(theme.palette.text.primary, 0.06),
-              px: 0.85,
-              py: 0.1,
-              borderRadius: 1,
-            }}
-          >
-            {current.length}
-          </Typography>
-        )}
-        <Box sx={{ flex: 1 }} />
+    <SectionCard
+      title="Service Lines"
+      icon={<AccountTreeOutlinedIcon />}
+      count={current.length}
+      disablePadding
+      actions={
         <Tooltip
           title={addable.length ? "Add a service line" : "All lines added"}
         >
@@ -319,13 +280,17 @@ export default function ClientServiceLinesCard() {
               aria-label="Add a service line"
               disabled={!addable.length}
               onClick={(e) => setAddAnchor(e.currentTarget)}
+              sx={{
+                color: "text.disabled",
+                "&:hover": { color: "primary.main" },
+              }}
             >
-              <AddIcon fontSize="small" />
+              <AddIcon sx={{ fontSize: 18 }} />
             </IconButton>
           </span>
         </Tooltip>
-      </Box>
-
+      }
+    >
       {error && (
         <Alert
           severity="error"
@@ -470,6 +435,6 @@ export default function ClientServiceLinesCard() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </SectionCard>
   );
 }

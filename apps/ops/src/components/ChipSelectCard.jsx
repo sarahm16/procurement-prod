@@ -5,7 +5,6 @@ import {
   Chip,
   IconButton,
   Tooltip,
-  Collapse,
   Popover,
   TextField,
   List,
@@ -18,8 +17,7 @@ import {
 import { alpha } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import SectionCard from "./SectionCard";
 
 /**
  * ChipSelectCard
@@ -85,8 +83,6 @@ export function ChipSelectCard({
 }) {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
-
-  const [open, setOpen] = useState(defaultOpen);
   const [anchorEl, setAnchorEl] = useState(null);
   const [search, setSearch] = useState("");
 
@@ -152,145 +148,74 @@ export function ChipSelectCard({
   };
 
   return (
-    <Box
-      sx={{
-        gridColumn: span === "full" ? "1 / -1" : undefined,
-        backgroundColor: "background.paper",
-        borderRadius: 2,
-        border: `1px solid ${theme.palette.divider}`,
-        overflow: "hidden",
-        transition: "box-shadow 0.15s ease",
-        "&:hover": {
-          boxShadow: isDark
-            ? `0 2px 12px ${alpha("#000", 0.3)}`
-            : `0 2px 12px ${alpha("#000", 0.06)}`,
-        },
-      }}
-    >
-      {/* Header — matches InfoCard exactly */}
-      <Box
-        sx={{
-          px: 2,
-          py: 1.25,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          backgroundColor: isDark
-            ? alpha(theme.palette.primary.main, 0.06)
-            : alpha(theme.palette.primary.main, 0.03),
-          borderBottom: open ? `1px solid ${theme.palette.divider}` : "none",
-          cursor: collapsible ? "pointer" : "default",
-          userSelect: "none",
-        }}
-        onClick={collapsible ? () => setOpen((o) => !o) : undefined}
-      >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Typography
-            sx={{
-              fontFamily: '"Barlow", sans-serif',
-              fontWeight: 600,
-              fontSize: "0.78rem",
-              letterSpacing: "0.05em",
-              textTransform: "uppercase",
-              color: "text.secondary",
-            }}
-          >
-            {title}
-            {value.length > 0 && (
-              <Box
-                component="span"
-                sx={{
-                  ml: 1,
-                  fontWeight: 500,
-                  color: "text.disabled",
-                  letterSpacing: 0,
-                }}
-              >
-                {value.length}
-              </Box>
-            )}
-          </Typography>
-        </Box>
-
-        <Box
-          sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {!disabled && (
-            <Tooltip title="Add">
-              <IconButton
-                size="small"
-                onClick={handleAddClick}
-                sx={{
-                  color: "text.disabled",
-                  "&:hover": { color: "primary.main" },
-                }}
-              >
-                <AddIcon sx={{ fontSize: 18 }} />
-              </IconButton>
-            </Tooltip>
-          )}
-
-          {collapsible && (
-            <Box sx={{ color: "text.disabled", display: "flex", ml: 0.5 }}>
-              {open ? (
-                <ExpandLessIcon sx={{ fontSize: 16 }} />
-              ) : (
-                <ExpandMoreIcon sx={{ fontSize: 16 }} />
-              )}
-            </Box>
-          )}
-        </Box>
-      </Box>
-
-      {/* Body — chips wrap area */}
-      <Collapse in={open}>
-        <Box sx={{ px: 2, py: 1.5 }}>
-          {value.length === 0 ? (
-            <Typography
+    <SectionCard
+      title={title}
+      icon={icon}
+      count={value.length}
+      collapsible={collapsible}
+      defaultOpen={defaultOpen}
+      sx={span === "full" ? { gridColumn: "1 / -1" } : undefined}
+      actions={
+        !disabled && (
+          <Tooltip title="Add">
+            <IconButton
+              size="small"
+              onClick={handleAddClick}
               sx={{
-                fontSize: "0.85rem",
                 color: "text.disabled",
-                fontStyle: "italic",
-                py: 0.25,
+                "&:hover": { color: "primary.main" },
               }}
             >
-              {emptyMessage}
-            </Typography>
-          ) : (
-            <Box
-              sx={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 0.75,
-              }}
-            >
-              {value.map((val) => {
-                return (
-                  <Chip
-                    key={val.id}
-                    label={val.name}
-                    onDelete={disabled ? undefined : () => remove(val)}
-                    color="primary"
-                    size="small"
-                    sx={{
-                      fontFamily: '"Barlow", sans-serif',
-                      fontWeight: 500,
-                      fontSize: "0.8rem",
-                      height: 26,
-                      "& .MuiChip-deleteIcon": {
-                        fontSize: 16,
-                        color: alpha("#fff", 0.7),
-                        "&:hover": { color: "#fff" },
-                      },
-                    }}
-                  />
-                );
-              })}
-            </Box>
-          )}
+              <AddIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+        )
+      }
+    >
+      {/* Body — chips wrap area */}
+      {value.length === 0 ? (
+        <Typography
+          sx={{
+            fontSize: "0.85rem",
+            color: "text.disabled",
+            fontStyle: "italic",
+            py: 0.25,
+          }}
+        >
+          {emptyMessage}
+        </Typography>
+      ) : (
+        <Box
+          sx={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 0.75,
+          }}
+        >
+          {value.map((val) => {
+            return (
+              <Chip
+                key={val.id}
+                label={val.name}
+                onDelete={disabled ? undefined : () => remove(val)}
+                color="primary"
+                size="small"
+                sx={{
+                  fontFamily: '"Barlow", sans-serif',
+                  fontWeight: 500,
+                  fontSize: "0.8rem",
+                  height: 26,
+                  "& .MuiChip-deleteIcon": {
+                    fontSize: 16,
+                    color: alpha("#fff", 0.7),
+                    "&:hover": { color: "#fff" },
+                  },
+                }}
+              />
+            );
+          })}
         </Box>
-      </Collapse>
+      )}
 
       {/* Add/Toggle popover */}
       <Popover
@@ -430,6 +355,6 @@ export function ChipSelectCard({
           )}
         </List>
       </Popover>
-    </Box>
+    </SectionCard>
   );
 }

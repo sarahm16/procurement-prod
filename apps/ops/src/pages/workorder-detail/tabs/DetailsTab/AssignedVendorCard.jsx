@@ -11,7 +11,6 @@ import {
   MenuItem,
   Link,
   Divider,
-  useTheme,
   Autocomplete,
   TextField,
   CircularProgress,
@@ -28,6 +27,7 @@ import {
   useWorkOrderActions,
   useWorkOrderServices,
 } from "../../WorkOrderDetailProvider";
+import SectionCard from "../../../../components/SectionCard";
 
 const initials = (name) =>
   (name ?? "")
@@ -37,8 +37,7 @@ const initials = (name) =>
     .join("")
     .toUpperCase() || "?";
 
-function AssignedVendorCard({ span = "half" }) {
-  const theme = useTheme();
+function AssignedVendorCard() {
   const details = useWorkOrderDetails();
   const { updateDetails, sendMSA } = useWorkOrderActions();
   const services = useWorkOrderServices();
@@ -46,8 +45,6 @@ function AssignedVendorCard({ span = "half" }) {
   const sendMsaDisabled =
     !services?.length ||
     !services.every((s) => s.vendor_price && s.client_price);
-
-  console.log("msa sending is disabled", sendMsaDisabled);
 
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [vendors, setVendors] = useState([]);
@@ -113,32 +110,13 @@ function AssignedVendorCard({ span = "half" }) {
   };
 
   return (
-    <Box
-      sx={{
-        border: `1px solid ${theme.palette.divider}`,
-        borderRadius: 2,
-        backgroundColor: "background.paper",
-        overflow: "hidden",
-        gridColumn: span === "full" ? "1 / -1" : "auto",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      {/* Header */}
-      <Box
-        sx={{
-          px: 2,
-          py: 1.25,
-          borderBottom: `1px solid ${theme.palette.divider}`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <Typography sx={{ fontWeight: 700, fontSize: "0.95rem" }}>
-          Assigned Vendor
-        </Typography>
-        {vendor && !replacing && (
+    <SectionCard
+      title="Assigned Vendor"
+      icon={<BusinessOutlinedIcon />}
+      disablePadding
+      actions={
+        vendor &&
+        !replacing && (
           <IconButton
             size="small"
             onClick={(e) => setMenuAnchor(e.currentTarget)}
@@ -146,11 +124,11 @@ function AssignedVendorCard({ span = "half" }) {
           >
             <MoreVertIcon sx={{ fontSize: 18 }} />
           </IconButton>
-        )}
-      </Box>
-
+        )
+      }
+    >
       {showPicker ? (
-        <Box sx={{ p: 3 }}>
+        <Box sx={{ p: 2 }}>
           {!vendor && !replacing && (
             <Box sx={{ textAlign: "center", mb: 2 }}>
               <BusinessOutlinedIcon
@@ -339,7 +317,6 @@ function AssignedVendorCard({ span = "half" }) {
               <Button
                 size="small"
                 variant="outlined"
-                disabled={sendMsaDisabled}
                 startIcon={
                   sendingMsa ? (
                     <CircularProgress size={13} color="inherit" />
@@ -348,7 +325,7 @@ function AssignedVendorCard({ span = "half" }) {
                   )
                 }
                 onClick={handleSendMsa}
-                disabled={sendingMsa}
+                disabled={sendingMsa || sendMsaDisabled}
                 sx={{ fontSize: "0.75rem" }}
               >
                 {sendingMsa ? "Sending…" : "Send MSA"}
@@ -383,7 +360,7 @@ function AssignedVendorCard({ span = "half" }) {
           Remove Vendor
         </MenuItem>
       </Menu>
-    </Box>
+    </SectionCard>
   );
 }
 

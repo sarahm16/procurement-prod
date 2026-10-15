@@ -4,7 +4,6 @@ import {
   Typography,
   IconButton,
   Tooltip,
-  Collapse,
   Divider,
   TextField,
   useTheme,
@@ -13,8 +12,7 @@ import {
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 import CloseIcon from "@mui/icons-material/Close";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import SectionCard from "./SectionCard";
 
 // ─── FieldRow ─────────────────────────────────────────────────────────────────
 /**
@@ -65,7 +63,6 @@ export function FieldRow({
             flexDirection: "column",
             gap: 0.5,
             borderBottom: `1px solid ${theme.palette.divider}`,
-            "&:last-child": { borderBottom: "none" },
           }}
         >
           <Typography
@@ -207,9 +204,6 @@ export function InfoCard({
   editValues = {},
   span = "half",
 }) {
-  const theme = useTheme();
-  const isDark = theme.palette.mode === "dark";
-  const [open, setOpen] = useState(defaultOpen);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({});
   const [saving, setSaving] = useState(false);
@@ -260,144 +254,75 @@ export function InfoCard({
       : children
     : children;
 
-  return (
-    <Box
-      sx={{
-        gridColumn: span === "full" ? "1 / -1" : undefined,
-        backgroundColor: "background.paper",
-        borderRadius: 2,
-        border: `1px solid ${theme.palette.divider}`,
-        overflow: "hidden",
-        // Subtle hover lift
-        transition: "box-shadow 0.15s ease",
-        "&:hover": {
-          boxShadow: isDark
-            ? `0 2px 12px ${alpha("#000", 0.3)}`
-            : `0 2px 12px ${alpha("#000", 0.06)}`,
-        },
-      }}
-    >
-      {/* Card header */}
-      <Box
-        sx={{
-          px: 2,
-          py: 1.25,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          backgroundColor: isDark
-            ? alpha(theme.palette.primary.main, 0.06)
-            : alpha(theme.palette.primary.main, 0.03),
-          borderBottom: open ? `1px solid ${theme.palette.divider}` : "none",
-          cursor: collapsible ? "pointer" : "default",
-          userSelect: "none",
-        }}
-        onClick={collapsible ? () => setOpen((o) => !o) : undefined}
-      >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          {icon && (
-            <Box
-              sx={{
-                color: theme.palette.secondary.main,
-                display: "flex",
-                alignItems: "center",
-                fontSize: 16,
-              }}
-            >
-              {icon}
-            </Box>
-          )}
-          <Typography
+  const headerActions = (
+    <>
+      {actions}
+
+      {editable && !editing && (
+        <Tooltip title="Edit">
+          <IconButton
+            size="small"
+            onClick={handleEditStart}
             sx={{
-              fontFamily: '"Barlow", sans-serif',
-              fontWeight: 600,
-              fontSize: "0.78rem",
-              letterSpacing: "0.05em",
-              textTransform: "uppercase",
-              color: "text.secondary",
+              color: "text.disabled",
+              "&:hover": { color: "primary.main" },
             }}
           >
-            {title}
-          </Typography>
-        </Box>
+            <EditOutlinedIcon sx={{ fontSize: 15 }} />
+          </IconButton>
+        </Tooltip>
+      )}
 
-        {/* Header actions */}
-        <Box
-          sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-          onClick={(e) => e.stopPropagation()} // prevent collapse toggle
-        >
-          {actions}
+      {editing && (
+        <>
+          <Tooltip title="Cancel">
+            <IconButton
+              size="small"
+              onClick={handleEditCancel}
+              disabled={saving}
+              sx={{ color: "text.disabled" }}
+            >
+              <CloseIcon sx={{ fontSize: 15 }} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Save changes">
+            <IconButton
+              size="small"
+              onClick={handleSave}
+              disabled={saving}
+              sx={{ color: "success.main" }}
+            >
+              <SaveOutlinedIcon sx={{ fontSize: 15 }} />
+            </IconButton>
+          </Tooltip>
+        </>
+      )}
+    </>
+  );
 
-          {editable && !editing && (
-            <Tooltip title="Edit">
-              <IconButton
-                size="small"
-                onClick={handleEditStart}
-                sx={{
-                  color: "text.disabled",
-                  "&:hover": { color: "primary.main" },
-                }}
-              >
-                <EditOutlinedIcon sx={{ fontSize: 15 }} />
-              </IconButton>
-            </Tooltip>
-          )}
-
-          {editing && (
-            <>
-              <Tooltip title="Cancel">
-                <IconButton
-                  size="small"
-                  onClick={handleEditCancel}
-                  disabled={saving}
-                  sx={{ color: "text.disabled" }}
-                >
-                  <CloseIcon sx={{ fontSize: 15 }} />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Save changes">
-                <IconButton
-                  size="small"
-                  onClick={handleSave}
-                  disabled={saving}
-                  sx={{ color: "success.main" }}
-                >
-                  <SaveOutlinedIcon sx={{ fontSize: 15 }} />
-                </IconButton>
-              </Tooltip>
-            </>
-          )}
-
-          {collapsible && (
-            <Box sx={{ color: "text.disabled", display: "flex", ml: 0.5 }}>
-              {open ? (
-                <ExpandLessIcon sx={{ fontSize: 16 }} />
-              ) : (
-                <ExpandMoreIcon sx={{ fontSize: 16 }} />
-              )}
-            </Box>
-          )}
-        </Box>
-      </Box>
-
-      {/* Card body */}
-      <Collapse in={open}>
-        <Box
-          sx={{
-            px: 2,
-            py: 0,
-            // CSS grid for label/value columns
-            display: "grid",
-            gridTemplateColumns: "minmax(120px, 40%) 1fr",
-            "& > *:last-child": {
-              borderBottom: "none !important",
-            },
-          }}
-        >
-          {enhancedChildren}
-        </Box>
-      </Collapse>
-    </Box>
+  return (
+    <SectionCard
+      title={title}
+      icon={icon}
+      actions={headerActions}
+      collapsible={collapsible}
+      defaultOpen={defaultOpen}
+      sx={span === "full" ? { gridColumn: "1 / -1" } : undefined}
+      bodySx={{
+        px: 2,
+        py: 0,
+        // CSS grid for label/value columns
+        display: "grid",
+        gridTemplateColumns: "minmax(120px, min(42%, 200px)) minmax(0, 1fr)",
+        // FieldRow is display: contents, so the border sits on its cells
+        "& > *:last-child, & > *:last-child > *": {
+          borderBottom: "none !important",
+        },
+      }}
+      disablePadding
+    >
+      {enhancedChildren}
+    </SectionCard>
   );
 }
 

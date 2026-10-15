@@ -31,6 +31,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { getServiceLineConfig } from "../../../../*/constants/serviceLineConfig";
 import { useSiteActions } from "../../SiteDetailProvider";
+import SectionCard from "../../../../components/SectionCard";
 
 /**
  * Site service lines, one per row.
@@ -267,49 +268,12 @@ export default function SiteServiceLinesCard({
       (dialogLine?.starts_on && dialog.lastDay < dialogLine.starts_on));
 
   return (
-    <Box
-      sx={{
-        border: `1px solid ${theme.palette.divider}`,
-        borderRadius: 2,
-        backgroundColor: "background.paper",
-        overflow: "hidden",
-        gridColumn: span === "full" ? "1 / -1" : "auto",
-      }}
+    <SectionCard
+      title="Service Lines"
+      icon={<AccountTreeOutlinedIcon />}
+      count={current.length}
+      disablePadding
     >
-      {/* Header */}
-      <Box
-        sx={{
-          px: 2,
-          py: 1.25,
-          borderBottom: `1px solid ${theme.palette.divider}`,
-          display: "flex",
-          alignItems: "center",
-          gap: 1,
-        }}
-      >
-        <AccountTreeOutlinedIcon
-          sx={{ fontSize: 17, color: "text.secondary" }}
-        />
-        <Typography sx={{ fontWeight: 700, fontSize: "0.9rem" }}>
-          Service Lines
-        </Typography>
-        {current.length > 0 && (
-          <Typography
-            sx={{
-              fontSize: "0.7rem",
-              fontWeight: 600,
-              color: "text.secondary",
-              backgroundColor: alpha(theme.palette.text.primary, 0.06),
-              px: 0.85,
-              py: 0.1,
-              borderRadius: 1,
-            }}
-          >
-            {current.length}
-          </Typography>
-        )}
-      </Box>
-
       {error && (
         <Alert
           severity="error"
@@ -447,6 +411,6 @@ export default function SiteServiceLinesCard({
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </SectionCard>
   );
 }

@@ -1,12 +1,18 @@
 // workorder-details/tabs/DetailsTab/WorkOrderDetailsTab.jsx
+//
+//   Side (reference)            Main (the work)
+//   ─ Team                      ─ Assigned Vendor | Vendor Onboarding
+//   ─ Work Order Info           ─ Scope & Pricing
+//   ─ Site                      ─ Mobilization Fee
+//                               ─ Linked Work Orders
 import { useParams } from "react-router-dom";
 
-// Local Components
-import InfoGrid from "../../../../components/InfoGrid";
+import DetailTabLayout, {
+  CardPair,
+} from "../../../../components/DetailTabLayout";
+import TeamCard from "../../../../components/TeamCard";
 
-// Cards
 import AssignedVendorCard from "./AssignedVendorCard";
-import RoleAssignment from "../../../../components/RoleAssignment";
 import GeneralInfoCard from "./GeneralInfoCard";
 import WorkOrderSiteCard from "./WorkOrderSiteCard";
 import ServicesPricingCard from "./ServicesPricingCard";
@@ -21,7 +27,7 @@ import {
   useWorkOrderServices,
 } from "../../WorkOrderDetailProvider";
 
-const WORK_ORDER_ENTITY_TYPE_ID = 4; // confirm your actual id
+const WORK_ORDER_ENTITY_TYPE_ID = 4;
 
 export default function WorkOrderDetailsTab() {
   const { id } = useParams();
@@ -29,49 +35,39 @@ export default function WorkOrderDetailsTab() {
   const details = useWorkOrderDetails();
   const site = useWorkOrderSite();
   const services = useWorkOrderServices();
-
-  console.log("work order site", site);
-
-  const {
-    updateDetails,
-    addService,
-    updateService,
-    deleteService,
-    updateScope, // saves scope_of_work on the work order
-  } = useWorkOrderActions();
+  const { updateDetails, addService, updateService, deleteService } =
+    useWorkOrderActions();
 
   return (
-    <>
-      <InfoGrid>
-        {/* Row 1: general info + who's assigned */}
-        <GeneralInfoCard details={details} onSave={updateDetails} />
-        <RoleAssignment
-          entity_type_id={WORK_ORDER_ENTITY_TYPE_ID}
-          entity_id={Number(id)}
-        />
-        <LinkedWorkOrders defaultOpen />
-
-        {/* Row 2: site */}
-        <WorkOrderSiteCard site={site} />
-
-        {/* Vendor assignment placeholder (logic later) */}
-        <AssignedVendorCard />
-        <VendorOnboardingCard />
-        <MobilizationFeeCard />
-
-        {/* Full width: scope + services/pricing */}
-        <ServicesPricingCard
-          services={services || []}
-          scopeOfWork={details?.scope_of_work}
-          onAddService={addService}
-          onUpdateService={updateService}
-          onDeleteService={deleteService}
-          onSaveScope={updateDetails}
-        />
-
-        {/* Attachments / pre-work images placeholder (logic later) */}
-        {/* <AttachmentsCard workOrderId={Number(id)} /> */}
-      </InfoGrid>
-    </>
+    <DetailTabLayout
+      side={
+        <>
+          <TeamCard
+            entity_type_id={WORK_ORDER_ENTITY_TYPE_ID}
+            entity_id={Number(id)}
+          />
+          <GeneralInfoCard details={details} onSave={updateDetails} />
+          <WorkOrderSiteCard site={site} />
+        </>
+      }
+      main={
+        <>
+          <CardPair>
+            <AssignedVendorCard />
+            <VendorOnboardingCard />
+          </CardPair>
+          <ServicesPricingCard
+            services={services || []}
+            scopeOfWork={details?.scope_of_work}
+            onAddService={addService}
+            onUpdateService={updateService}
+            onDeleteService={deleteService}
+            onSaveScope={updateDetails}
+          />
+          <MobilizationFeeCard />
+          <LinkedWorkOrders />
+        </>
+      }
+    />
   );
 }

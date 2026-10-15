@@ -3,7 +3,6 @@ import {
   Box,
   Button,
   Chip,
-  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -15,8 +14,6 @@ import {
   useTheme,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import LinkIcon from "@mui/icons-material/Link";
 import AddIcon from "@mui/icons-material/Add";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
@@ -27,6 +24,7 @@ import {
   useWorkOrderActions,
 } from "../../WorkOrderDetailProvider";
 import AddChildWorkOrderPanel from "./AddChildWorkOrderPanel";
+import SectionCard from "../../../../components/SectionCard";
 
 /**
  * LinkedWorkOrders
@@ -208,13 +206,11 @@ function Row({ wo, isParent, isCurrent, onOpen, onUnlink }) {
 
 export default function LinkedWorkOrders({ onAddChild, defaultOpen = true }) {
   const theme = useTheme();
-  const isDark = theme.palette.mode === "dark";
 
   const { workOrderId, parent, family, isChild, clientTotal, loading } =
     useLinkedWorkOrders();
   const { unlinkWorkOrder } = useWorkOrderActions();
 
-  const [open, setOpen] = useState(defaultOpen);
   const [adding, setAdding] = useState(false);
   const [unlinking, setUnlinking] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -262,177 +258,118 @@ export default function LinkedWorkOrders({ onAddChild, defaultOpen = true }) {
 
   return (
     <>
-      <Box
-        sx={{
-          backgroundColor: "background.paper",
-          borderRadius: 2,
-          border: `1px solid ${theme.palette.divider}`,
-          overflow: "hidden",
-        }}
-      >
-        {/* Header */}
-        <Box
-          onClick={() => setOpen((o) => !o)}
-          sx={{
-            px: 2,
-            py: 1.25,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            backgroundColor: isDark
-              ? alpha(theme.palette.primary.main, 0.06)
-              : alpha(theme.palette.primary.main, 0.03),
-            borderBottom: open ? `1px solid ${theme.palette.divider}` : "none",
-            cursor: "pointer",
-            userSelect: "none",
-          }}
-        >
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Box sx={{ display: "flex", color: "secondary.main" }}>
-              <LinkIcon sx={{ fontSize: 16 }} />
-            </Box>
-            <Typography
+      <SectionCard
+        title="Linked Work Orders"
+        icon={<LinkIcon />}
+        count={children.length}
+        defaultOpen={defaultOpen}
+        bodySx={{ px: 1.5, py: 1.25 }}
+        actions={
+          // Available from either end — needing a third vendor occurs to
+          // you just as easily while looking at a child.
+          <Tooltip title="Add another vendor's work order to this job">
+            <IconButton
+              size="small"
+              onClick={onAddChild ?? (() => setAdding(true))}
               sx={{
-                fontFamily: '"Barlow", sans-serif',
-                fontWeight: 600,
-                fontSize: "0.78rem",
-                letterSpacing: "0.05em",
-                textTransform: "uppercase",
-                color: "text.secondary",
+                color: "text.disabled",
+                "&:hover": { color: "primary.main" },
               }}
             >
-              Linked Work Orders
-            </Typography>
-            {children.length > 0 && (
-              <Typography sx={{ fontSize: "0.72rem", color: "text.disabled" }}>
-                {children.length}
-              </Typography>
-            )}
-          </Stack>
+              <AddIcon sx={{ fontSize: 17 }} />
+            </IconButton>
+          </Tooltip>
+        }
+      >
+        {isChild && <Row wo={parent} isParent onOpen={openWorkOrder} />}
 
-          <Stack
-            direction="row"
-            spacing={0.5}
-            alignItems="center"
-            onClick={(e) => e.stopPropagation()}
+        {children.length === 0 ? (
+          <Typography
+            sx={{
+              px: 1.25,
+              py: 1.5,
+              fontSize: "0.78rem",
+              color: "text.secondary",
+            }}
           >
-            {/* Available from either end — needing a third vendor occurs to
-                you just as easily while looking at a child. */}
-            <Tooltip title="Add another vendor's work order to this job">
-              <IconButton
-                size="small"
-                onClick={onAddChild ?? (() => setAdding(true))}
-                sx={{
-                  color: "text.disabled",
-                  "&:hover": { color: "primary.main" },
-                }}
-              >
-                <AddIcon sx={{ fontSize: 17 }} />
-              </IconButton>
-            </Tooltip>
-            <Box sx={{ color: "text.disabled", display: "flex" }}>
-              {open ? (
-                <ExpandLessIcon sx={{ fontSize: 16 }} />
-              ) : (
-                <ExpandMoreIcon sx={{ fontSize: 16 }} />
-              )}
-            </Box>
-          </Stack>
-        </Box>
+            No linked work orders yet. Add one when a second vendor is needed
+            for a different scope at this site — they'll be invoiced together on
+            this work order.
+          </Typography>
+        ) : (
+          children.map((wo) => (
+            <Row
+              key={wo.id}
+              wo={wo}
+              isCurrent={wo.id === workOrderId}
+              onOpen={openWorkOrder}
+              onUnlink={setUnlinking}
+            />
+          ))
+        )}
 
-        <Collapse in={open}>
-          <Box sx={{ px: 1.5, py: 1.25 }}>
-            {isChild && <Row wo={parent} isParent onOpen={openWorkOrder} />}
-
-            {children.length === 0 ? (
-              <Typography
-                sx={{
-                  px: 1.25,
-                  py: 1.5,
-                  fontSize: "0.78rem",
-                  color: "text.secondary",
-                }}
-              >
-                No linked work orders yet. Add one when a second vendor is
-                needed for a different scope at this site — they'll be invoiced
-                together on this work order.
-              </Typography>
-            ) : (
-              children.map((wo) => (
-                <Row
-                  key={wo.id}
-                  wo={wo}
-                  isCurrent={wo.id === workOrderId}
-                  onOpen={openWorkOrder}
-                  onUnlink={setUnlinking}
-                />
-              ))
-            )}
-
-            {/* Roll-up. The client price sits on the parent; the vendor costs
+        {/* Roll-up. The client price sits on the parent; the vendor costs
                 sit on the children — so this line is the job's margin. */}
-            {children.length > 0 &&
-              (vendorTotal != null || clientTotal != null) && (
-                <Stack
-                  direction="row"
-                  spacing={2}
-                  alignItems="baseline"
-                  useFlexGap
-                  flexWrap="wrap"
-                  sx={{ px: 1.25, pt: 1.25 }}
+        {children.length > 0 &&
+          (vendorTotal != null || clientTotal != null) && (
+            <Stack
+              direction="row"
+              spacing={2}
+              alignItems="baseline"
+              useFlexGap
+              flexWrap="wrap"
+              sx={{ px: 1.25, pt: 1.25 }}
+            >
+              {clientTotal != null && (
+                <Typography
+                  sx={{ fontSize: "0.74rem", color: "text.secondary" }}
                 >
-                  {clientTotal != null && (
-                    <Typography
-                      sx={{ fontSize: "0.74rem", color: "text.secondary" }}
-                    >
-                      Client{" "}
-                      <strong style={{ color: theme.palette.text.primary }}>
-                        {fmtMoney(clientTotal)}
-                      </strong>
-                    </Typography>
-                  )}
-                  {vendorTotal != null && (
-                    <Typography
-                      sx={{ fontSize: "0.74rem", color: "text.secondary" }}
-                    >
-                      Vendor cost{" "}
-                      <strong style={{ color: theme.palette.text.primary }}>
-                        {fmtMoney(vendorTotal)}
-                      </strong>
-                    </Typography>
-                  )}
-                  {margin != null && (
-                    <Typography
-                      sx={{
-                        fontSize: "0.74rem",
-                        fontWeight: 600,
-                        color:
-                          margin < 0
-                            ? "error.main"
-                            : marginPct < 20
-                              ? "warning.main"
-                              : "success.main",
-                      }}
-                    >
-                      Margin {fmtMoney(margin)} · {marginPct}%
-                    </Typography>
-                  )}
-                  {unassigned > 0 && (
-                    <Typography
-                      sx={{
-                        fontSize: "0.74rem",
-                        color: "warning.main",
-                        ml: "auto",
-                      }}
-                    >
-                      {unassigned} without a vendor
-                    </Typography>
-                  )}
-                </Stack>
+                  Client{" "}
+                  <strong style={{ color: theme.palette.text.primary }}>
+                    {fmtMoney(clientTotal)}
+                  </strong>
+                </Typography>
               )}
-          </Box>
-        </Collapse>
-      </Box>
+              {vendorTotal != null && (
+                <Typography
+                  sx={{ fontSize: "0.74rem", color: "text.secondary" }}
+                >
+                  Vendor cost{" "}
+                  <strong style={{ color: theme.palette.text.primary }}>
+                    {fmtMoney(vendorTotal)}
+                  </strong>
+                </Typography>
+              )}
+              {margin != null && (
+                <Typography
+                  sx={{
+                    fontSize: "0.74rem",
+                    fontWeight: 600,
+                    color:
+                      margin < 0
+                        ? "error.main"
+                        : marginPct < 20
+                          ? "warning.main"
+                          : "success.main",
+                  }}
+                >
+                  Margin {fmtMoney(margin)} · {marginPct}%
+                </Typography>
+              )}
+              {unassigned > 0 && (
+                <Typography
+                  sx={{
+                    fontSize: "0.74rem",
+                    color: "warning.main",
+                    ml: "auto",
+                  }}
+                >
+                  {unassigned} without a vendor
+                </Typography>
+              )}
+            </Stack>
+          )}
+      </SectionCard>
 
       <AddChildWorkOrderPanel open={adding} onClose={() => setAdding(false)} />
 
