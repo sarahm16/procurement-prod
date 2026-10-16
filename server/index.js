@@ -4,6 +4,7 @@ dotenv.config();
 
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 // import path from "path";
 // import { fileURLToPath } from "url";
 
@@ -31,6 +32,7 @@ import pandadocRouter from "./routes/pandadoc.js";
 import workordersRouter from "./routes/workorders.js";
 import sourcingRouter from "./routes/sourcing.js";
 import handoffRulesRouter from "./routes/handoffRules.js";
+import portalAuthRouter from "./routes/portal/auth.js";
 
 import prisma from "./db.js";
 
@@ -48,6 +50,10 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 app.use(express.json());
+app.use(cookieParser());
+
+// app.set("trust proxy", 1); // only if the server runs behind Azure App Service,
+//                            // a load balancer or a reverse proxy; see notes
 
 app.get("/", (req, res) => {
   res.send("Hello World!");
@@ -73,6 +79,7 @@ app.use("/api/workorders", workordersRouter(prisma));
 app.use("/api/pandadoc", pandadocRouter);
 app.use("/api/sourcing", sourcingRouter(prisma));
 app.use("/api/handoff-rules", handoffRulesRouter(prisma));
+app.use("/api/portal/auth", portalAuthRouter(prisma));
 
 // Catch-all LAST — hands everything else to React Router
 // app.get("/*splat", (req, res) => {
