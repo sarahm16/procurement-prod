@@ -1,0 +1,68 @@
+/// A person who can log in to the vendor portal. One vendor can have
+/// several (owner, dispatcher, crew lead). Separate from Employees, who log
+/// in with Microsoft, and from VendorContacts, who are people we contact
+/// but who don't necessarily log in.
+model VendorUsers {
+  id            Int       @id @default(autoincrement())
+  vendor_id     Int
+  /// The contact this login belongs to, if they're also on the vendor's
+  /// Contacts list. Optional so a crew lead can log in without being a contact.
+  contact_id    Int?
+  name          String    @db.VarChar(100)
+  /// Login is by email. Stored lowercase and trimmed.
+  email         String    @unique @db.VarChar(100)
+  phone         String?   @db.VarChar(20)
+  /// "admin" can invite and remove the vendor's other users later; "member" can't.
+  role          String    @default("member") @db.VarChar(20)
+  /// Turned off instead of deleted, so their past updates keep a name.
+  is_active     Boolean   @default(true)
+  last_login_at DateTime?
+  created_at    DateTime  @default(now())
+  /// The employee who gave them access.
+  invited_by    Int?
+
+  Vendor     Vendors           @relation(fields: [vendor_id], references: [id], onUpdate: NoAction)
+  Contact    VendorContacts?   @relation(fields: [contact_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  InvitedBy  Employees?        @relation("VendorUserInvitedBy", fields: [invited_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  LoginCodes VendorLoginCodes[]
+  Sessions   VendorSessions[]
+
+  @@index([vendor_id])
+}
+
+/// One-time sign-in codes emailed to a vendor user. Only a hash of the code
+/// is stored. A code works once, for 10 minutes, with a few tries.
+model VendorLoginCodes {
+  id             Int       @id @default(autoincrement())
+  vendor_user_id Int
+  code_hash      String    @db.VarChar(64)
+  expires_at     DateTime
+  used_at        DateTime?
+  attempts       Int       @default(0)
+  created_at     DateTime  @default(now())
+
+  VendorUser VendorUsers @relation(fields: [vendor_user_id], references: [id], onUpdate: NoAction)
+
+  @@index([vendor_user_id, created_at])
+}
+
+/// A signed-in browser. The cookie holds a random token; only its hash is
+/// stored here, so a leaked table can't be used to log in. Deactivating a
+/// user or setting revoked_at signs them out on their next request.
+///
+/// Lifetime: expires_at moves to 60 days after each visit, but never past
+/// 6 months from created_at. After that they sign in with a new code.
+model VendorSessions {
+  id             Int       @id @default(autoincrement())
+  vendor_user_id Int
+  token_hash     String    @unique @db.VarChar(64)
+  expires_at     DateTime
+  revoked_at     DateTime?
+  last_seen_at   DateTime  @default(now())
+  user_agent     String?   @db.VarChar(255)
+  created_at     DateTime  @default(now())
+
+  VendorUser VendorUsers @relation(fields: [vendor_user_id], references: [id], onUpdate: NoAction)
+
+  @@index([vendor_user_id])
+}

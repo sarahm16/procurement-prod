@@ -16,6 +16,13 @@ model WorkOrders {
   software_id          Int?
   priority             String?                   @db.VarChar(50)
   phase                String?                   @default("ops") @db.VarChar(10)
+
+  /// When ops released this work order to the vendor portal. Null = the
+  /// vendor can't see it yet. Cleared if the vendor is replaced.
+  portal_released_at   DateTime?
+  portal_released_by   Int?
+  PortalReleasedBy     Employees?                @relation("WorkOrderPortalReleasedBy", fields: [portal_released_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  
   Attachments          WorkOrderAttachments[]
   VendorCommunications WorkOrderCommunications[]
   MSAs                 WorkOrderMSAs[]

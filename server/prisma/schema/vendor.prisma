@@ -34,7 +34,8 @@ model Vendors {
   WorkOrderMSAs           WorkOrderMSAs[]
   WorkOrders              WorkOrders[]
   WorkOrderUpdates        WorkOrderVendorUpdates[]
-  MobilizationFees WorkOrderMobilizationFees[]
+  MobilizationFees        WorkOrderMobilizationFees[]
+  PortalUsers             VendorUsers[]
 }
 
 model VendorContacts {
@@ -47,6 +48,7 @@ model VendorContacts {
   contact_role_id Int
   ContactRole     ContactRoles @relation(fields: [contact_role_id], references: [id], onUpdate: NoAction)
   Vendor          Vendors      @relation(fields: [vendor_id], references: [id], onUpdate: NoAction)
+  PortalUsers     VendorUsers[]
 
   @@index([vendor_id])
 }

@@ -21,6 +21,8 @@ model Employees {
   ContractHandoffsSubmitted Contracts[]               @relation("ContractHandoffSubmittedBy")
   HandoffRulesUpdated       HandoffRules[]            @relation("HandoffRuleUpdatedBy")
   ChecklistItemsDone        ContractChecklistItems[]  @relation("ChecklistItemDoneBy")
+  VendorUsersInvited        VendorUsers[]             @relation("VendorUserInvitedBy")
+  WorkOrdersPortalReleased  WorkOrders[]              @relation("WorkOrderPortalReleasedBy")
 }
 
 model InternalRoles {
