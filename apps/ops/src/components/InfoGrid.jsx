@@ -13,6 +13,7 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 import CloseIcon from "@mui/icons-material/Close";
 import SectionCard from "./SectionCard";
+import RecordLink from "./RecordLink";
 
 // ─── FieldRow ─────────────────────────────────────────────────────────────────
 /**
@@ -28,6 +29,8 @@ import SectionCard from "./SectionCard";
  *   type      {string}            — input type when editing (default "text")
  *   render    {fn}                — custom render: (value, editing) => ReactNode
  *   editable  {boolean}           — false = never shows an input (default true)
+ *   link      {string}            — path to another record's page; the value
+ *                                   opens it (e.g. `/clients/${client_id}`)
  */
 export function FieldRow({
   label,
@@ -39,9 +42,17 @@ export function FieldRow({
   type = "text",
   render,
   editable = true,
+  link,
 }) {
   const theme = useTheme();
   const showInput = editing && editable && fieldKey;
+
+  const display =
+    link && value ? (
+      <RecordLink to={link}>{value}</RecordLink>
+    ) : (
+      <Typography sx={valueSx}>{value || "—"}</Typography>
+    );
 
   return (
     <Box
@@ -90,7 +101,7 @@ export function FieldRow({
               sx={inputSx(theme)}
             />
           ) : (
-            <Typography sx={valueSx}>{value || "—"}</Typography>
+            display
           )}
         </Box>
       ) : (
@@ -113,7 +124,7 @@ export function FieldRow({
                 sx={inputSx(theme)}
               />
             ) : (
-              <Typography sx={valueSx}>{value || "—"}</Typography>
+              display
             )}
           </Box>
         </>

@@ -39,7 +39,12 @@ function SiteDetailsTab() {
             entity_id={Number(id)}
           />
           <InfoCard title="Site Info" icon={<StorefrontOutlinedIcon />}>
-            <FieldRow label="Client" value={details.client} editable={false} />
+            <FieldRow
+              label="Client"
+              value={details.client}
+              editable={false}
+              link={details.client_id ? `/clients/${details.client_id}` : null}
+            />
             <FieldRow label="Store" value={details.store} editable={false} />
           </InfoCard>
           <AddressCard
