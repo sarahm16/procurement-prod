@@ -29,6 +29,10 @@ model Clients {
   invoice_portal     String?                 @db.VarChar(200)
   segment_id         Int?                    // what kind of client: Government, Commercial, Residential
   Segment            ClientSegments?         @relation(fields: [segment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  /// The work order platform this client uses (ServiceChannel, Corrigo…).
+  /// Sarlacc = they use our client portal.
+  software_id        Int?
+  Software           Softwares?              @relation("ClientPlatform", fields: [software_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   PausedBy           Employees?              @relation("ClientPausedBy", fields: [paused_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   Contacts           ClientContacts[]
   ClientServiceLines ClientServiceLines[]

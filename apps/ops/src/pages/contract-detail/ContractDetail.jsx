@@ -62,8 +62,6 @@ const sitesText = (c) =>
 const FIELD_LABELS = {
   project_name: "Name",
   service_type_id: "Service type",
-  software_id: "Client platform",
-  internal_system_id: "Our system of record",
   start_date: "Start date",
   end_date: "End date",
   auto_renew: "Auto renew",

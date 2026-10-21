@@ -6,7 +6,6 @@ model Contracts {
   annual_increase_percent Decimal?
   client_id               Int
   service_line_id         Int
-  software_id             Int?
   project_name            String
   value                   Decimal
   created_at              DateTime        @default(now())
@@ -41,8 +40,7 @@ model Contracts {
   client_sla                String?   @db.VarChar(200)
   lead_time_override_reason String?   @db.VarChar(300)
 
-  // Systems and communication
-  internal_system_id        Int?                 // Sarlacc / UtilizeCore (software_id = client's platform)
+  // Communication (the client's platform is on Clients.software_id)
   update_cadence            String    @default("AM and PM, with photos") @db.VarChar(100)
   communication_plan        String?   @db.NVarChar(1000)
 
@@ -63,10 +61,6 @@ model Contracts {
   Client                  Clients         @relation(fields: [client_id], references: [id], onUpdate: NoAction)
   ServiceLine             ServiceLines    @relation(fields: [service_line_id], references: [id], onUpdate: NoAction)
   ServiceType             ServiceTypes?   @relation(fields: [service_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  // Two links to Softwares, so both are named. Naming doesn't change the
-  // existing foreign key.
-  Software                Softwares?      @relation("ContractClientPlatform", fields: [software_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  InternalSystem          Softwares?      @relation("ContractInternalSystem", fields: [internal_system_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   HandoffSubmittedBy      Employees?      @relation("ContractHandoffSubmittedBy", fields: [handoff_submitted_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   
   ChecklistItems          ContractChecklistItems[]

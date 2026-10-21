@@ -170,11 +170,19 @@ async function loadClientServiceLines(db, clientId) {
 const stripPauseColumns = ({ paused_at, paused_reason, paused_by, ...rest }) =>
   rest;
 
+// The client's work order platform. Sarlacc means they use our client portal.
+const CLIENT_PORTAL_SOFTWARE = "Sarlacc";
+const serializePlatform = (Software) => ({
+  software: Software?.name ?? null,
+  uses_client_portal: Software?.name === CLIENT_PORTAL_SOFTWARE,
+});
+
 const serializeClient = (client, statusRow) => {
-  const { Segment, ...rest } = client;
+  const { Segment, Software, ...rest } = client;
   return {
     ...stripPauseColumns(rest),
     segment: Segment?.name ?? null,
+    ...serializePlatform(Software),
     service_lines: client.ClientServiceLines.map((csl) => csl.ServiceLine),
     role_assignments: (client.role_assignments || []).map(
       serializeRoleAssignment,
@@ -191,10 +199,11 @@ const serializeClientById = (
   contacts,
   serviceLines,
 ) => {
-  const { PausedBy, ClientServiceLines, Segment, ...rest } = client;
+  const { PausedBy, ClientServiceLines, Segment, Software, ...rest } = client;
   return {
     ...stripPauseColumns(rest),
     segment: Segment?.name ?? null,
+    ...serializePlatform(Software),
     // With status and counts per line — see loadClientServiceLines.
     service_lines: serviceLines,
     notes: notes.map(serializeNote),
@@ -215,6 +224,7 @@ function clientsRouter(prisma) {
       const clients = await prisma.clients.findMany({
         include: {
           Segment: { select: { id: true, name: true } },
+          Software: { select: { id: true, name: true } },
           ClientServiceLines: {
             include: {
               ServiceLine: true,
@@ -314,6 +324,7 @@ function clientsRouter(prisma) {
             where: { id: Number(id) },
             include: {
               Segment: { select: { id: true, name: true } },
+              Software: { select: { id: true, name: true } },
               ClientServiceLines: {
                 include: {
                   ServiceLine: true,
@@ -393,7 +404,6 @@ function clientsRouter(prisma) {
         include: {
           ServiceLine: { select: { id: true, name: true } },
           ServiceType: { select: { id: true, name: true } },
-          Software: { select: { id: true, name: true } },
         },
         orderBy: { start_date: "desc" },
       });
@@ -530,6 +540,7 @@ function clientsRouter(prisma) {
     // PUT /:id/pause and /:id/unpause.
     "brand",
     "segment_id",
+    "software_id",
     "mailing_address",
     "mailing_address2",
     "mailing_city",
@@ -584,6 +595,21 @@ function clientsRouter(prisma) {
       }
     }
 
+    // Platform: a Softwares id, or empty to clear it.
+    if ("software_id" in requested) {
+      const v = requested.software_id;
+      requested.software_id = v === "" || v == null ? null : Number(v);
+      if (requested.software_id !== null) {
+        const ok =
+          Number.isInteger(requested.software_id) &&
+          (await prisma.softwares.findUnique({
+            where: { id: requested.software_id },
+            select: { id: true },
+          }));
+        if (!ok) return res.status(400).json({ error: "Unknown platform" });
+      }
+    }
+
     try {
       // Fetch existing values for just the fields being touched
       const existing = await prisma.clients.findUnique({
@@ -623,11 +649,23 @@ function clientsRouter(prisma) {
                 })
               )?.name
             : null;
+        // …and the platform by name.
+        const platformName =
+          "software_id" in data && data.software_id != null
+            ? (
+                await tx.softwares.findUnique({
+                  where: { id: data.software_id },
+                  select: { name: true },
+                })
+              )?.name
+            : null;
         const summary = changedFields
           .map(([k, v]) =>
             k === "segment_id"
               ? `segment: ${segmentName ?? "cleared"}`
-              : `${k}: ${v}`,
+              : k === "software_id"
+                ? `platform: ${platformName ?? "cleared"}`
+                : `${k}: ${v}`,
           )
           .join(", ");
 
@@ -659,7 +697,6 @@ function clientsRouter(prisma) {
     "annual_increase_percent",
     "value",
     "project_name",
-    "software_id",
     "service_type_id",
     // sales_person_id, operations_person_id removed — no longer columns
   ]);

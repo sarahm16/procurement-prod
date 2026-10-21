@@ -8,7 +8,6 @@ import {
   BILLING_TRIGGERS,
   handoffDefaults,
   handoffKind,
-  internalSystemIdFor,
   loadHandoffRules,
   toDate,
   todayPacific,
@@ -59,7 +58,7 @@ const TEXT_FIELDS = {
   safety_notes: [1000],
   warranty_terms: [1000],
 };
-const ID_FIELDS = ["service_type_id", "software_id", "internal_system_id"];
+const ID_FIELDS = ["service_type_id"];
 const INT_FIELDS = {
   // field: [min, required]
   lead_time_days: [0, true],
@@ -210,8 +209,6 @@ export const serializeContract = (
     Client,
     ServiceLine,
     ServiceType,
-    Software,
-    InternalSystem,
     HandoffSubmittedBy,
     ContractSites,
     ChecklistItems,
@@ -245,10 +242,10 @@ export const serializeContract = (
     ...dates,
     ...decimals,
     client: Client?.client ?? null,
+    // The client's work order platform; set on the client, shown here.
+    client_platform: Client?.Software?.name ?? null,
     service_line: ServiceLine?.name ?? null,
     service_type: ServiceType?.name ?? null,
-    software: Software?.name ?? null,
-    internal_system: InternalSystem?.name ?? null,
     handoff_submitted_by_name: HandoffSubmittedBy?.name ?? null,
     status: meta.name ? { key, name: meta.name, color: meta.color } : null,
     status_key: key,
@@ -293,11 +290,11 @@ export const serializeContract = (
 };
 
 const CONTRACT_INCLUDE = {
-  Client: { select: { id: true, client: true } },
+  Client: {
+    select: { id: true, client: true, Software: { select: { name: true } } },
+  },
   ServiceLine: { select: { id: true, name: true } },
   ServiceType: { select: { id: true, name: true } },
-  Software: { select: { id: true, name: true } },
-  InternalSystem: { select: { id: true, name: true } },
   HandoffSubmittedBy: { select: { id: true, name: true } },
 };
 
@@ -558,8 +555,8 @@ export default function contractsRouter(prisma) {
   });
 
   // POST /api/contracts
-  // A new contract starts with the handoff defaults from HandoffRules (and
-  // our internal system by service type). Anything in the body wins.
+  // A new contract starts with the handoff defaults from HandoffRules.
+  // Anything in the body wins.
   router.post("/", async (req, res) => {
     try {
       const body = req.body ?? {};
@@ -574,10 +571,6 @@ export default function contractsRouter(prisma) {
       ]);
       const kind = handoffKind(type?.name);
       const defaults = handoffDefaults(rules, { kind });
-      if (body.internal_system_id == null) {
-        const sys = await internalSystemIdFor(prisma, kind);
-        if (sys) defaults.internal_system_id = sys;
-      }
       const contract = await prisma.contracts.create({
         data: { ...defaults, ...body },
       });

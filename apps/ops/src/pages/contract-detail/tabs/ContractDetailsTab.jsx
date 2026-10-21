@@ -8,10 +8,10 @@
 //   ─ Team                      ─ Job
 //   ─ Contract term             ─ Scope of work
 //   ─ Money plan                ─ Sourcing and timing
-//   ─ Systems and communication ─ Invoicing
+//   ─ Communication             ─ Invoicing
 //                               ─ Requirements to plan for
 //                               ─ Warranty
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import { Alert, Box, CircularProgress } from "@mui/material";
 
@@ -41,7 +41,6 @@ export default function ContractDetailsTab() {
   const { updateDetails } = useContractActions();
 
   const [serviceTypes, setServiceTypes] = useState([]);
-  const [softwares, setSoftwares] = useState([]);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -49,19 +48,7 @@ export default function ContractDetailsTab() {
       .get("/api/service-types")
       .then(({ data }) => setServiceTypes(Array.isArray(data) ? data : []))
       .catch((e) => console.error("Error fetching service types:", e));
-    axios
-      .get("/api/softwares")
-      .then(({ data }) => setSoftwares(Array.isArray(data) ? data : []))
-      .catch((e) => console.error("Error fetching softwares:", e));
   }, []);
-
-  const opts = useMemo(
-    () => ({
-      clientPlatforms: softwares.filter((s) => !s.is_internal),
-      internalSystems: softwares.filter((s) => s.is_internal),
-    }),
-    [softwares],
-  );
 
   const save = async (changes) => {
     setError(null);
@@ -167,19 +154,13 @@ export default function ContractDetailsTab() {
           />
           <FieldCard
             {...card}
-            title="Systems and communication"
+            title="Communication"
             fields={[
               {
-                key: "internal_system_id",
-                label: "Our system of record",
-                type: "select",
-                options: opts.internalSystems,
-              },
-              {
-                key: "software_id",
                 label: "Client platform",
-                type: "select",
-                options: opts.clientPlatforms,
+                type: "computed",
+                display: (x) => x.client_platform ?? "Not set",
+                hint: () => "Set on the client",
               },
               {
                 key: "update_cadence",

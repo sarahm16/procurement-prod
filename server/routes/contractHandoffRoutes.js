@@ -11,13 +11,7 @@
 // orders.
 import { Router } from "express";
 import { logActivity } from "../utils/logActivity.js";
-import {
-  handoffKind,
-  internalSystemIdFor,
-  toDate,
-  todayPacific,
-  ymd,
-} from "../utils/handoff.js";
+import { handoffKind, toDate, todayPacific, ymd } from "../utils/handoff.js";
 
 const CONTRACT_ENTITY_TYPE_ID = 5;
 
@@ -35,8 +29,7 @@ export default function makeContractHandoffRoutes(prisma, { loadContract }) {
   //
   // POST /api/contracts/:id/submit-handoff   Body: { user_id }
   //
-  // Stamps the handoff date and who submitted it, and fills our system of
-  // record if it's empty (UtilizeCore for PM, Sarlacc otherwise). Refused
+  // Stamps the handoff date and who submitted it. Refused
   // until the contract has a value, a scope, invoicing instructions and at
   // least one site.
   router.post("/:id/submit-handoff", async (req, res) => {
@@ -44,10 +37,7 @@ export default function makeContractHandoffRoutes(prisma, { loadContract }) {
     const { user_id } = req.body ?? {};
 
     try {
-      const c = await prisma.contracts.findUnique({
-        where: { id },
-        include: { ServiceType: { select: { name: true } } },
-      });
+      const c = await prisma.contracts.findUnique({ where: { id } });
       if (!c) return res.status(404).json({ error: "Contract not found" });
       if (c.handoff_on)
         return res.status(409).json({
@@ -71,13 +61,6 @@ export default function makeContractHandoffRoutes(prisma, { loadContract }) {
 
       const today = todayPacific();
       const data = { handoff_on: today, handoff_submitted_by: user_id ?? null };
-      if (c.internal_system_id == null) {
-        const sys = await internalSystemIdFor(
-          prisma,
-          handoffKind(c.ServiceType?.name),
-        );
-        if (sys) data.internal_system_id = sys;
-      }
 
       await prisma.$transaction(async (tx) => {
         await tx.contracts.update({ where: { id }, data });

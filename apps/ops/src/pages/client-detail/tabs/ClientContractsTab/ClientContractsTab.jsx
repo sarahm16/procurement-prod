@@ -147,12 +147,6 @@ const columns = [
     width: 140,
     valueGetter: (value) => value ?? "—",
   },
-  {
-    field: "software",
-    headerName: "Software",
-    width: 130,
-    valueGetter: (value) => value ?? "—",
-  },
 ];
 
 export default function ClientContractsTab() {
@@ -187,7 +181,7 @@ export default function ClientContractsTab() {
   }, [all, view]);
 
   return (
-    <Box>
+    <Box sx={{ p: { xs: 2, sm: 4 }, pt: { xs: 2, sm: 3 } }}>
       {/* View chips — each shows how many contracts it holds */}
       <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
         {VIEWS.map((v) => (
@@ -218,7 +212,7 @@ export default function ClientContractsTab() {
           }
           initialState={{
             columns: {
-              columnVisibilityModel: { service_type: false, software: false },
+              columnVisibilityModel: { service_type: false },
             },
           }}
         />

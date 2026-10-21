@@ -63,8 +63,7 @@ export const productionDaysFor = (value, rate) => {
 
 /**
  * Which kind of job a service type is. The deck's rules differ by kind:
- * deposit, lead time and production days are project-only; PM work lives in
- * UtilizeCore, everything else in Sarlacc.
+ * deposit, lead time and production days are project-only.
  *
  * Keyed on ServiceTypes.name ("Projects", "On Demand", "Planned
  * Maintenance"). A renamed or new service type returns null, which the page
@@ -128,14 +127,4 @@ export const handoffDefaults = (rules, { kind } = {}) => {
   set("update_cadence", rules.update_cadence);
   set("billing_trigger", DEFAULT_BILLING[kind] ?? "upon_completion");
   return out;
-};
-
-/** The id of our internal system for a kind of job (UtilizeCore for PM). */
-export const internalSystemIdFor = async (db, kind) => {
-  const name = kind === "planned_maintenance" ? "UtilizeCore" : "Sarlacc";
-  const row = await db.softwares.findFirst({
-    where: { name, is_internal: true },
-    select: { id: true },
-  });
-  return row?.id ?? null;
 };

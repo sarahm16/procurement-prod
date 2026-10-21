@@ -28,12 +28,33 @@ import {
 
 const CLIENT_ENTITY_TYPE_ID = 3;
 
+// The software that means "this client uses our client portal".
+const CLIENT_PORTAL_SOFTWARE = "Sarlacc";
+const platformLabel = (name) =>
+  name === CLIENT_PORTAL_SOFTWARE ? "NFC Client Portal (Sarlacc)" : name;
+
 function ClientDetailsTab() {
   const { id } = useParams();
   const details = useClientDetails();
   const contacts = useClientContacts();
   const { updateDetails, addContact, updateContact, deleteContact } =
     useClientActions();
+
+  // Platform options: the client platforms, plus Sarlacc (= our client
+  // portal). Our other internal systems (UtilizeCore) aren't a client choice.
+  const [platforms, setPlatforms] = useState([]);
+  useEffect(() => {
+    axios
+      .get("/api/softwares")
+      .then(({ data }) =>
+        setPlatforms(
+          (Array.isArray(data) ? data : []).filter(
+            (p) => !p.is_internal || p.name === CLIENT_PORTAL_SOFTWARE,
+          ),
+        ),
+      )
+      .catch((e) => console.error("Error fetching platforms:", e));
+  }, []);
 
   // Segment options (Government, Commercial, Residential).
   const [segments, setSegments] = useState([]);
@@ -97,6 +118,43 @@ function ClientDetailsTab() {
                     {segments.find((sg) => sg.id === value)?.name ??
                       details.segment ??
                       "—"}
+                  </Typography>
+                )
+              }
+            />
+            <FieldRow
+              label="Platform"
+              value={details.software_id}
+              fieldKey="software_id"
+              render={(value, editing, { onChange }) =>
+                editing ? (
+                  <TextField
+                    select
+                    size="small"
+                    fullWidth
+                    value={value ?? ""}
+                    onChange={(e) =>
+                      onChange(
+                        "software_id",
+                        e.target.value === "" ? null : e.target.value,
+                      )
+                    }
+                  >
+                    <MenuItem value="">
+                      <em>Not set</em>
+                    </MenuItem>
+                    {platforms.map((p) => (
+                      <MenuItem key={p.id} value={p.id}>
+                        {platformLabel(p.name)}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                ) : (
+                  <Typography sx={{ fontSize: "0.85rem" }}>
+                    {platformLabel(
+                      platforms.find((p) => p.id === value)?.name ??
+                        details.software,
+                    ) ?? "—"}
                   </Typography>
                 )
               }

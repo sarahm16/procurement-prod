@@ -38,7 +38,6 @@ model Softwares {
   id         Int          @id @default(autoincrement())
   name       String       @db.VarChar(50)
   is_internal Boolean @default(false) // our systems (Sarlac, UtilizeCore), not a client platform
-  Contracts               Contracts[]  @relation("ContractClientPlatform")
-  InternalSystemContracts Contracts[]  @relation("ContractInternalSystem")
+  Clients                 Clients[]    @relation("ClientPlatform")
   WorkOrders              WorkOrders[]
 }
