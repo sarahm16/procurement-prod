@@ -1,4 +1,4 @@
-// portal/api.js
+// @sarlacc/portal · src/auth/api.js
 //
 // createApi("/api/portal") → an axios instance for one portal's server
 // routes. Sends the sign-in cookie with every request. If any request

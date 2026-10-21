@@ -1,4 +1,4 @@
-// portal/AuthProvider.jsx
+// @sarlacc/portal · src/auth/AuthProvider.jsx
 //
 // Knows whether someone is signed in, and who. On load it asks the server
 // (GET /auth/me); the cookie itself can't be read from JavaScript.
@@ -10,8 +10,8 @@
 //
 //   <AuthProvider api={api}>…</AuthProvider>   (api from createApi)
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { SIGNED_OUT_EVENT } from "./api";
-import { AuthContext } from "./authContext";
+import { SIGNED_OUT_EVENT } from "./api.js";
+import { AuthContext } from "./authContext.js";
 
 export function AuthProvider({ api, children }) {
   const [status, setStatus] = useState("loading");

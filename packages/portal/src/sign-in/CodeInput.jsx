@@ -1,4 +1,4 @@
-// portal/CodeInput.jsx
+// @sarlacc/portal · src/sign-in/CodeInput.jsx
 //
 // Six boxes for the emailed code. Underneath it's one ordinary input, so
 // typing, pasting the whole code, and phones offering the code from the

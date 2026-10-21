@@ -1,12 +1,18 @@
-// src/App.jsx — the portal's pages.
+// src/App.jsx — the client portal's pages.
 //
-//   /sign-in          public
-//   /                 work orders (signed in)
-//   anything else  →  /
+//   /sign-in      public
+//   /             work orders
+//   /sites
+//   /equipment
+//   /users        client admins only
+//   anything else → /
 import { Navigate, Route, Routes } from "react-router-dom";
-import { PortalLayout, RequireAuth, SignInPage } from "./portal";
-import { PORTAL } from "./portalConfig";
-import WorkOrders from "./pages/WorkOrders";
+import { PortalLayout, RequireAuth, SignInPage } from "@sarlacc/portal";
+import { PORTAL } from "./config";
+import EquipmentPage from "./pages/Equipment/EquipmentPage";
+import SitesPage from "./pages/Sites/SitesPage";
+import UsersPage from "./pages/Users/UsersPage";
+import WorkOrdersPage from "./pages/WorkOrders/WorkOrdersPage";
 
 export default function App() {
   return (
@@ -14,7 +20,10 @@ export default function App() {
       <Route path="/sign-in" element={<SignInPage config={PORTAL} />} />
       <Route element={<RequireAuth />}>
         <Route element={<PortalLayout config={PORTAL} />}>
-          <Route index element={<WorkOrders />} />
+          <Route index element={<WorkOrdersPage />} />
+          <Route path="sites" element={<SitesPage />} />
+          <Route path="equipment" element={<EquipmentPage />} />
+          <Route path="users" element={<UsersPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

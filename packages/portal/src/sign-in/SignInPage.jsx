@@ -1,9 +1,9 @@
-// portal/SignInPage.jsx
+// @sarlacc/portal · src/sign-in/SignInPage.jsx
 //
 // Two steps: enter your email → enter the 6-digit code we emailed.
 // Shared by every portal; the words come from the app's config:
 //
-//   <SignInPage config={PORTAL} />
+//   <SignInPage config={config} />
 //
 //   config = {
 //     name: "Vendor Portal",
@@ -30,9 +30,9 @@ import {
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import MailOutlineIcon from "@mui/icons-material/MailOutline";
-import CodeInput from "./CodeInput";
-import { useAuth } from "./useAuth";
-import { errorMessage } from "./api";
+import CodeInput from "./CodeInput.jsx";
+import { useAuth } from "../auth/useAuth.js";
+import { errorMessage } from "../auth/api.js";
 
 const RESEND_SECONDS = 30;
 

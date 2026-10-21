@@ -1,5 +1,5 @@
 import { useContext } from "react";
-import { AuthContext } from "./authContext";
+import { AuthContext } from "./authContext.js";
 
 /** { status, user, requestCode, verifyCode, signOut } — see AuthProvider. */
 export function useAuth() {
