@@ -23,6 +23,7 @@ model Employees {
   ChecklistItemsDone        ContractChecklistItems[]  @relation("ChecklistItemDoneBy")
   VendorUsersInvited        VendorUsers[]             @relation("VendorUserInvitedBy")
   WorkOrdersPortalReleased  WorkOrders[]              @relation("WorkOrderPortalReleasedBy")
+  ClientUsersInvited        ClientUsers[]             @relation("ClientUserInvitedBy")
 }
 
 model InternalRoles {

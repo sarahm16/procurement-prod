@@ -4,17 +4,16 @@
 //   /                 work orders (signed in)
 //   anything else  →  /
 import { Navigate, Route, Routes } from "react-router-dom";
-import RequireAuth from "./auth/RequireAuth";
-import PortalLayout from "./layout/PortalLayout";
-import SignIn from "./pages/SignIn";
+import { PortalLayout, RequireAuth, SignInPage } from "./portal";
+import { PORTAL } from "./portalConfig";
 import WorkOrders from "./pages/WorkOrders";
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/sign-in" element={<SignIn />} />
+      <Route path="/sign-in" element={<SignInPage config={PORTAL} />} />
       <Route element={<RequireAuth />}>
-        <Route element={<PortalLayout />}>
+        <Route element={<PortalLayout config={PORTAL} />}>
           <Route index element={<WorkOrders />} />
         </Route>
       </Route>

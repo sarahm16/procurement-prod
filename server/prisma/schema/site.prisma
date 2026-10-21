@@ -19,7 +19,8 @@ model Sites {
   ContractSites    ContractSites[]
   Attachments      SiteAttachments[]
   Contacts         SiteContacts[]
-    WorkOrders       WorkOrders[]
+  WorkOrders       WorkOrders[]
+  PortalUsers      ClientUserSites[]
 
   Client           Clients           @relation(fields: [client_id], references: [id], onUpdate: NoAction, map: "FK__Sites__client_id__40F9A68C")
   Company          Companies?        @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK__Sites__company_i__41EDCAC5")

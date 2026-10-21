@@ -36,6 +36,7 @@ model Clients {
   Companies          Companies[]
   Contracts          Contracts[]
   Sites              Sites[]
+  PortalUsers        ClientUsers[]
 }
 
 model Companies {
@@ -57,6 +58,7 @@ model ClientContacts {
   created_at      DateTime     @default(now())
   Client          Clients      @relation(fields: [client_id], references: [id], onUpdate: NoAction)
   ContactRole     ContactRoles @relation(fields: [contact_role_id], references: [id], onUpdate: NoAction)
+  PortalUsers     ClientUsers[]
 }
 
 model ClientServiceLines {

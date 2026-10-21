@@ -1,0 +1,79 @@
+/// A person at a client who can log in to the client portal. Mirrors
+/// VendorUsers. By default they see every site of their client; adding rows
+/// to ClientUserSites limits them to just those sites.
+model ClientUsers {
+  id            Int       @id @default(autoincrement())
+  client_id     Int
+  /// The client contact this login belongs to, if they're on the Contacts list.
+  contact_id    Int?
+  name          String    @db.VarChar(100)
+  /// Login is by email. Stored lowercase and trimmed.
+  email         String    @unique @db.VarChar(100)
+  phone         String?   @db.VarChar(20)
+  /// "admin" can invite and manage the client's other users later; "member" can't.
+  role          String    @default("member") @db.VarChar(20)
+  /// Turned off instead of deleted, so the work orders they submitted keep a name.
+  is_active     Boolean   @default(true)
+  last_login_at DateTime?
+  created_at    DateTime  @default(now())
+  /// The employee who gave them access.
+  invited_by    Int?
+
+  Client     Clients            @relation(fields: [client_id], references: [id], onUpdate: NoAction)
+  Contact    ClientContacts?    @relation(fields: [contact_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  InvitedBy  Employees?         @relation("ClientUserInvitedBy", fields: [invited_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Sites      ClientUserSites[]
+  LoginCodes ClientLoginCodes[]
+  Sessions   ClientSessions[]
+
+  @@index([client_id])
+}
+
+/// Limits a client login to specific sites (e.g. a store manager who only
+/// submits for their own stores). No rows for a user = all of the client's
+/// sites. The server checks that each site belongs to the user's client.
+model ClientUserSites {
+  client_user_id Int
+  site_id        Int
+  created_at     DateTime @default(now())
+
+  ClientUser ClientUsers @relation(fields: [client_user_id], references: [id], onUpdate: NoAction)
+  Site       Sites       @relation(fields: [site_id], references: [id], onUpdate: NoAction)
+
+  @@id([client_user_id, site_id])
+  @@index([site_id])
+}
+
+/// One-time sign-in codes for client users. Same rules as VendorLoginCodes:
+/// only a hash is stored; works once, for 10 minutes, with a few tries.
+model ClientLoginCodes {
+  id             Int       @id @default(autoincrement())
+  client_user_id Int
+  code_hash      String    @db.VarChar(64)
+  expires_at     DateTime
+  used_at        DateTime?
+  attempts       Int       @default(0)
+  created_at     DateTime  @default(now())
+
+  ClientUser ClientUsers @relation(fields: [client_user_id], references: [id], onUpdate: NoAction)
+
+  @@index([client_user_id, created_at])
+}
+
+/// A signed-in browser in the client portal. Same rules as VendorSessions:
+/// only a hash of the cookie's token is stored; 60 days after each visit,
+/// never past 6 months; revoked_at or deactivating the user signs them out.
+model ClientSessions {
+  id             Int       @id @default(autoincrement())
+  client_user_id Int
+  token_hash     String    @unique @db.VarChar(64)
+  expires_at     DateTime
+  revoked_at     DateTime?
+  last_seen_at   DateTime  @default(now())
+  user_agent     String?   @db.VarChar(255)
+  created_at     DateTime  @default(now())
+
+  ClientUser ClientUsers @relation(fields: [client_user_id], references: [id], onUpdate: NoAction)
+
+  @@index([client_user_id])
+}

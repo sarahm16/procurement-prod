@@ -2,7 +2,7 @@
 //
 // Placeholder until the work order design is settled in the ops app.
 import { Paper, Typography } from "@mui/material";
-import { useAuth } from "../auth/useAuth";
+import { useAuth } from "../portal";
 
 export default function WorkOrders() {
   const { user } = useAuth();

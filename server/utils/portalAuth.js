@@ -1,12 +1,11 @@
 // utils/portalAuth.js
 //
-// The pieces of vendor sign-in that don't touch the database: settings,
-// codes, session tokens and the cookie.
+// The parts of portal sign-in that don't touch the database: settings,
+// codes, session tokens and cookies. Shared by the vendor and client portals.
 //
 // .env:
-//   PORTAL_AUTH_SECRET   a long random string, e.g. the output of
-//                        node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-//                        Changing it makes every unused code stop working.
+//   PORTAL_AUTH_SECRET   a long random string. Changing it makes every unused
+//                        code stop working (sessions are unaffected).
 import crypto from "crypto";
 
 // ─── Codes ───────────────────────────────────────────────────────────────────
@@ -14,7 +13,7 @@ export const CODE_TTL_MINUTES = 10; // how long an emailed code works
 export const CODE_MAX_ATTEMPTS = 5; // wrong guesses before a code is dead
 export const CODES_PER_HOUR = 5; // codes one person can request per hour
 
-/** Lowercase and trim, so "Jane@Vendor.com " and "jane@vendor.com" match. */
+/** Lowercase and trim, so "Jane@Acme.com " and "jane@acme.com" match. */
 export const normalizeEmail = (email) =>
   typeof email === "string" ? email.trim().toLowerCase() : "";
 
@@ -27,16 +26,16 @@ export const generateCode = () =>
 
 /**
  * What gets stored instead of the code. A 6-digit code has only a million
- * possibilities, so a plain hash could be reversed in a second; mixing in a
- * server secret (HMAC) means the table alone is useless. The user id is
- * mixed in too, so a code only works for the person it was sent to.
+ * possibilities, so it's mixed with a server secret (HMAC) — the table alone
+ * is useless. The portal and user id are mixed in too, so a code only works
+ * for the person, and the portal, it was sent for.
  */
-export function hashCode(vendorUserId, code) {
+export function hashCode(kind, userId, code) {
   const secret = process.env.PORTAL_AUTH_SECRET;
   if (!secret) throw new Error("PORTAL_AUTH_SECRET isn't set");
   return crypto
     .createHmac("sha256", secret)
-    .update(`${vendorUserId}:${code}`)
+    .update(`${kind}:${userId}:${code}`)
     .digest("hex"); // 64 characters, fits code_hash VarChar(64)
 }
 
@@ -53,13 +52,9 @@ export const SESSION_MAX_DAYS = 180; // signed out this long after signing in, r
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** The random value that goes in the cookie. 256 bits, URL-safe. */
-export const newSessionToken = () =>
-  crypto.randomBytes(32).toString("base64url");
+export const newSessionToken = () => crypto.randomBytes(32).toString("base64url");
 
-/**
- * What gets stored instead of the token. The token is already long and
- * random, so a plain SHA-256 is enough (no secret needed).
- */
+/** What gets stored instead of the token (already long and random, so plain SHA-256). */
 export const hashToken = (token) =>
   crypto.createHash("sha256").update(token).digest("hex");
 
@@ -70,25 +65,22 @@ export function sessionExpiry(createdAt, now = new Date()) {
   return new Date(Math.min(idle, cap));
 }
 
-// ─── Cookie ──────────────────────────────────────────────────────────────────
-export const SESSION_COOKIE = "nfc_portal";
-
+// ─── Cookies ─────────────────────────────────────────────────────────────────
 /**
- * httpOnly: page scripts can't read it, so injected JavaScript can't steal it.
- * secure: only sent over HTTPS (off on localhost so dev works).
+ * httpOnly: page scripts can't read it.
+ * secure: only over HTTPS (off on localhost so dev works).
  * sameSite lax: not sent on requests started by other sites.
- * path /api/portal: the browser only sends it to portal routes, never to
- *   the ops API.
+ * path: only sent to that portal's own API routes.
  */
-export const cookieOptions = (expiresAt) => ({
+export const cookieOptions = (portal, expiresAt) => ({
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: "lax",
-  path: "/api/portal",
+  path: portal.cookiePath,
   expires: expiresAt,
 });
 
-export const clearCookieOptions = () => {
-  const { expires, ...rest } = cookieOptions(new Date(0));
+export const clearCookieOptions = (portal) => {
+  const { expires, ...rest } = cookieOptions(portal, new Date(0));
   return rest;
 };

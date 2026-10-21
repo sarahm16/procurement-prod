@@ -33,6 +33,7 @@ import workordersRouter from "./routes/workorders.js";
 import sourcingRouter from "./routes/sourcing.js";
 import handoffRulesRouter from "./routes/handoffRules.js";
 import portalAuthRouter from "./routes/portal/auth.js";
+import clientPortalAuthRouter from "./routes/clientPortal/auth.js";
 
 import prisma from "./db.js";
 
@@ -80,6 +81,7 @@ app.use("/api/pandadoc", pandadocRouter);
 app.use("/api/sourcing", sourcingRouter(prisma));
 app.use("/api/handoff-rules", handoffRulesRouter(prisma));
 app.use("/api/portal/auth", portalAuthRouter(prisma));
+app.use("/api/client-portal/auth", clientPortalAuthRouter(prisma));
 
 // Catch-all LAST — hands everything else to React Router
 // app.get("/*splat", (req, res) => {

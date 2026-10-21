@@ -1,4 +1,4 @@
-// src/auth/AuthProvider.jsx
+// portal/AuthProvider.jsx
 //
 // Knows whether someone is signed in, and who. On load it asks the server
 // (GET /auth/me); the cookie itself can't be read from JavaScript.
@@ -6,17 +6,14 @@
 //   const { status, user, requestCode, verifyCode, signOut } = useAuth();
 //   (useAuth is in ./useAuth.js)
 //   status: "loading" | "signedIn" | "signedOut"
-//   user:   { id, name, email, role, vendor: { id, company } }
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-import api, { SIGNED_OUT_EVENT } from "../api";
+//   user:   from the server's /auth/me (vendor: user.vendor, client: user.client)
+//
+//   <AuthProvider api={api}>…</AuthProvider>   (api from createApi)
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { SIGNED_OUT_EVENT } from "./api";
 import { AuthContext } from "./authContext";
 
-export function AuthProvider({ children }) {
+export function AuthProvider({ api, children }) {
   const [status, setStatus] = useState("loading");
   const [user, setUser] = useState(null);
 
@@ -34,7 +31,7 @@ export function AuthProvider({ children }) {
         setStatus("signedIn");
       })
       .catch(signedOut);
-  }, [signedOut]);
+  }, [api, signedOut]);
 
   // Any other request that comes back 401 means the session ended.
   useEffect(() => {
@@ -45,16 +42,19 @@ export function AuthProvider({ children }) {
   /** Email a code. Resolves the same whether or not the email has access. */
   const requestCode = useCallback(
     (email) => api.post("/auth/request-code", { email }),
-    [],
+    [api],
   );
 
   /** Check the code; on success the server sets the cookie. */
-  const verifyCode = useCallback(async (email, code) => {
-    const { data } = await api.post("/auth/verify-code", { email, code });
-    setUser(data.user);
-    setStatus("signedIn");
-    return data.user;
-  }, []);
+  const verifyCode = useCallback(
+    async (email, code) => {
+      const { data } = await api.post("/auth/verify-code", { email, code });
+      setUser(data.user);
+      setStatus("signedIn");
+      return data.user;
+    },
+    [api],
+  );
 
   const signOut = useCallback(async () => {
     try {
@@ -62,7 +62,7 @@ export function AuthProvider({ children }) {
     } finally {
       signedOut();
     }
-  }, [signedOut]);
+  }, [api, signedOut]);
 
   const value = useMemo(
     () => ({ status, user, requestCode, verifyCode, signOut }),
@@ -71,4 +71,3 @@ export function AuthProvider({ children }) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
-

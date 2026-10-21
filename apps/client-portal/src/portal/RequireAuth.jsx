@@ -1,6 +1,6 @@
-// src/auth/RequireAuth.jsx
+// portal/RequireAuth.jsx
 //
-// Wraps every page that needs a signed-in vendor. Signed out → the sign-in
+// Wraps every page that needs someone signed in. Signed out → the sign-in
 // page, remembering where they were headed so they land there afterwards
 // (e.g. a "You've been assigned WO-10482" email link).
 import { Navigate, Outlet, useLocation } from "react-router-dom";
