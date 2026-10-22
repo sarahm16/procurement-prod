@@ -194,7 +194,31 @@ export default function workordersRouter(prisma) {
           },
         },
       });
-      res.json(workorders.map((wo) => ({ ...wo, segment: segmentOf(wo) })));
+      // Project managers for the list's PM column — one query for all rows.
+      const pms = await prisma.roleAssignments.findMany({
+        where: {
+          entity_type_id: 4, // work order
+          entity_id: { in: workorders.map((w) => w.id) },
+          Role: { name: "Project Manager" },
+        },
+        select: { entity_id: true, Employee: { select: { name: true } } },
+        orderBy: { created_at: "asc" },
+      });
+      const pmsByWo = new Map();
+      for (const { entity_id, Employee } of pms) {
+        if (!Employee?.name) continue;
+        const names = pmsByWo.get(entity_id) ?? [];
+        if (!names.includes(Employee.name)) names.push(Employee.name);
+        pmsByWo.set(entity_id, names);
+      }
+
+      res.json(
+        workorders.map((wo) => ({
+          ...wo,
+          segment: segmentOf(wo),
+          project_managers: pmsByWo.get(wo.id) ?? [],
+        })),
+      );
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         console.error("Prisma error fetching workorders:", error);

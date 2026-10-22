@@ -55,6 +55,26 @@ const sumServices = (wo, field) =>
   (wo.Services ?? []).reduce((total, s) => total + (Number(s[field]) || 0), 0);
 
 /**
+ * Gross margin as a percentage of the client price, or null when it can't
+ * be worked out honestly: no client price, or no vendor cost yet (a margin
+ * of 100% on an unpriced job would look great and mean nothing).
+ */
+const marginPercent = (client, vendor) =>
+  client > 0 && vendor != null ? ((client - vendor) / client) * 100 : null;
+
+/** Margin colours: 50%+ good, 47–50% watch, under 47% a problem. */
+const MARGIN_GOOD = 50;
+const MARGIN_WATCH = 47;
+const marginColor = (pct) =>
+  pct == null
+    ? "text.secondary"
+    : pct >= MARGIN_GOOD
+      ? "success.main"
+      : pct >= MARGIN_WATCH
+        ? "warning.main"
+        : "error.main";
+
+/**
  * Turns the flat list into tree rows, and rolls the money up.
  *
  * The rollup mirrors how the business actually works: the client price lives on
@@ -88,6 +108,16 @@ function buildTreeRows(workorders) {
     const ownClient = sumServices(w, "client_price");
     const ownVendor = sumServices(w, "vendor_price");
 
+    // Parents show their own client price (or, if it's only on the children,
+    // theirs added up) and their children's total cost.
+    const clientTotal =
+      (kids.length && !ownClient
+        ? kids.reduce((t, k) => t + sumServices(k, "client_price"), 0)
+        : ownClient) || null;
+    const vendorTotal = kids.length
+      ? kids.reduce((t, k) => t + sumServices(k, "vendor_price"), 0) || null
+      : ownVendor || null;
+
     return {
       ...w,
       treePath: parent ? [key(parent), key(w)] : [key(w)],
@@ -96,11 +126,12 @@ function buildTreeRows(workorders) {
       __childCount: kids.length,
       __childVendorCount: new Set(kids.map((k) => k.vendor_id).filter(Boolean))
         .size,
-      // Parents show their own client price and their children's total cost.
-      __clientTotal: ownClient || null,
-      __vendorTotal: kids.length
-        ? kids.reduce((t, k) => t + sumServices(k, "vendor_price"), 0) || null
-        : ownVendor || null,
+      __clientTotal: clientTotal,
+      __vendorTotal: vendorTotal,
+      // Children don't get a margin: the client price is on the parent, so a
+      // child's own numbers would be meaningless. Parents use the rolled-up
+      // totals; standalone work orders use their own.
+      __margin: parent ? null : marginPercent(clientTotal, vendorTotal),
     };
   });
 }
@@ -181,7 +212,8 @@ function Workorders() {
       if (q) {
         const hay =
           `${w.work_order_number ?? ""} ${w.external_id ?? ""} ${w.Site?.store ?? ""} ` +
-          `${w.Site?.Client?.client ?? ""} ${w.Vendor?.company ?? ""}`.toLowerCase();
+          `${w.Site?.Client?.client ?? ""} ${w.Vendor?.company ?? ""} ` +
+          `${(w.project_managers ?? []).join(" ")}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       if (statusFilter !== "all" && w.Status?.name !== statusFilter)
@@ -290,6 +322,14 @@ function Workorders() {
           ),
       },
       {
+        field: "project_managers",
+        headerName: "Project Manager",
+        width: 160,
+        // Usually one; if a work order has more, they're listed together.
+        valueGetter: (value) => (value ?? []).join(", "),
+        renderCell: ({ value }) => value || "—",
+      },
+      {
         field: "priority",
         headerName: "Priority",
         width: 100,
@@ -324,6 +364,44 @@ function Workorders() {
         width: 110,
         type: "number",
         valueFormatter: (value) => fmtMoney(value),
+      },
+      {
+        field: "__margin",
+        headerName: "Margin",
+        description:
+          "(Client $ − Vendor $) ÷ Client $. Green 50%+, yellow 47–50%, red under 47%. Parents use their children's totals; children have none.",
+        width: 95,
+        type: "number",
+        renderCell: ({ value, row }) =>
+          row.__isChild ? (
+            ""
+          ) : value == null ? (
+            <Typography
+              component="span"
+              sx={{ fontSize: "inherit", color: "text.disabled" }}
+            >
+              —
+            </Typography>
+          ) : (
+            <Typography
+              component="span"
+              sx={{
+                fontSize: "inherit",
+                fontWeight: 700,
+                color: marginColor(value),
+              }}
+            >
+              {value.toFixed(1)}%
+            </Typography>
+          ),
+      },
+      {
+        field: "start_date",
+        headerName: "Start",
+        width: 110,
+        valueGetter: (value, row) =>
+          row.start_date ? new Date(row.start_date) : null,
+        type: "date",
       },
       {
         field: "due_date",
@@ -429,7 +507,7 @@ function Workorders() {
           <ListToolbar
             search={search}
             onSearchChange={setSearch}
-            searchPlaceholder="Search WO #, site, client, vendor…"
+            searchPlaceholder="Search WO #, site, client, vendor, PM…"
             filters={[
               {
                 label: "Status",
