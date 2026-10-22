@@ -64,6 +64,11 @@ export function WorkOrderDetailProvider({ id, children }) {
           msa: data?.msa ?? null,
           vendor_compliance: data?.vendor?.compliance,
           segment: data?.segment,
+          client: data?.client,
+          phase: data?.phase ?? "ops",
+          client_software: data?.client_software ?? null,
+          client_id: data?.client_id ?? null,
+          client_quickbooks_id: data?.client_quickbooks_id ?? null,
         });
         setActivity(data.activity_log ?? []);
         setNotes(data.notes ?? []);

@@ -20,6 +20,13 @@ import {
   serializeMessage,
 } from "../services/workOrderMessages.js";
 import { notifyAboutMessage } from "../services/messageNotifications.js";
+import {
+  PHASES,
+  PhaseError,
+  checkStatusChange,
+  moveBackToOps,
+  moveToFinance,
+} from "../services/workOrderPhase.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -55,6 +62,8 @@ const serializeFamilyMember = (wo) => ({
   status: wo.Status?.name ?? null,
   status_color: wo.Status?.color ?? null,
   vendor: wo.Vendor?.company ?? null,
+  vendor_id: wo.Vendor?.id ?? null,
+  vendor_quickbooks_id: wo.Vendor?.quickbooks_id ?? null,
   vendor_total: sumField(wo.Services, "vendor_price"),
 });
 
@@ -86,6 +95,7 @@ const serializeVendor = (vendor) => {
   return {
     id: vendor.id,
     company: vendor.company,
+    quickbooks_id: vendor.quickbooks_id ?? null,
     primary_contact_name: primary?.name ?? null,
     email: primary?.email ?? null,
     phone: primary?.phone ?? null,
@@ -118,6 +128,8 @@ const serializeVendorUpdate = (u) => ({
 const serializeWorkorderById = (workorder, notes, activityLog) => {
   return {
     client: workorder?.Site?.Client?.client,
+    client_id: workorder?.Site?.Client?.id ?? null,
+    client_quickbooks_id: workorder?.Site?.Client?.quickbooks_id ?? null,
     segment: segmentOf(workorder),
     priority: workorder?.priority,
     external_id: workorder?.external_id,
@@ -148,6 +160,8 @@ const serializeWorkorderById = (workorder, notes, activityLog) => {
     // Whether the client can see the client conversation (uses our portal).
     client_uses_portal:
       workorder?.Site?.Client?.Software?.name === CLIENT_PORTAL_SOFTWARE,
+    // The client's work order portal (for the Accounting tab).
+    client_software: workorder?.Site?.Client?.Software?.name ?? null,
     parent: workorder?.Parent
       ? {
           id: workorder.Parent.id,
@@ -269,11 +283,18 @@ export default function workordersRouter(prisma) {
           parent_work_order_id: true,
           vendor_id: true,
           work_order_number: true,
+          phase: true,
         },
       });
 
       if (!parent) {
         return res.status(404).json({ error: "Parent work order not found" });
+      }
+      if (parent.phase === "finance") {
+        return res.status(409).json({
+          error:
+            "That job is in finance. Send it back to ops before adding work to it.",
+        });
       }
       if (parent.parent_work_order_id) {
         return res
@@ -434,6 +455,7 @@ export default function workordersRouter(prisma) {
           id: true,
           work_order_number: true,
           parent_work_order_id: true,
+          phase: true,
         },
       });
       if (!wo) return res.status(404).json({ error: "Work order not found" });
@@ -441,6 +463,12 @@ export default function workordersRouter(prisma) {
         return res
           .status(400)
           .json({ error: "That work order isn't part of a job" });
+      }
+      if (wo.phase === "finance") {
+        return res.status(409).json({
+          error:
+            "This job is in finance. Send it back to ops before splitting it up.",
+        });
       }
 
       await prisma.$transaction(async (tx) => {
@@ -532,10 +560,19 @@ export default function workordersRouter(prisma) {
     }
   });
 
-  // GET /api/workorders/statuses
+  // GET /api/workorders/statuses            every status, ops first
+  // GET /api/workorders/statuses?phase=ops   just one phase's
   router.get("/statuses", async (req, res) => {
+    const { phase } = req.query;
+    if (phase && !PHASES.includes(phase)) {
+      return res.status(400).json({ error: "Invalid phase" });
+    }
     try {
-      const statuses = await prisma.workOrderStatuses.findMany();
+      const statuses = await prisma.workOrderStatuses.findMany({
+        where: phase ? { phase } : undefined,
+        // Workflow order: ops statuses, then finance, each in id order.
+        orderBy: [{ phase: "desc" }, { id: "asc" }],
+      });
       res.json(statuses);
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
@@ -562,7 +599,7 @@ export default function workordersRouter(prisma) {
       type: true,
       scope_of_work: true,
       Status: { select: { name: true, color: true } },
-      Vendor: { select: { company: true } },
+      Vendor: { select: { id: true, company: true, quickbooks_id: true } },
       Services: { select: { vendor_price: true } },
     };
 
@@ -583,12 +620,14 @@ export default function workordersRouter(prisma) {
                 mailing_city: true,
                 mailing_state: true,
                 mailing_zipcode: true,
+                quickbooks_id: true,
                 Client: {
                   select: {
                     client: true,
                     id: true,
                     Segment: { select: { name: true } },
                     Software: { select: { name: true } },
+                    quickbooks_id: true,
                   },
                 },
                 Contacts: true,
@@ -680,8 +719,15 @@ export default function workordersRouter(prisma) {
       "due_date",
       "scope_of_work",
       "vendor_id",
-      "phase",
     ];
+
+    // Phase only changes through POST /:id/phase, which checks the job is
+    // actually finished and moves the children with it.
+    if ("phase" in changes) {
+      return res.status(400).json({
+        error: "Use Move to Finance / Send back to Ops to change the phase",
+      });
+    }
 
     const data = {};
     for (const key of allowed) {
@@ -705,6 +751,17 @@ export default function workordersRouter(prisma) {
 
     if (Object.keys(data).length === 0) {
       return res.status(400).json({ error: "No valid fields to update" });
+    }
+
+    if (data.status_id != null) {
+      try {
+        await checkStatusChange(prisma, Number(id), data.status_id);
+      } catch (e) {
+        if (e instanceof PhaseError) {
+          return res.status(e.status).json({ error: e.message });
+        }
+        throw e;
+      }
     }
 
     try {
@@ -742,6 +799,31 @@ export default function workordersRouter(prisma) {
         console.error("Error updating workorder:", error);
         res.status(500).json({ error: "Internal Server Error" });
       }
+    }
+  });
+
+  // POST /api/workorders/:id/phase
+  // body: { phase: "finance" }                       hand a completed job to finance
+  //       { phase: "ops", reason: "…" }              send it back, with a reason
+  //       plus user_id
+  router.post("/:id/phase", async (req, res) => {
+    const id = Number(req.params.id);
+    const { phase, reason, user_id } = req.body ?? {};
+    if (!PHASES.includes(phase)) {
+      return res.status(400).json({ error: "phase must be ops or finance" });
+    }
+    try {
+      const result =
+        phase === "finance"
+          ? await moveToFinance(prisma, { id, userId: user_id })
+          : await moveBackToOps(prisma, { id, userId: user_id, reason });
+      res.json(result);
+    } catch (e) {
+      if (e instanceof PhaseError) {
+        return res.status(e.status).json({ error: e.message, ...e.extra });
+      }
+      console.error("Error changing work order phase:", e);
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 

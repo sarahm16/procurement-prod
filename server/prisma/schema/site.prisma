@@ -12,6 +12,7 @@ model Sites {
   company_id       Int?
   sandbox          Boolean           @default(false)
   created_at       DateTime          @default(now())
+  quickbooks_id    String?           @db.VarChar(100)
 
   // No status column: whether a site is active is worked out from its
   // contract sites — see view SiteStatus (vw_SiteStatus) in schema.prisma.

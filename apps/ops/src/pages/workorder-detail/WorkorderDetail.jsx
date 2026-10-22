@@ -13,6 +13,8 @@ import MessagesTab from "./tabs/MessagesTab/MessagesTab";
 import WorkOrderDetailsTab from "./tabs/DetailsTab/WorkOrderDetailsTab";
 import FieldActivityTab from "./tabs/FieldActivityTab/FieldActivityTab";
 import AttachmentsTab from "./tabs/AttachmentsTab/AttachmentsTab";
+import PhaseActions from "./PhaseActions";
+import AccountingTab from "./tabs/AccountingTab/AccountingTab";
 
 // Local Functions
 import { useWorkOrderStatuses } from "../../*/hooks/useWorkOrderStatuses";
@@ -24,6 +26,7 @@ import {
   useWorkOrderActivity,
   WorkOrderDetailProvider,
   useWorkOrderSite,
+  useLinkedWorkOrders,
 } from "./WorkOrderDetailProvider";
 
 import Tooltip from "@mui/material/Tooltip";
@@ -39,6 +42,7 @@ function WorkOrderDetail() {
 
 function WorkOrderDetailLayout({ id }) {
   // Get the WorkOrder details from the WorkOrder context
+  const linked = useLinkedWorkOrders();
 
   // Hooks
   const { data: WorkOrderStatuses = [] } = useWorkOrderStatuses();
@@ -50,14 +54,31 @@ function WorkOrderDetailLayout({ id }) {
   const activity = useWorkOrderActivity();
   const { updateStatus, addNote } = useWorkOrderActions();
 
+  // The status menu only offers the current phase's statuses. A child in
+  // finance is tracked on its parent, so its status is read-only.
+  const phase = details.phase ?? "ops";
+  const currentStatus =
+    WorkOrderStatuses.find((s) => s.name === details.status) ??
+    (details.status ? { name: details.status } : null);
+  const lockedChild = linked.isChild && phase === "finance";
+  const statusOptions = lockedChild
+    ? []
+    : WorkOrderStatuses.filter((s) => (s.phase ?? "ops") === phase);
+
   return (
     <DetailPageLayout
       header={
         <DetailPageHeader
           title={details.work_order_number}
           subtitle={`Details for Work Order ${details.work_order_number}`}
-          status={details?.status}
-          statusOptions={WorkOrderStatuses}
+          status={currentStatus}
+          statusOptions={statusOptions}
+          statusTooltip={
+            lockedChild
+              ? "In finance with its parent; change it there"
+              : undefined
+          }
+          actions={<PhaseActions />}
           onStatusChange={updateStatus}
           breadcrumbs={[
             { label: "Work Orders", href: "/workorders" },
@@ -66,7 +87,6 @@ function WorkOrderDetailLayout({ id }) {
           meta={[]}
           address={`${site.mailing_address ?? ""}, ${site.mailing_city ?? ""}, ${site.mailing_state ?? ""} ${site.mailing_zipcode ?? ""}`}
           onBack={() => console.log("Back button clicked")}
-          actions={[]}
           badges={
             details?.segment ? (
               <Tooltip
@@ -99,13 +119,16 @@ function WorkOrderDetailLayout({ id }) {
           label: "Messages",
           content: <MessagesTab />,
         },
-
+        {
+          label: "Accounting",
+          content: <AccountingTab />,
+        },
         {
           label: "Activity",
           content: (
             <ActivityLog
               entries={activity}
-              fieldLabels={{ status_id: "Status" }}
+              fieldLabels={{ status_id: "Status", phase: "Phase" }}
               valueFormatters={{
                 status_id: (value) => {
                   const status = WorkOrderStatuses.find(

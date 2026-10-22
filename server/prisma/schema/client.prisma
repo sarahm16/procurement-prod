@@ -20,6 +20,7 @@ model Clients {
   brand              String                  @db.VarChar(4)
   legal_name         String                  @db.VarChar(100)
   sarlaccId          String?                 @db.VarChar(100)
+  quickbooks_id      String?                 @db.VarChar(100)
   paused_at          DateTime?               @db.Date
   paused_reason      String?                 @db.VarChar(200)
   paused_by          Int?
