@@ -9,6 +9,10 @@ import ClientSegmentChip from "../../components/ClientSegmentChip/ClientSegmentC
 // Tabs
 // import WorkOrderDetailsTab from "./tabs/DetailsTab/WorkOrderDetailsTab";
 import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
+import MessagesTab from "./tabs/MessagesTab/MessagesTab";
+import WorkOrderDetailsTab from "./tabs/DetailsTab/WorkOrderDetailsTab";
+import FieldActivityTab from "./tabs/FieldActivityTab/FieldActivityTab";
+import AttachmentsTab from "./tabs/AttachmentsTab/AttachmentsTab";
 
 // Local Functions
 import { useWorkOrderStatuses } from "../../*/hooks/useWorkOrderStatuses";
@@ -21,9 +25,6 @@ import {
   WorkOrderDetailProvider,
   useWorkOrderSite,
 } from "./WorkOrderDetailProvider";
-import WorkOrderDetailsTab from "./tabs/DetailsTab/WorkOrderDetailsTab";
-import FieldActivityTab from "./tabs/FieldActivityTab/FieldActivityTab";
-import AttachmentsTab from "./tabs/AttachmentsTab/AttachmentsTab";
 
 import Tooltip from "@mui/material/Tooltip";
 
@@ -85,6 +86,7 @@ function WorkOrderDetailLayout({ id }) {
           label: "Details",
           content: <WorkOrderDetailsTab />,
         },
+
         {
           label: "Attachments",
           content: <AttachmentsTab />,
@@ -92,6 +94,10 @@ function WorkOrderDetailLayout({ id }) {
         {
           label: "Field Activity",
           content: <FieldActivityTab />,
+        },
+        {
+          label: "Messages",
+          content: <MessagesTab />,
         },
 
         {

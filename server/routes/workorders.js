@@ -11,6 +11,15 @@ import {
   serializeMobilizationFee,
 } from "./mobilizationFeeRoutes.js";
 import { DOC_TYPES, hasCompletedDoc } from "../utils/complianceDocs.js";
+import {
+  CHANNELS,
+  CLIENT_PORTAL_SOFTWARE,
+  MESSAGE_INCLUDE,
+  checkContent,
+  createMessage,
+  serializeMessage,
+} from "../services/workOrderMessages.js";
+import { notifyAboutMessage } from "../services/messageNotifications.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -106,17 +115,6 @@ const serializeVendorUpdate = (u) => ({
   vendor_company: u?.Vendor?.company ?? null,
 });
 
-const serializeCommunication = (c) => ({
-  id: c.id,
-  content: c.content,
-  sender_type: c.sender_type,
-  employee_id: c.employee_id,
-  vendor_id: c.vendor_id,
-  employee_name: c.Employee?.name ?? null, // who on our team, if internal
-  created_at: c.created_at,
-  vendor_company: c?.Vendor?.company ?? null,
-});
-
 const serializeWorkorderById = (workorder, notes, activityLog) => {
   return {
     client: workorder?.Site?.Client?.client,
@@ -142,10 +140,14 @@ const serializeWorkorderById = (workorder, notes, activityLog) => {
     phase: workorder?.phase ?? "ops",
     attachments: workorder?.Attachments,
     vendor_updates: (workorder?.VendorUpdates ?? []).map(serializeVendorUpdate),
-    communications: (workorder?.VendorCommunications ?? [])
+    // Both outside conversations; each thread on the page filters by channel.
+    communications: (workorder?.Communications ?? [])
       .slice()
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)) // chronological
-      .map(serializeCommunication),
+      .map((m) => serializeMessage(m)),
+    // Whether the client can see the client conversation (uses our portal).
+    client_uses_portal:
+      workorder?.Site?.Client?.Software?.name === CLIENT_PORTAL_SOFTWARE,
     parent: workorder?.Parent
       ? {
           id: workorder.Parent.id,
@@ -562,6 +564,7 @@ export default function workordersRouter(prisma) {
                     client: true,
                     id: true,
                     Segment: { select: { name: true } },
+                    Software: { select: { name: true } },
                   },
                 },
                 Contacts: true,
@@ -581,12 +584,7 @@ export default function workordersRouter(prisma) {
                 Vendor: true,
               },
             },
-            VendorCommunications: {
-              include: {
-                Employee: true,
-                Vendor: true,
-              },
-            },
+            Communications: { include: MESSAGE_INCLUDE },
             Parent: {
               select: {
                 id: true,
@@ -889,42 +887,67 @@ export default function workordersRouter(prisma) {
   });
 
   // POST /api/workorders/:id/communications
+  // body: { channel: "client" | "vendor", content, user_id }
+  // Our team posting in the client or the vendor conversation.
+  //   - client: only when the client uses our client portal (otherwise
+  //     they'd never see it)
+  //   - vendor: goes to the vendor currently on the work order
   router.post("/:id/communications", async (req, res) => {
-    const { id } = req.params;
-    const { content, sender_type, user_id, vendor_id } = req.body;
+    const id = Number(req.params.id);
+    const { channel, user_id } = req.body;
 
-    if (!content?.trim())
-      return res.status(400).json({ error: "Content required" });
-    if (!["internal", "vendor"].includes(sender_type)) {
-      return res.status(400).json({ error: "Invalid sender_type" });
+    if (!CHANNELS.includes(channel)) {
+      return res.status(400).json({ error: "Invalid channel" });
+    }
+    const { content, error } = checkContent(req.body.content);
+    if (error) return res.status(400).json({ error });
+    if (!Number(user_id)) {
+      return res.status(400).json({ error: "user_id required" });
     }
 
     try {
-      const created = await prisma.$transaction(async (tx) => {
-        const message = await tx.workOrderCommunications.create({
-          data: {
-            work_order_id: Number(id),
-            content: content.trim(),
-            sender_type,
-            employee_id:
-              sender_type === "internal" ? Number(user_id) || null : null,
-            vendor_id:
-              sender_type === "vendor" ? Number(vendor_id) || null : null,
+      const wo = await prisma.workOrders.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          vendor_id: true,
+          Site: {
+            select: {
+              Client: {
+                select: { client: true, Software: { select: { name: true } } },
+              },
+            },
           },
-          include: { Employee: true },
-        });
-        return message;
+        },
       });
+      if (!wo) return res.status(404).json({ error: "Work order not found" });
 
-      res.status(201).json({
-        id: created.id,
-        content: created.content,
-        sender_type: created.sender_type,
-        employee_id: created.employee_id,
-        vendor_id: created.vendor_id,
-        employee_name: created.Employee?.name ?? null,
-        created_at: created.created_at,
+      if (channel === "vendor" && !wo.vendor_id) {
+        return res
+          .status(400)
+          .json({ error: "Assign a vendor before messaging them" });
+      }
+      if (
+        channel === "client" &&
+        wo.Site?.Client?.Software?.name !== CLIENT_PORTAL_SOFTWARE
+      ) {
+        return res.status(400).json({
+          error: `${wo.Site?.Client?.client ?? "This client"} doesn't use the client portal, so they can't receive messages here`,
+        });
+      }
+
+      const message = await createMessage(prisma, {
+        workOrderId: wo.id,
+        channel,
+        content,
+        author: { employeeId: Number(user_id) },
+        vendorId: wo.vendor_id,
       });
+      // Email the other side; a mail problem never fails the post.
+      notifyAboutMessage(prisma, message).catch((e) =>
+        console.error("Message email failed:", e),
+      );
+      res.status(201).json(serializeMessage(message));
     } catch (error) {
       console.error("Error adding communication:", error);
       res.status(500).json({ error: "Failed to add communication" });

@@ -24,7 +24,7 @@ model WorkOrders {
   PortalReleasedBy     Employees?                @relation("WorkOrderPortalReleasedBy", fields: [portal_released_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   
   Attachments          WorkOrderAttachments[]
-  VendorCommunications WorkOrderCommunications[]
+  Communications       WorkOrderCommunications[]
   MSAs                 WorkOrderMSAs[]
   Site                 Sites                     @relation(fields: [site_id], references: [id], onUpdate: NoAction, map: "FK__WorkOrder__site___5E8A0973")
   Parent               WorkOrders?               @relation("WorkOrderChildren", fields: [parent_work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -99,17 +99,30 @@ model WorkOrderVendorUpdates {
   @@unique([work_order_id, vendor_id])
 }
 
+/// Messages on a work order between NFC and someone outside: the client
+/// (channel "client") or the assigned vendor (channel "vendor"). Internal
+/// notes are a different table (Notes) that the portals never read.
+///
+/// Exactly one author: employee_id (our team), vendor_user_id or
+/// client_user_id. vendor_id is the vendor company on every vendor message,
+/// so a replacement vendor never sees the previous vendor's conversation;
+/// client messages never have one. Both rules are CHECK constraints added
+/// by the work_order_messages migration (Prisma can't express them).
 model WorkOrderCommunications {
-  id            Int        @id @default(autoincrement())
-  work_order_id Int
-  content       String     @db.VarChar(2000)
-  sender_type   String
-  employee_id   Int?
-  vendor_id     Int?
-  created_at    DateTime   @default(now())
-  Employee      Employees? @relation(fields: [employee_id], references: [id])
-  Vendor        Vendors?   @relation(fields: [vendor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  WorkOrder     WorkOrders @relation(fields: [work_order_id], references: [id], onUpdate: NoAction)
+  id             Int          @id @default(autoincrement())
+  work_order_id  Int
+  channel        String       @db.VarChar(10) // "client" | "vendor"
+  content        String       @db.VarChar(2000)
+  employee_id    Int?
+  vendor_user_id Int?
+  client_user_id Int?
+  vendor_id      Int?
+  created_at     DateTime     @default(now())
+  Employee       Employees?   @relation(fields: [employee_id], references: [id])
+  VendorUser     VendorUsers? @relation(fields: [vendor_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ClientUser     ClientUsers? @relation(fields: [client_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Vendor         Vendors?     @relation(fields: [vendor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  WorkOrder      WorkOrders   @relation(fields: [work_order_id], references: [id], onUpdate: NoAction)
 
-  @@index([work_order_id])
+  @@index([work_order_id, channel])
 }

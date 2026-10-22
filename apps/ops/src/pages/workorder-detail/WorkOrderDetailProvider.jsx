@@ -226,6 +226,7 @@ export function WorkOrderDetailProvider({ id, children }) {
         }));
       } catch (error) {
         console.error("error saving communication", error);
+        throw error;
       }
     },
     [id, user?.id],

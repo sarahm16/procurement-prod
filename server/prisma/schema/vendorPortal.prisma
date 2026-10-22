@@ -26,6 +26,7 @@ model VendorUsers {
   InvitedBy  Employees?        @relation("VendorUserInvitedBy", fields: [invited_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   LoginCodes VendorLoginCodes[]
   Sessions   VendorSessions[]
+  Messages   WorkOrderCommunications[]
 
   @@index([vendor_id])
 }

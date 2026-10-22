@@ -25,6 +25,7 @@ model ClientUsers {
   Sites      ClientUserSites[]
   LoginCodes ClientLoginCodes[]
   Sessions   ClientSessions[]
+  Messages   WorkOrderCommunications[]
 
   @@index([client_id])
 }

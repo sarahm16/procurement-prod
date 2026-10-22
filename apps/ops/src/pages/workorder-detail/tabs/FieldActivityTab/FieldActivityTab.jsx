@@ -1,7 +1,6 @@
 // workorder-details/tabs/FieldActivityTab/FieldActivityTab.jsx
 import { Box, Typography } from "@mui/material";
 import CheckInOutCard from "./CheckInOutCard";
-import CommunicationsThread from "./CommunicationsThread";
 import FileUploadSection from "../AttachmentsTab/FileUploadSection";
 
 export default function FieldActivityTab() {
@@ -27,9 +26,6 @@ export default function FieldActivityTab() {
           variant="grid"
         />
       </Box>
-
-      {/* 3. Communications thread */}
-      <CommunicationsThread />
     </Box>
   );
 }
