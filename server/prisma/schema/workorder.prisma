@@ -34,7 +34,7 @@ model WorkOrders {
   Vendor               Vendors?                  @relation(fields: [vendor_id], references: [id])
   Services             WorkOrderServices[]
   VendorUpdates        WorkOrderVendorUpdates[]
-  MobilizationFees WorkOrderMobilizationFees[]
+  MobilizationFees     WorkOrderMobilizationFees[]
 }
 
 model WorkOrderStatuses {
@@ -42,6 +42,7 @@ model WorkOrderStatuses {
   name        String       @db.VarChar(30)
   description String?      @db.VarChar(100)
   color       String?      @db.VarChar(8)
+  phase       String       @default("ops") @db.VarChar(10) // "ops" | "finance"
   WorkOrders  WorkOrders[]
 }
 
