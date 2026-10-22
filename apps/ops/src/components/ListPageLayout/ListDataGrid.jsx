@@ -1,5 +1,15 @@
 import { useCallback, useMemo } from "react";
-import { Box, Typography, useTheme, alpha } from "@mui/material";
+import {
+  Box,
+  IconButton,
+  InputAdornment,
+  TextField,
+  Typography,
+  useTheme,
+  alpha,
+} from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
+import SearchIcon from "@mui/icons-material/Search";
 import * as XGrid from "@mui/x-data-grid-pro";
 import {
   DataGridPro,
@@ -35,6 +45,10 @@ import {
  *                            most list pages already have one in ListToolbar,
  *                            and two search boxes that filter differently
  *                            would just confuse people)
+ *   search / onSearchChange  a search box in the toolbar that the PAGE owns —
+ *   searchPlaceholder        use this instead of quickFilter when the page
+ *                            filters rows itself (e.g. on nested fields the
+ *                            columns don't show)
  *   exportFileName="sites"   CSV name; today's date is appended
  *
  * All additional DataGridPro props are spread onto the grid.
@@ -66,13 +80,61 @@ const todayStamp = () => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 };
 
+/** Controlled search box for the grid toolbar. */
+function ToolbarSearch({ value, onChange, placeholder }) {
+  return (
+    <TextField
+      size="small"
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => {
+        // Escape clears; keep keys from reaching the grid's own handlers.
+        if (e.key === "Escape" && value) onChange("");
+        e.stopPropagation();
+      }}
+      placeholder={placeholder}
+      inputProps={{ "aria-label": placeholder }}
+      sx={{
+        width: { xs: "100%", sm: 300 },
+        "& .MuiOutlinedInput-root": { height: 32, borderRadius: 1.5 },
+      }}
+      InputProps={{
+        startAdornment: (
+          <InputAdornment position="start">
+            <SearchIcon sx={{ fontSize: 18, color: "text.disabled" }} />
+          </InputAdornment>
+        ),
+        endAdornment: value ? (
+          <InputAdornment position="end">
+            <IconButton
+              size="small"
+              aria-label="Clear search"
+              onClick={() => onChange("")}
+              edge="end"
+            >
+              <CloseIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </InputAdornment>
+        ) : null,
+      }}
+    />
+  );
+}
+
 /**
  * The standard toolbar. Exported so a page that needs extra buttons can
  * render it inside its own toolbar rather than rebuilding it.
  *
- * Receives `quickFilter` and `exportFileName` through slotProps.toolbar.
+ * Receives `quickFilter`, `exportFileName` and the search props through
+ * slotProps.toolbar.
  */
-export function ListGridToolbar({ quickFilter = false, exportFileName }) {
+export function ListGridToolbar({
+  quickFilter = false,
+  exportFileName,
+  search,
+  onSearchChange,
+  searchPlaceholder = "Search…",
+}) {
   const fileName = exportFileName
     ? `${exportFileName}-${todayStamp()}`
     : `export-${todayStamp()}`;
@@ -88,7 +150,15 @@ export function ListGridToolbar({ quickFilter = false, exportFileName }) {
         printOptions={{ disableToolbarButton: true }}
       />
       <Box sx={{ flex: 1 }} />
-      {quickFilter && <GridToolbarQuickFilter debounceMs={250} />}
+      {onSearchChange ? (
+        <ToolbarSearch
+          value={search}
+          onChange={onSearchChange}
+          placeholder={searchPlaceholder}
+        />
+      ) : (
+        quickFilter && <GridToolbarQuickFilter debounceMs={250} />
+      )}
     </GridToolbarContainer>
   );
 }
@@ -103,6 +173,9 @@ export default function ListDataGrid({
   toolbar,
   quickFilter = false,
   exportFileName,
+  search,
+  onSearchChange,
+  searchPlaceholder,
   // Density. The defaults are deliberately tighter than MUI's — these grids
   // are scanned, and fitting more rows on screen is the point.
   rowHeight = 38,
@@ -386,7 +459,14 @@ export default function ListDataGrid({
         }}
         slotProps={{
           ...slotProps,
-          toolbar: { quickFilter, exportFileName, ...slotProps?.toolbar },
+          toolbar: {
+            quickFilter,
+            exportFileName,
+            search,
+            onSearchChange,
+            searchPlaceholder,
+            ...slotProps?.toolbar,
+          },
         }}
         sx={{ flex: 1, minHeight: 0 }}
         {...rest}

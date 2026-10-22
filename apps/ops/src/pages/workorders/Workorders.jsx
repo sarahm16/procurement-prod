@@ -11,9 +11,9 @@ import ListDataGrid, {
   TREE_GROUP_FIELD,
 } from "../../components/ListPageLayout/ListDataGrid";
 import ListPageLayout from "../../components/ListPageLayout/ListPageLayout";
-import ListToolbar from "../../components/ListPageLayout/ListToolbar";
 import SlideOutPanel from "../../components/ListPageLayout/SlideOutPanel";
 import CreateWorkorderForm from "./CreateWorkorderForm";
+import WorkOrderFilters, { NO_PM } from "./WorkOrderFilters";
 import ClientSegmentChip from "../../components/ClientSegmentChip/ClientSegmentChip";
 
 import AddIcon from "@mui/icons-material/Add";
@@ -138,6 +138,56 @@ function buildTreeRows(workorders) {
 
 const getTreeDataPath = (row) => row.treePath;
 
+/* ── Filters ──────────────────────────────────────────────────────────── */
+
+const EMPTY_FILTERS = { types: [], statuses: [], pms: [] };
+const FILTERS_KEY = "nfc.workorders.filters.v1";
+
+/** The last filters you used, so the list opens the way you left it. */
+const loadFilters = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FILTERS_KEY));
+    return {
+      types: Array.isArray(saved?.types) ? saved.types : [],
+      statuses: Array.isArray(saved?.statuses) ? saved.statuses : [],
+      pms: Array.isArray(saved?.pms) ? saved.pms : [],
+    };
+  } catch {
+    return EMPTY_FILTERS;
+  }
+};
+
+const searchText = (w) =>
+  (
+    `${w.work_order_number ?? ""} ${w.external_id ?? ""} ${w.Site?.store ?? ""} ` +
+    `${w.Site?.Client?.client ?? ""} ${w.Vendor?.company ?? ""} ` +
+    `${(w.project_managers ?? []).join(" ")}`
+  ).toLowerCase();
+
+const pmKeys = (w) =>
+  w.project_managers?.length ? w.project_managers : [NO_PM];
+
+/**
+ * One test per filter group, so each group's chip counts can be worked out
+ * with every OTHER group applied ("how many would I see if I clicked this").
+ */
+const makeTests = (q, f) => ({
+  search: (w) => !q || searchText(w).includes(q),
+  types: (w) => !f.types.length || f.types.includes(w.type),
+  statuses: (w) => !f.statuses.length || f.statuses.includes(w.Status?.name),
+  pms: (w) => !f.pms.length || pmKeys(w).some((n) => f.pms.includes(n)),
+});
+
+const passes = (tests, w, skip) =>
+  Object.entries(tests).every(([k, t]) => k === skip || t(w));
+
+const countBy = (rows, keysOf) => {
+  const m = new Map();
+  for (const r of rows)
+    for (const k of keysOf(r)) if (k) m.set(k, (m.get(k) ?? 0) + 1);
+  return m;
+};
+
 /** Striping plus a hook for weighting parent rows. */
 const getRowClassName = (params) => {
   const banding =
@@ -163,8 +213,15 @@ function Workorders() {
   const [submitting, setSubmitting] = useState(false);
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [typeFilter, setTypeFilter] = useState("all");
+  const [filters, setFilters] = useState(loadFilters);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(FILTERS_KEY, JSON.stringify(filters));
+    } catch {
+      /* private window etc. — filters just won't be remembered */
+    }
+  }, [filters]);
 
   const [workorders, setWorkorders] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -190,38 +247,68 @@ function Workorders() {
     [statuses],
   );
 
-  const statusOptions = useMemo(
-    () =>
-      [...new Set(workorders.map((w) => w.Status?.name).filter(Boolean))]
-        .sort()
-        .map((s) => ({ value: s, label: s })),
-    [workorders],
+  const tests = useMemo(
+    () => makeTests(search.trim().toLowerCase(), filters),
+    [search, filters],
   );
 
-  const typeOptions = useMemo(
-    () =>
-      [...new Set(workorders.map((w) => w.type).filter(Boolean))]
-        .sort()
-        .map((t) => ({ value: t, label: t })),
-    [workorders],
+  const filtered = useMemo(
+    () => workorders.filter((w) => passes(tests, w)),
+    [workorders, tests],
   );
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return workorders.filter((w) => {
-      if (q) {
-        const hay =
-          `${w.work_order_number ?? ""} ${w.external_id ?? ""} ${w.Site?.store ?? ""} ` +
-          `${w.Site?.Client?.client ?? ""} ${w.Vendor?.company ?? ""} ` +
-          `${(w.project_managers ?? []).join(" ")}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      if (statusFilter !== "all" && w.Status?.name !== statusFilter)
-        return false;
-      if (typeFilter !== "all" && w.type !== typeFilter) return false;
-      return true;
-    });
-  }, [workorders, search, statusFilter, typeFilter]);
+  /** Chip options with counts, each group counted against the other groups. */
+  const facets = useMemo(() => {
+    const without = (skip) => workorders.filter((w) => passes(tests, w, skip));
+    const forTypes = without("types");
+    const forStatuses = without("statuses");
+    const forPms = without("pms");
+
+    const typeCounts = countBy(forTypes, (w) => [w.type]);
+    const statusCounts = countBy(forStatuses, (w) => [w.Status?.name]);
+    const pmCounts = countBy(forPms, pmKeys);
+
+    // Types in the order they're defined, then anything unexpected in the data.
+    const typeNames = [
+      ...workOrderTypes.map((t) => t.name),
+      ...[...typeCounts.keys()].filter(
+        (n) => !workOrderTypes.some((t) => t.name === n),
+      ),
+    ];
+    // Statuses in workflow order (as the statuses table has them).
+    const statusNames = [
+      ...statuses.map((st) => st.name),
+      ...[...statusCounts.keys()].filter(
+        (n) => !statuses.some((st) => st.name === n),
+      ),
+    ];
+    // Every PM on any work order, so nobody vanishes from the list at 0.
+    const pmNames = [
+      ...new Set(workorders.flatMap((w) => w.project_managers ?? [])),
+    ].sort((a, b) => a.localeCompare(b));
+
+    return {
+      types: typeNames.map((name) => ({
+        name,
+        color: typeColor(name),
+        count: typeCounts.get(name) ?? 0,
+      })),
+      statuses: statusNames.map((name) => {
+        const st = statuses.find((x) => x.name === name);
+        return {
+          name,
+          color: st?.color || "#6b7280",
+          description: st?.description || undefined,
+          count: statusCounts.get(name) ?? 0,
+        };
+      }),
+      pms: [
+        ...pmNames.map((name) => ({ name, count: pmCounts.get(name) ?? 0 })),
+        { name: NO_PM, count: pmCounts.get(NO_PM) ?? 0 },
+      ],
+      totals: { types: forTypes.length, statuses: forStatuses.length },
+    };
+  }, [workorders, tests, statuses]);
 
   const treeRows = useMemo(() => buildTreeRows(filtered), [filtered]);
 
@@ -376,20 +463,13 @@ function Workorders() {
           row.__isChild ? (
             ""
           ) : value == null ? (
-            <Typography
-              component="span"
-              sx={{ fontSize: "inherit", color: "text.disabled" }}
-            >
+            <Typography component="span" sx={{ fontSize: "inherit", color: "text.disabled" }}>
               —
             </Typography>
           ) : (
             <Typography
               component="span"
-              sx={{
-                fontSize: "inherit",
-                fontWeight: 700,
-                color: marginColor(value),
-              }}
+              sx={{ fontSize: "inherit", fontWeight: 700, color: marginColor(value) }}
             >
               {value.toFixed(1)}%
             </Typography>
@@ -504,24 +584,14 @@ function Workorders() {
 
       <ListPageLayout
         toolbar={
-          <ListToolbar
-            search={search}
-            onSearchChange={setSearch}
-            searchPlaceholder="Search WO #, site, client, vendor, PM…"
-            filters={[
-              {
-                label: "Status",
-                value: statusFilter,
-                onChange: setStatusFilter,
-                options: statusOptions,
-              },
-              {
-                label: "Type",
-                value: typeFilter,
-                onChange: setTypeFilter,
-                options: typeOptions,
-              },
-            ]}
+          <WorkOrderFilters
+            types={facets.types}
+            statuses={facets.statuses}
+            pms={facets.pms}
+            totals={facets.totals}
+            value={filters}
+            onChange={setFilters}
+            me={user?.name}
             actions={
               <>
                 <Tooltip title="Refresh">
@@ -542,6 +612,7 @@ function Workorders() {
                   size="small"
                   startIcon={<AddIcon sx={{ fontSize: "1rem !important" }} />}
                   onClick={() => setFormOpen(true)}
+                  sx={{ height: 32, whiteSpace: "nowrap" }}
                 >
                   Create New
                 </Button>
@@ -556,6 +627,10 @@ function Workorders() {
           loading={loading}
           onRowClick={onRowClick}
           noRowsMessage="No work orders match these filters"
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search WO #, site, client, vendor, PM…"
+          exportFileName="work-orders"
           treeData
           getTreeDataPath={getTreeDataPath}
           groupingColDef={groupingColDef}
