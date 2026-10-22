@@ -7,6 +7,11 @@
 //   PUT /:kind/:id                    link one of ours to a QuickBooks record
 //       { quickbooks_id, user_id }    (quickbooks_id: null unlinks)
 //
+//   GET  /vendors/:id/bills           the vendor's bills in QuickBooks, each
+//                                     matched to a work order where possible
+//   POST /vendors/:id/create          create the vendor in QuickBooks from our
+//       { user_id }                   record, and link it
+//
 //   kind     ours        QuickBooks
 //   clients  Clients     a customer (top-level)
 //   sites    Sites       a customer, normally a sub-customer under the client's
@@ -22,9 +27,49 @@ import { Router } from "express";
 import { logActivity } from "../utils/logActivity.js";
 import {
   QuickBooksError,
+  createVendor,
   getEntity,
+  getVendorBills,
   searchEntities,
 } from "../services/quickbooks/qbApi.js";
+
+// Our work order numbers, as they'd be typed on a bill.
+const WO_NUMBER = /\bNFC-\d{6}\b/gi;
+
+/** Our vendor as a QuickBooks vendor: name, contact and billing address. */
+function vendorPayload(v) {
+  const email =
+    v.contact_email?.trim() ||
+    v.Contacts?.find((c) => c.email?.trim())?.email?.trim() ||
+    null;
+  const phone =
+    v.contact_phone?.trim() ||
+    v.Contacts?.find((c) => c.phone?.trim())?.phone?.trim() ||
+    null;
+  // Bills are paid to the billing address; fall back to mailing.
+  const useBilling = Boolean(v.billing_address?.trim());
+  const a = (field) =>
+    (useBilling ? v[`billing_${field}`] : v[`mailing_${field}`])?.trim() ||
+    undefined;
+  const name = v.company.trim();
+
+  return {
+    DisplayName: name.slice(0, 500),
+    CompanyName: name.slice(0, 100),
+    PrintOnCheckName: name.slice(0, 110),
+    ...(email && { PrimaryEmailAddr: { Address: email } }),
+    ...(phone && { PrimaryPhone: { FreeFormNumber: phone } }),
+    ...(a("address") && {
+      BillAddr: {
+        Line1: a("address"),
+        Line2: a("address2"),
+        City: a("city"),
+        CountrySubDivisionCode: a("state"),
+        PostalCode: a("zipcode"),
+      },
+    }),
+  };
+}
 
 /** Everything that differs between clients, sites and vendors. */
 const KINDS = {
@@ -234,6 +279,136 @@ export default function quickbooksRouter(prisma) {
       res.json({ id, quickbooks_id: qbId, record: qbRecord });
     } catch (e) {
       sendError(res, e, `linking ${kind.label} to QuickBooks`);
+    }
+  });
+
+  // GET /api/quickbooks/vendors/:id/bills
+  router.get("/vendors/:id/bills", async (req, res) => {
+    const id = Number(req.params.id);
+    try {
+      const vendor = await prisma.vendors.findUnique({
+        where: { id },
+        select: { id: true, quickbooks_id: true },
+      });
+      if (!vendor)
+        return res.status(404).json({ error: "That vendor doesn't exist" });
+      if (!vendor.quickbooks_id) return res.json({ linked: false, bills: [] });
+
+      const bills = await getVendorBills(vendor.quickbooks_id);
+
+      // Tie bills back to work orders: a mobilization fee recorded against
+      // the bill, or a work order number written on it.
+      const numbers = [
+        ...new Set(
+          bills.flatMap((b) =>
+            (b.text.match(WO_NUMBER) ?? []).map((n) => n.toUpperCase()),
+          ),
+        ),
+      ];
+      const [byNumber, fees] = await Promise.all([
+        numbers.length
+          ? prisma.workOrders.findMany({
+              where: { work_order_number: { in: numbers } },
+              select: { id: true, work_order_number: true },
+            })
+          : [],
+        bills.length
+          ? prisma.workOrderMobilizationFees.findMany({
+              where: { quickbooks_bill_id: { in: bills.map((b) => b.id) } },
+              select: {
+                quickbooks_bill_id: true,
+                WorkOrder: { select: { id: true, work_order_number: true } },
+              },
+            })
+          : [],
+      ]);
+      const woByNumber = new Map(
+        byNumber.map((w) => [w.work_order_number.toUpperCase(), w]),
+      );
+      const feeByBill = new Map(
+        fees.map((f) => [f.quickbooks_bill_id, f.WorkOrder]),
+      );
+
+      res.json({
+        linked: true,
+        quickbooks_id: vendor.quickbooks_id,
+        bills: bills.map(({ text, ...b }) => {
+          const fee = feeByBill.get(b.id);
+          const named = (text.match(WO_NUMBER) ?? [])
+            .map((n) => woByNumber.get(n.toUpperCase()))
+            .find(Boolean);
+          const wo = fee ?? named;
+          return {
+            ...b,
+            work_order: wo
+              ? {
+                  id: wo.id,
+                  work_order_number: wo.work_order_number,
+                  via: fee ? "mobilization_fee" : "reference",
+                }
+              : null,
+          };
+        }),
+      });
+    } catch (e) {
+      sendError(res, e, "loading vendor bills");
+    }
+  });
+
+  // POST /api/quickbooks/vendors/:id/create   { user_id }
+  router.post("/vendors/:id/create", async (req, res) => {
+    const id = Number(req.params.id);
+    const { user_id } = req.body ?? {};
+    try {
+      const vendor = await prisma.vendors.findUnique({
+        where: { id },
+        include: { Contacts: { select: { email: true, phone: true } } },
+      });
+      if (!vendor)
+        return res.status(404).json({ error: "That vendor doesn't exist" });
+      if (vendor.quickbooks_id) {
+        return res.status(409).json({
+          error: `Already linked to QuickBooks vendor ${vendor.quickbooks_id}`,
+        });
+      }
+      if (!vendor.company?.trim()) {
+        return res
+          .status(400)
+          .json({ error: "The vendor needs a company name first" });
+      }
+
+      let created;
+      try {
+        created = await createVendor(vendorPayload(vendor));
+      } catch (e) {
+        if (e.code === "duplicate_name") {
+          return res.status(409).json({
+            error: `QuickBooks already has a customer, vendor or employee named “${vendor.company.trim()}”. Search for it and link it instead.`,
+            code: "duplicate_name",
+          });
+        }
+        throw e;
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.vendors.update({
+          where: { id },
+          data: { quickbooks_id: created.id },
+        });
+        await logActivity(tx, {
+          entityTypeId: KINDS.vendors.entityTypeId,
+          entityId: id,
+          fieldChanged: "quickbooks_id",
+          previousValue: null,
+          newValue: `${created.id} (${created.name}), created in QuickBooks`,
+          changedBy: user_id ?? null,
+          action: "UPDATE",
+        });
+      });
+
+      res.status(201).json({ id, quickbooks_id: created.id, record: created });
+    } catch (e) {
+      sendError(res, e, "creating vendor in QuickBooks");
     }
   });
 

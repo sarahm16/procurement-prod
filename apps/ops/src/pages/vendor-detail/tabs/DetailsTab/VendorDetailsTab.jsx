@@ -17,6 +17,7 @@ import { ChipSelectCard } from "../../../../components/ChipSelectCard";
 import AddressCard from "../../../../components/AddressCard";
 import Contacts from "../../../../components/Contacts";
 import TeamCard from "../../../../components/TeamCard";
+import VendorQuickBooksCard from "./VendorQuickBooksCard";
 
 import {
   useVendorActions,
@@ -118,6 +119,11 @@ function VendorDetailsTab() {
             addContact={addContact}
             updateContact={updateContact}
             deleteContact={deleteContact}
+          />
+          <VendorQuickBooksCard
+            vendorId={Number(id)}
+            company={details.company}
+            quickbooksId={details.quickbooks_id}
           />
         </>
       }

@@ -75,6 +75,7 @@ const serializeVendor = (vendor, notes, activityLog) => {
     role_assignments: (vendor.role_assignments || []).map(
       serializeRoleAssignment,
     ),
+    quickbooks_id: vendor.quickbooks_id ?? null,
   };
 };
 

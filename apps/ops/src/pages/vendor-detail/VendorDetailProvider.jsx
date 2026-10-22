@@ -49,6 +49,7 @@ export function VendorDetailProvider({ id, children }) {
         contact_email: data.contact_email,
         contact_phone: data.contact_phone,
         contact_phone2: data.contact_phone2,
+        quickbooks_id: data.quickbooks_id ?? null,
       });
       setActivity(data.activity_log);
       setNotes(data.notes);

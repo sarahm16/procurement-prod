@@ -105,15 +105,29 @@ const faultMessage = (body) => {
     : null;
 };
 
-async function qbGet(path, { retried = false } = {}) {
+/** The QuickBooks error code (e.g. "6240" duplicate name), if any. */
+export const faultCode = (body) => {
+  const e = body?.Fault?.Error?.[0];
+  return e ? String(e.code ?? e.Code ?? "") : null;
+};
+
+async function qbRequest(method, path, payload, { retried = false } = {}) {
   const token = await getAccessToken({ force: retried });
   const res = await fetch(`${apiBase()}${path}`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      ...(payload && { "Content-Type": "application/json" }),
+    },
+    ...(payload && { body: JSON.stringify(payload) }),
   });
 
   // A cached token can go stale early (revoked, refreshed elsewhere).
   // Get a fresh one and try once more.
-  if (res.status === 401 && !retried) return qbGet(path, { retried: true });
+  if (res.status === 401 && !retried) {
+    return qbRequest(method, path, payload, { retried: true });
+  }
 
   const body = await res.json().catch(() => null);
   if (!res.ok) {
@@ -125,6 +139,10 @@ async function qbGet(path, { retried = false } = {}) {
   }
   return body;
 }
+
+const qbGet = (path) => qbRequest("GET", path);
+const qbPost = (path, payload) =>
+  qbRequest("POST", `${path}?minorversion=${MINOR_VERSION}`, payload);
 
 /** Run a QuickBooks query (their SQL-like language). */
 export async function qbQuery(query) {
@@ -214,4 +232,54 @@ export async function getEntity(entity, id) {
   );
   const row = res[entity]?.[0];
   return row ? serialize(row) : null;
+}
+
+/* ── Vendor bills ─────────────────────────────────────────────────────── */
+
+export const serializeBill = (b) => ({
+  id: String(b.Id),
+  doc_number: b.DocNumber ?? null,
+  txn_date: b.TxnDate ?? null,
+  due_date: b.DueDate ?? null,
+  total: Number(b.TotalAmt ?? 0),
+  balance: Number(b.Balance ?? 0),
+  memo: b.PrivateNote ?? null,
+  created_at: b.MetaData?.CreateTime ?? null,
+  updated_at: b.MetaData?.LastUpdatedTime ?? null,
+  // Everything a work order number could be written in.
+  text: [
+    b.DocNumber,
+    b.PrivateNote,
+    ...(b.Line ?? []).map((l) => l.Description),
+  ]
+    .filter(Boolean)
+    .join(" "),
+});
+
+/** Every bill for a QuickBooks vendor, newest first (up to 1,000). */
+export async function getVendorBills(vendorQbId) {
+  const { Bill = [] } = await qbQuery(
+    `SELECT * FROM Bill WHERE VendorRef = ${qbString(vendorQbId)} ORDERBY TxnDate DESC MAXRESULTS 1000`,
+  );
+  return Bill.map(serializeBill);
+}
+
+/* ── Creating a vendor ────────────────────────────────────────────────── */
+
+/**
+ * Create a vendor in QuickBooks. QuickBooks won't allow two names (across
+ * customers, vendors and employees) to be the same; that comes back as a
+ * QuickBooksError with code "6240".
+ */
+export async function createVendor(payload) {
+  try {
+    const body = await qbPost("/vendor", payload);
+    return serializeVendor(body.Vendor);
+  } catch (e) {
+    if (e instanceof QuickBooksError && faultCode(e.detail) === "6240") {
+      e.status = 409;
+      e.code = "duplicate_name";
+    }
+    throw e;
+  }
 }

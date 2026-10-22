@@ -13,6 +13,9 @@
 //     dense                           // compact, for a row in a list
 //   />
 //
+// Vendors can also be created in QuickBooks from the search dialog when
+// they aren't there yet (from our record: name, contact, billing address).
+//
 // Searches run on our server (/api/quickbooks/:kind/search), which also says
 // when a QuickBooks record is already linked to something else here. For a
 // site, results under the client's QuickBooks customer come first.
@@ -75,10 +78,7 @@ const KINDS = {
 
 export const qbUrl = (kind, id) => KINDS[kind].url(encodeURIComponent(id));
 
-const norm = (s) =>
-  String(s ?? "")
-    .trim()
-    .toLowerCase();
+const norm = (s) => String(s ?? "").trim().toLowerCase();
 
 const fmtMoney = (n) =>
   n == null
@@ -111,15 +111,7 @@ const SmallChip = ({ label, tone = "green" }) => (
 
 /* ── Search dialog ────────────────────────────────────────────────────── */
 
-function SearchDialog({
-  open,
-  onClose,
-  kind,
-  recordId,
-  name,
-  currentId,
-  onLinked,
-}) {
+function SearchDialog({ open, onClose, kind, recordId, name, currentId, onLinked }) {
   const k = KINDS[kind];
   const { user } = useAuthenticatedUser();
   const [term, setTerm] = useState(name ?? "");
@@ -129,7 +121,11 @@ function SearchDialog({
   const [loading, setLoading] = useState(false);
   const [linking, setLinking] = useState(null); // QuickBooks id being linked
   const [error, setError] = useState(null);
+  const [confirmCreate, setConfirmCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
   const reqId = useRef(0);
+  const canCreate = kind === "vendors" && !currentId;
+  const busy = Boolean(linking) || creating;
 
   const search = async (q = term) => {
     const t = q.trim();
@@ -162,6 +158,7 @@ function SearchDialog({
     setResults([]);
     setSearched(null);
     setError(null);
+    setConfirmCreate(false);
     if (name?.trim()) search(name);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, name]);
@@ -197,21 +194,28 @@ function SearchDialog({
     }
   };
 
+  const create = async () => {
+    setCreating(true);
+    setError(null);
+    try {
+      const { data } = await axios.post(`/api/quickbooks/${kind}/${recordId}/create`, {
+        user_id: user?.id,
+      });
+      onLinked(data.quickbooks_id);
+    } catch (e) {
+      setConfirmCreate(false);
+      setError(e.response?.data?.error ?? "Couldn't create it in QuickBooks.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
-    <Dialog
-      open={open}
-      onClose={linking ? undefined : onClose}
-      maxWidth="sm"
-      fullWidth
-    >
-      <DialogTitle
-        sx={{ display: "flex", alignItems: "center", gap: 1.25, pb: 1 }}
-      >
+    <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.25, pb: 1 }}>
         <QuickBooksIcon size={20} />
         <Box sx={{ minWidth: 0 }}>
-          <Typography
-            sx={{ fontWeight: 700, fontSize: "1.05rem", lineHeight: 1.2 }}
-          >
+          <Typography sx={{ fontWeight: 700, fontSize: "1.05rem", lineHeight: 1.2 }}>
             Find {name || `this ${k.noun}`} in QuickBooks
           </Typography>
           <Typography sx={{ fontSize: "0.78rem", color: "text.secondary" }}>
@@ -283,8 +287,7 @@ function SearchDialog({
           ) : (
             sorted.map((r) => {
               const isCurrent = currentId != null && String(currentId) === r.id;
-              const elsewhere =
-                r.linked_to && r.linked_to.id !== Number(recordId);
+              const elsewhere = r.linked_to && r.linked_to.id !== Number(recordId);
               const place = [r.city, r.state].filter(Boolean).join(", ");
               // A sub-customer's full name shows which customer it sits under.
               const parentPath =
@@ -307,53 +310,29 @@ function SearchDialog({
                     bgcolor: isCurrent ? alpha(QB_GREEN, 0.05) : "transparent",
                     opacity: elsewhere ? 0.6 : 1,
                     transition: "border-color .12s",
-                    "&:hover":
-                      elsewhere || isCurrent ? {} : { borderColor: QB_GREEN },
+                    "&:hover": elsewhere || isCurrent ? {} : { borderColor: QB_GREEN },
                   }}
                 >
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     {parentPath && (
                       <Typography
-                        sx={{
-                          fontSize: "0.7rem",
-                          color: "text.secondary",
-                          lineHeight: 1.2,
-                        }}
+                        sx={{ fontSize: "0.7rem", color: "text.secondary", lineHeight: 1.2 }}
                         noWrap
                       >
                         {parentPath} ›
                       </Typography>
                     )}
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 0.75,
-                        minWidth: 0,
-                      }}
-                    >
-                      <Typography
-                        sx={{ fontWeight: 600, fontSize: "0.9rem" }}
-                        noWrap
-                      >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
+                      <Typography sx={{ fontWeight: 600, fontSize: "0.9rem" }} noWrap>
                         {r.name}
                       </Typography>
-                      {r.under_client && !isCurrent && (
-                        <SmallChip label="Under this client" />
-                      )}
-                      {r.exact && !isCurrent && (
-                        <SmallChip label="Exact match" />
-                      )}
+                      {r.under_client && !isCurrent && <SmallChip label="Under this client" />}
+                      {r.exact && !isCurrent && <SmallChip label="Exact match" />}
                       {r.is_1099 && <SmallChip label="1099" tone="grey" />}
                     </Box>
-                    <Typography
-                      sx={{ fontSize: "0.75rem", color: "text.secondary" }}
-                      noWrap
-                    >
+                    <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }} noWrap>
                       {[
-                        r.company && norm(r.company) !== norm(r.name)
-                          ? r.company
-                          : null,
+                        r.company && norm(r.company) !== norm(r.name) ? r.company : null,
                         place || null,
                         r.email,
                       ]
@@ -361,24 +340,16 @@ function SearchDialog({
                         .join(" · ") || "No address on file"}
                     </Typography>
                     <Typography
-                      sx={{
-                        fontSize: "0.7rem",
-                        color: "text.disabled",
-                        fontFamily: "monospace",
-                      }}
+                      sx={{ fontSize: "0.7rem", color: "text.disabled", fontFamily: "monospace" }}
                     >
                       ID {r.id}
-                      {r.balance
-                        ? ` · open balance ${fmtMoney(r.balance)}`
-                        : ""}
+                      {r.balance ? ` · open balance ${fmtMoney(r.balance)}` : ""}
                     </Typography>
                   </Box>
 
                   {isCurrent ? (
                     <Chip
-                      icon={
-                        <CheckCircleIcon sx={{ fontSize: "16px !important" }} />
-                      }
+                      icon={<CheckCircleIcon sx={{ fontSize: "16px !important" }} />}
                       label="Linked"
                       size="small"
                       sx={{
@@ -405,7 +376,7 @@ function SearchDialog({
                       variant="contained"
                       disableElevation
                       onClick={() => link(r)}
-                      disabled={Boolean(linking)}
+                      disabled={busy}
                       sx={{
                         textTransform: "none",
                         fontWeight: 600,
@@ -414,11 +385,7 @@ function SearchDialog({
                         "&:hover": { bgcolor: "#237a15" },
                       }}
                     >
-                      {linking === r.id
-                        ? "Linking…"
-                        : currentId
-                          ? "Switch to this"
-                          : "Link"}
+                      {linking === r.id ? "Linking…" : currentId ? "Switch to this" : "Link"}
                     </Button>
                   )}
                 </Box>
@@ -428,31 +395,62 @@ function SearchDialog({
         </Box>
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Typography
-          sx={{ fontSize: "0.72rem", color: "text.disabled", mr: "auto" }}
+      {confirmCreate ? (
+        <DialogActions
+          sx={{ px: 3, pb: 2, pt: 1.5, borderTop: 1, borderColor: "divider", gap: 1 }}
         >
-          Not there? It needs to be created in QuickBooks first.
-        </Typography>
-        <Button onClick={onClose} color="inherit" disabled={Boolean(linking)}>
-          Close
-        </Button>
-      </DialogActions>
+          <Typography sx={{ fontSize: "0.82rem", mr: "auto" }}>
+            Create a new QuickBooks vendor named <strong>{name}</strong>, with its
+            contact details and billing address, and link it?
+          </Typography>
+          <Button onClick={() => setConfirmCreate(false)} color="inherit" disabled={creating}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            disableElevation
+            onClick={create}
+            disabled={creating}
+            startIcon={creating ? <CircularProgress size={14} color="inherit" /> : null}
+            sx={{ bgcolor: QB_GREEN, "&:hover": { bgcolor: "#237a15" }, flexShrink: 0 }}
+          >
+            {creating ? "Creating…" : "Create & link"}
+          </Button>
+        </DialogActions>
+      ) : (
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          {canCreate ? (
+            <Box sx={{ mr: "auto", display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>
+                Not there?
+              </Typography>
+              <Button
+                size="small"
+                startIcon={<QuickBooksIcon size={14} />}
+                onClick={() => setConfirmCreate(true)}
+                disabled={busy || !searched}
+                sx={{ textTransform: "none", fontWeight: 600, color: QB_DARK }}
+              >
+                Create it in QuickBooks
+              </Button>
+            </Box>
+          ) : (
+            <Typography sx={{ fontSize: "0.72rem", color: "text.disabled", mr: "auto" }}>
+              Not there? It needs to be created in QuickBooks first.
+            </Typography>
+          )}
+          <Button onClick={onClose} color="inherit" disabled={busy}>
+            Close
+          </Button>
+        </DialogActions>
+      )}
     </Dialog>
   );
 }
 
 /* ── Unlink confirm ───────────────────────────────────────────────────── */
 
-function UnlinkDialog({
-  open,
-  onClose,
-  kind,
-  recordId,
-  name,
-  quickbooksId,
-  onUnlinked,
-}) {
+function UnlinkDialog({ open, onClose, kind, recordId, name, quickbooksId, onUnlinked }) {
   const k = KINDS[kind];
   const { user } = useAuthenticatedUser();
   const [saving, setSaving] = useState(false);
@@ -475,15 +473,8 @@ function UnlinkDialog({
   };
 
   return (
-    <Dialog
-      open={open}
-      onClose={saving ? undefined : onClose}
-      maxWidth="xs"
-      fullWidth
-    >
-      <DialogTitle sx={{ fontWeight: 700 }}>
-        Unlink from QuickBooks?
-      </DialogTitle>
+    <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="xs" fullWidth>
+      <DialogTitle sx={{ fontWeight: 700 }}>Unlink from QuickBooks?</DialogTitle>
       <DialogContent>
         <Typography sx={{ fontSize: "0.88rem" }}>
           {name || `This ${k.noun}`} will no longer be linked to QuickBooks{" "}
@@ -500,12 +491,7 @@ function UnlinkDialog({
         <Button onClick={onClose} color="inherit" disabled={saving}>
           Cancel
         </Button>
-        <Button
-          variant="contained"
-          color="error"
-          onClick={unlink}
-          disabled={saving}
-        >
+        <Button variant="contained" color="error" onClick={unlink} disabled={saving}>
           {saving ? "Unlinking…" : "Unlink"}
         </Button>
       </DialogActions>
@@ -559,57 +545,39 @@ export default function QuickBooksLink({
 
   if (!linked) {
     return (
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          gap: 1.25,
-          flexWrap: "wrap",
-        }}
-      >
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap" }}>
         {!dense && (
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 0.75,
-              color: "warning.main",
-            }}
-          >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, color: "warning.main" }}>
             <ErrorOutlineIcon sx={{ fontSize: 18 }} />
             <Typography sx={{ fontSize: "0.82rem", fontWeight: 600 }}>
               Not linked to QuickBooks
             </Typography>
           </Box>
         )}
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={<QuickBooksIcon />}
-          onClick={() => setDialog("search")}
-          disabled={!recordId}
-          sx={qbButtonSx}
-        >
-          Search QuickBooks
-        </Button>
+        {/* The span lets the tooltip show on a disabled button. */}
+        <Tooltip title={recordId ? "" : `This ${k.noun} hasn't loaded, so it can't be linked yet`}>
+          <span>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<QuickBooksIcon />}
+              onClick={() => setDialog("search")}
+              disabled={!recordId}
+              sx={qbButtonSx}
+            >
+              Search QuickBooks
+            </Button>
+          </span>
+        </Tooltip>
         {dialogs}
       </Box>
     );
   }
 
   return (
-    <Box
-      sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap" }}
-    >
+    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap" }}>
       {!dense && <QuickBooksIcon />}
-      <Typography
-        sx={{
-          fontSize: "0.82rem",
-          fontWeight: 600,
-          mr: 0.5,
-          ml: dense ? 0 : 0.5,
-        }}
-      >
+      <Typography sx={{ fontSize: "0.82rem", fontWeight: 600, mr: 0.5, ml: dense ? 0 : 0.5 }}>
         {k.qbNoun[0].toUpperCase() + k.qbNoun.slice(1)}{" "}
         <Box component="span" sx={{ fontFamily: "monospace" }}>
           #{quickbooksId}
@@ -630,12 +598,7 @@ export default function QuickBooksLink({
       <Button
         size="small"
         onClick={() => setDialog("search")}
-        sx={{
-          textTransform: "none",
-          fontWeight: 600,
-          minWidth: 0,
-          color: "text.secondary",
-        }}
+        sx={{ textTransform: "none", fontWeight: 600, minWidth: 0, color: "text.secondary" }}
       >
         Change
       </Button>
