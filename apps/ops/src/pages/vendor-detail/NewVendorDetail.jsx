@@ -19,6 +19,7 @@ import VendorDetailsTab from "./tabs/DetailsTab/VendorDetailsTab";
 import ActivityLog from "../../components/DetailPageLayout/ActivityLog";
 import VendorDocumentationTab from "./tabs/Documentation/VendorDocumentationTab";
 import SitesTab from "./tabs/SitesTab/SitesTab";
+import VendorTextTab from "./tabs/TextsTab/VendorTextsTab";
 
 // Local Functions
 import { sendEmailFromHTML } from "../../*/api/microsoftApi";
@@ -89,6 +90,10 @@ function VendorDetailLayout({ id }) {
         {
           label: "Work Orders",
           content: <WorkOrdersTab vendorId={id} />,
+        },
+        {
+          label: "Text Requests",
+          content: <VendorTextTab vendorId={id} />,
         },
         {
           label: "Activity",
