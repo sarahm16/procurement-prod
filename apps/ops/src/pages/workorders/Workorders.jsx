@@ -140,21 +140,62 @@ const getTreeDataPath = (row) => row.treePath;
 
 /* ── Filters ──────────────────────────────────────────────────────────── */
 
-const EMPTY_FILTERS = { types: [], statuses: [], pms: [] };
-const FILTERS_KEY = "nfc.workorders.filters.v1";
+export const PHASES = ["ops", "finance"];
+
+/**
+ * Types and PMs carry across both phases; statuses don't (each phase has its
+ * own), so each phase remembers its own status picks.
+ */
+const EMPTY_FILTERS = {
+  phase: "ops",
+  types: [],
+  pms: [],
+  statuses: { ops: [], finance: [] },
+};
+const FILTERS_KEY = "nfc.workorders.filters.v2";
+const OLD_FILTERS_KEY = "nfc.workorders.filters.v1";
+
+const list = (v) => (Array.isArray(v) ? v : []);
 
 /** The last filters you used, so the list opens the way you left it. */
 const loadFilters = () => {
   try {
     const saved = JSON.parse(localStorage.getItem(FILTERS_KEY));
-    return {
-      types: Array.isArray(saved?.types) ? saved.types : [],
-      statuses: Array.isArray(saved?.statuses) ? saved.statuses : [],
-      pms: Array.isArray(saved?.pms) ? saved.pms : [],
-    };
+    if (saved) {
+      return {
+        phase: PHASES.includes(saved.phase) ? saved.phase : "ops",
+        types: list(saved.types),
+        pms: list(saved.pms),
+        statuses: { ops: list(saved.statuses?.ops), finance: list(saved.statuses?.finance) },
+      };
+    }
+    // Filters saved before the Finance view existed were all ops.
+    const old = JSON.parse(localStorage.getItem(OLD_FILTERS_KEY));
+    if (old) {
+      return {
+        ...EMPTY_FILTERS,
+        types: list(old.types),
+        pms: list(old.pms),
+        statuses: { ops: list(old.statuses), finance: [] },
+      };
+    }
   } catch {
-    return EMPTY_FILTERS;
+    /* fall through */
   }
+  return EMPTY_FILTERS;
+};
+
+/* Columns each phase starts with. Anything changed with the grid's Columns
+   button is kept per phase for the rest of the visit. */
+const DEFAULT_COLUMNS = {
+  ops: { portal: false },
+  finance: {
+    priority: false,
+    start_date: false,
+    due_date: false,
+    age: false,
+    portal: true,
+  },
 };
 
 const searchText = (w) =>
@@ -167,19 +208,40 @@ const searchText = (w) =>
 const pmKeys = (w) =>
   w.project_managers?.length ? w.project_managers : [NO_PM];
 
+const phaseOf = (w) => w.phase ?? "ops";
+
+/**
+ * The status a work order is filtered by. A child in finance keeps its own
+ * ops status (Completed / Cancelled) as a record, but the job's finance
+ * status lives on its parent — so it's filtered by that, and stays with its
+ * parent when you pick "Invoiced / Billed".
+ */
+const statusForFilter = (w, byId) => {
+  if (phaseOf(w) === "finance" && w.parent_work_order_id) {
+    const parent = byId.get(w.parent_work_order_id);
+    if (parent) return parent.Status?.name;
+  }
+  return w.Status?.name;
+};
+
 /**
  * One test per filter group, so each group's chip counts can be worked out
  * with every OTHER group applied ("how many would I see if I clicked this").
  */
-const makeTests = (q, f) => ({
-  search: (w) => !q || searchText(w).includes(q),
-  types: (w) => !f.types.length || f.types.includes(w.type),
-  statuses: (w) => !f.statuses.length || f.statuses.includes(w.Status?.name),
-  pms: (w) => !f.pms.length || pmKeys(w).some((n) => f.pms.includes(n)),
-});
+const makeTests = (q, f, byId) => {
+  const picked = f.statuses[f.phase] ?? [];
+  return {
+    phase: (w) => phaseOf(w) === f.phase,
+    search: (w) => !q || searchText(w).includes(q),
+    types: (w) => !f.types.length || f.types.includes(w.type),
+    statuses: (w) => !picked.length || picked.includes(statusForFilter(w, byId)),
+    pms: (w) => !f.pms.length || pmKeys(w).some((n) => f.pms.includes(n)),
+  };
+};
 
-const passes = (tests, w, skip) =>
-  Object.entries(tests).every(([k, t]) => k === skip || t(w));
+/** Passes every test, apart from the groups named in `skip`. */
+const passes = (tests, w, ...skip) =>
+  Object.entries(tests).every(([k, t]) => skip.includes(k) || t(w));
 
 const countBy = (rows, keysOf) => {
   const m = new Map();
@@ -247,10 +309,38 @@ function Workorders() {
     [statuses],
   );
 
+  const phase = filters.phase;
+
+  const byId = useMemo(() => new Map(workorders.map((w) => [w.id, w])), [workorders]);
+
   const tests = useMemo(
-    () => makeTests(search.trim().toLowerCase(), filters),
-    [search, filters],
+    () => makeTests(search.trim().toLowerCase(), filters, byId),
+    [search, filters, byId],
   );
+
+  /** The filter bar works on the current phase's slice of the filters. */
+  const barValue = useMemo(
+    () => ({
+      types: filters.types,
+      pms: filters.pms,
+      statuses: filters.statuses[phase] ?? [],
+    }),
+    [filters, phase],
+  );
+  const onBarChange = (next) =>
+    setFilters((f) => ({
+      ...f,
+      types: next.types,
+      pms: next.pms,
+      statuses: { ...f.statuses, [f.phase]: next.statuses },
+    }));
+  const onPhaseChange = (next) => setFilters((f) => ({ ...f, phase: next }));
+
+  // Column choices per phase: Finance doesn't need priority or due dates,
+  // but does need the client's invoicing portal.
+  const [columnModels, setColumnModels] = useState(DEFAULT_COLUMNS);
+  const onColumnVisibilityModelChange = (model) =>
+    setColumnModels((m) => ({ ...m, [phase]: model }));
 
   const filtered = useMemo(
     () => workorders.filter((w) => passes(tests, w)),
@@ -259,14 +349,19 @@ function Workorders() {
 
   /** Chip options with counts, each group counted against the other groups. */
   const facets = useMemo(() => {
-    const without = (skip) => workorders.filter((w) => passes(tests, w, skip));
+    const without = (...skip) => workorders.filter((w) => passes(tests, w, ...skip));
     const forTypes = without("types");
     const forStatuses = without("statuses");
     const forPms = without("pms");
+    // The switch: how many each phase would show with the other filters on.
+    // Status picks belong to a phase, so they don't count here.
+    const forPhases = without("phase", "statuses");
 
     const typeCounts = countBy(forTypes, (w) => [w.type]);
-    const statusCounts = countBy(forStatuses, (w) => [w.Status?.name]);
+    const statusCounts = countBy(forStatuses, (w) => [statusForFilter(w, byId)]);
     const pmCounts = countBy(forPms, pmKeys);
+    const phaseCounts = Object.fromEntries(countBy(forPhases, (w) => [phaseOf(w)]));
+    const phaseStatuses = statuses.filter((st) => (st.phase ?? "ops") === phase);
 
     // Types in the order they're defined, then anything unexpected in the data.
     const typeNames = [
@@ -275,11 +370,12 @@ function Workorders() {
         (n) => !workOrderTypes.some((t) => t.name === n),
       ),
     ];
-    // Statuses in workflow order (as the statuses table has them).
+    // This phase's statuses in workflow order (as the statuses table has
+    // them), then anything unexpected in the data.
     const statusNames = [
-      ...statuses.map((st) => st.name),
+      ...phaseStatuses.map((st) => st.name),
       ...[...statusCounts.keys()].filter(
-        (n) => !statuses.some((st) => st.name === n),
+        (n) => !phaseStatuses.some((st) => st.name === n),
       ),
     ];
     // Every PM on any work order, so nobody vanishes from the list at 0.
@@ -307,8 +403,9 @@ function Workorders() {
         { name: NO_PM, count: pmCounts.get(NO_PM) ?? 0 },
       ],
       totals: { types: forTypes.length, statuses: forStatuses.length },
+      phaseCounts: { ops: phaseCounts.ops ?? 0, finance: phaseCounts.finance ?? 0 },
     };
-  }, [workorders, tests, statuses]);
+  }, [workorders, tests, statuses, byId, phase]);
 
   const treeRows = useMemo(() => buildTreeRows(filtered), [filtered]);
 
@@ -498,6 +595,14 @@ function Workorders() {
         valueGetter: (value, row) => row.external_id ?? "",
       },
       {
+        field: "portal",
+        headerName: "Portal",
+        width: 130,
+        // The client's invoicing portal (ServiceChannel, Corrigo, …).
+        valueGetter: (value, row) => row.Site?.Client?.Software?.name ?? "",
+        renderCell: ({ value }) => value || "—",
+      },
+      {
         field: "age",
         headerName: "Age",
         width: 80,
@@ -589,8 +694,11 @@ function Workorders() {
             statuses={facets.statuses}
             pms={facets.pms}
             totals={facets.totals}
-            value={filters}
-            onChange={setFilters}
+            value={barValue}
+            onChange={onBarChange}
+            phase={phase}
+            onPhaseChange={onPhaseChange}
+            phaseCounts={facets.phaseCounts}
             me={user?.name}
             actions={
               <>
@@ -626,11 +734,17 @@ function Workorders() {
           columns={columns}
           loading={loading}
           onRowClick={onRowClick}
-          noRowsMessage="No work orders match these filters"
+          noRowsMessage={
+            phase === "finance"
+              ? "No work orders in finance match these filters"
+              : "No work orders match these filters"
+          }
+          columnVisibilityModel={columnModels[phase]}
+          onColumnVisibilityModelChange={onColumnVisibilityModelChange}
           search={search}
           onSearchChange={setSearch}
           searchPlaceholder="Search WO #, site, client, vendor, PM…"
-          exportFileName="work-orders"
+          exportFileName={phase === "finance" ? "work-orders-finance" : "work-orders"}
           treeData
           getTreeDataPath={getTreeDataPath}
           groupingColDef={groupingColDef}

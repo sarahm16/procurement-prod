@@ -202,7 +202,12 @@ export default function workordersRouter(prisma) {
               mailing_city: true,
               mailing_state: true,
               Client: {
-                select: { client: true, Segment: { select: { name: true } } },
+                select: {
+                  client: true,
+                  Segment: { select: { name: true } },
+                  // The client's invoicing portal, for the Finance view.
+                  Software: { select: { name: true } },
+                },
               },
             },
           },

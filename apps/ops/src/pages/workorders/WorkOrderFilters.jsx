@@ -2,6 +2,8 @@
 //
 // The filter bar above the work order grid.
 //
+//   Phase   Ops | Finance: which side of the job you're looking at. Each
+//           phase has its own statuses, so the Status row changes with it.
 //   Type    colour-coded chips, pick any number
 //   Status  colour-coded chips in workflow order, pick any number
 //   PM      avatar button → checklist (with "Mine" and "No PM")
@@ -23,6 +25,8 @@ import {
   Menu,
   MenuItem,
   Paper,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
   alpha,
@@ -31,6 +35,8 @@ import {
 import FilterAltOffOutlinedIcon from "@mui/icons-material/FilterAltOffOutlined";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import PersonOffOutlinedIcon from "@mui/icons-material/PersonOffOutlined";
+import EngineeringOutlinedIcon from "@mui/icons-material/EngineeringOutlined";
+import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
 
 export const NO_PM = "__none__";
 
@@ -334,6 +340,70 @@ function PmFilter({ options, selected, onChange, me }) {
   );
 }
 
+/* ── Phase switch ─────────────────────────────────────────────────────── */
+
+const PHASES = [
+  { value: "ops", label: "Ops", Icon: EngineeringOutlinedIcon, hint: "Work orders still being worked" },
+  { value: "finance", label: "Finance", Icon: AccountBalanceOutlinedIcon, hint: "Completed jobs with accounting" },
+];
+
+function PhaseSwitch({ phase, onChange, counts = {} }) {
+  const theme = useTheme();
+  return (
+    <ToggleButtonGroup
+      exclusive
+      size="small"
+      value={phase}
+      // null = the active one clicked again; keep one selected.
+      onChange={(_, v) => v && onChange(v)}
+      sx={{
+        bgcolor: "background.paper",
+        "& .MuiToggleButton-root": {
+          px: 1.75,
+          py: 0.5,
+          gap: 0.75,
+          textTransform: "none",
+          fontWeight: 600,
+          fontSize: "0.85rem",
+          color: "text.secondary",
+          "&.Mui-selected": {
+            color: "primary.contrastText",
+            bgcolor: "primary.main",
+            "&:hover": { bgcolor: "primary.dark" },
+          },
+        },
+      }}
+    >
+      {PHASES.map(({ value, label, Icon, hint }) => (
+        <Tooltip key={value} title={hint} enterDelay={500}>
+          <ToggleButton value={value} aria-label={label}>
+            <Icon sx={{ fontSize: 18 }} />
+            {label}
+            <Box
+              component="span"
+              sx={{
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                fontVariantNumeric: "tabular-nums",
+                px: 0.75,
+                minWidth: 22,
+                borderRadius: 9,
+                lineHeight: "18px",
+                bgcolor:
+                  phase === value
+                    ? "rgba(255,255,255,0.22)"
+                    : alpha(theme.palette.text.primary, 0.08),
+              }}
+            >
+              {counts[value] ?? 0}
+            </Box>
+          </ToggleButton>
+        </Tooltip>
+      ))}
+    </ToggleButtonGroup>
+  );
+}
+
 /* ── The bar ──────────────────────────────────────────────────────────── */
 
 export default function WorkOrderFilters({
@@ -343,6 +413,9 @@ export default function WorkOrderFilters({
   value, // { types: [], statuses: [], pms: [] }
   onChange,
   totals, // { types, statuses } — counts behind each row's "All"
+  phase = "ops",
+  onPhaseChange,
+  phaseCounts, // { ops, finance }
   me,
   actions,
 }) {
@@ -368,23 +441,18 @@ export default function WorkOrderFilters({
             : alpha(theme.palette.primary.main, 0.015),
       }}
     >
+      {/* Header: which phase, then who and the page actions. */}
       <Box
         sx={{
           display: "flex",
-          gap: 2,
-          alignItems: "flex-start",
-          flexWrap: { xs: "wrap", lg: "nowrap" },
+          gap: 1.5,
+          alignItems: "center",
+          flexWrap: "wrap",
         }}
       >
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <ChipRow
-            label="Type"
-            options={types}
-            selected={value.types}
-            onChange={set("types")}
-            total={totals.types}
-          />
-        </Box>
+        {onPhaseChange && (
+          <PhaseSwitch phase={phase} onChange={onPhaseChange} counts={phaseCounts} />
+        )}
         <Box
           sx={{
             display: "flex",
@@ -403,6 +471,16 @@ export default function WorkOrderFilters({
           {actions}
         </Box>
       </Box>
+
+      <Divider flexItem sx={{ borderStyle: "dashed" }} />
+
+      <ChipRow
+        label="Type"
+        options={types}
+        selected={value.types}
+        onChange={set("types")}
+        total={totals.types}
+      />
 
       <Divider flexItem sx={{ borderStyle: "dashed" }} />
 
