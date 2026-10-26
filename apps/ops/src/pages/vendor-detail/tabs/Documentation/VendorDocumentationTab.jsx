@@ -18,6 +18,7 @@ import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 
 import VendorComplianceSection from "./Tabs/Compliance/VendorComplianceSection";
 import VendorNoticesSection from "./Tabs/Notices/VendorNoticesSection";
+import VendorMiscDocumentsSection from "./Tabs/Miscellaneous/VendorMiscDocumentsSection";
 // import VendorExhibitsSection from "./VendorExhibitsSection";
 // import VendorExhibitsFormSection from "./VendorExhibitsFormSection";
 // import VendorWorkOrderMsaSection from "./VendorWorkOrderMsaSection";
@@ -52,13 +53,13 @@ const SECTIONS = [
   {
     id: "notices",
     label: "Notices",
-    subtitle: "Warnings & termination",
+    subtitle: "Warnings, compliance & termination",
     icon: <WarningAmberOutlinedIcon fontSize="small" />,
   },
   {
     id: "misc",
     label: "Miscellaneous",
-    subtitle: "Other documents",
+    subtitle: "Uploaded files",
     icon: <MoreHorizIcon fontSize="small" />,
   },
 ];
@@ -79,6 +80,8 @@ export default function VendorDocumentationTab({ vendorId }) {
       //   return <VendorWorkOrderMsaSection vendorId={vendorId} />;
       case "notices":
         return <VendorNoticesSection vendorId={vendorId} />;
+      case "misc":
+        return <VendorMiscDocumentsSection vendorId={vendorId} />;
       default:
         return (
           <Box sx={{ py: 6, textAlign: "center" }}>

@@ -24,6 +24,9 @@ model Employees {
   VendorUsersInvited        VendorUsers[]             @relation("VendorUserInvitedBy")
   WorkOrdersPortalReleased  WorkOrders[]              @relation("WorkOrderPortalReleasedBy")
   ClientUsersInvited        ClientUsers[]             @relation("ClientUserInvitedBy")
+  VendorDocumentsUploaded VendorDocuments[]           @relation("VendorDocumentUploadedBy")
+  VendorDocumentsDeleted  VendorDocuments[]           @relation("VendorDocumentDeletedBy")
+
 }
 
 model InternalRoles {

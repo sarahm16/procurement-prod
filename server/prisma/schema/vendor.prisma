@@ -36,6 +36,8 @@ model Vendors {
   WorkOrderUpdates        WorkOrderVendorUpdates[]
   MobilizationFees        WorkOrderMobilizationFees[]
   PortalUsers             VendorUsers[]
+  Documents               VendorDocuments[]
+
 }
 
 model VendorContacts {
@@ -240,4 +242,27 @@ model VendorWarningContractSites {
 
   @@unique([warning_id, vendor_contract_site_id])
   @@index([vendor_contract_site_id])
+}
+
+model VendorDocuments {
+  id           Int        @id @default(autoincrement())
+  vendor_id    Int
+  name         String     @db.VarChar(255)   // display name, editable
+  file_name    String     @db.VarChar(255)   // the file name as uploaded
+  blob_path    String     @db.VarChar(500)   // key in the vendor-documents container
+  blob_url     String     @db.VarChar(1000)
+  content_type String     @db.VarChar(150)
+  size_bytes   Int
+  notes        String?    @db.VarChar(1000)
+  uploaded_by  Int
+  created_at   DateTime   @default(now())
+  updated_at   DateTime   @updatedAt
+  deleted_at   DateTime?
+  deleted_by   Int?
+
+  Vendor       Vendors    @relation(fields: [vendor_id], references: [id], onUpdate: NoAction)
+  UploadedBy   Employees  @relation("VendorDocumentUploadedBy", fields: [uploaded_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  DeletedBy    Employees? @relation("VendorDocumentDeletedBy", fields: [deleted_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([vendor_id, deleted_at])
 }

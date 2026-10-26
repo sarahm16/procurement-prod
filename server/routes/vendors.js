@@ -20,6 +20,7 @@ import { sendMsa } from "../services/pandadoc/send/sendMsa.js";
 import { registerAssignableVendorsRoute } from "./vendorAssignableRoute.js";
 import { registerTerminationRoutes } from "./vendorTerminationRoutes.js";
 import { registerWarningRoutes } from "./vendorWarningRoutes.js";
+import { registerMiscDocumentRoutes } from "./vendorMiscDocumentRoutes.js";
 
 // Use MEMORY storage — the file stays in RAM as a Buffer, we hand it straight
 // to blob storage, nothing touches local disk (which is ephemeral on Azure anyway).
@@ -114,6 +115,7 @@ export default function vendorsRouter(prisma) {
   registerAssignableVendorsRoute(router, prisma);
   registerTerminationRoutes(router, prisma);
   registerWarningRoutes(router, prisma);
+  registerMiscDocumentRoutes(router, prisma);
 
   // GET /api/vendors
   router.get("/", async (req, res) => {
