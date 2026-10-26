@@ -18,7 +18,6 @@ import {
   Alert,
   Box,
   Button,
-  Checkbox,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -38,31 +37,10 @@ import {
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 
-import SiteTerminationAutocomplete from "./SiteTerminationAutocomplete";
+import NoticeLinePicker, { chosenLines } from "./NoticeLinePicker";
+import { loadSender, saveSender } from "./noticeSender";
 
 const RED = "#dc2626";
-
-// The sender's title and phone are remembered for next time. The old app
-// used "title" / "phoneNumber"; those are read as a fallback.
-const SENDER_KEY = "nfc.noticeSender";
-const loadSender = () => {
-  try {
-    const saved = JSON.parse(localStorage.getItem(SENDER_KEY) || "null");
-    return {
-      title: saved?.title ?? localStorage.getItem("title") ?? "",
-      phone: saved?.phone ?? localStorage.getItem("phoneNumber") ?? "",
-    };
-  } catch {
-    return { title: "", phone: "" };
-  }
-};
-const saveSender = (title, phone) => {
-  try {
-    localStorage.setItem(SENDER_KEY, JSON.stringify({ title, phone }));
-  } catch {
-    /* not remembered; fine */
-  }
-};
 
 /** Today as YYYY-MM-DD, local time (what a date input wants). */
 const todayIso = () => {
@@ -120,7 +98,7 @@ export default function TerminationNoticeForm({ vendorId, user, onClose, onIssue
   useEffect(() => {
     let active = true;
     axios
-      .get(`/api/vendors/${vendorId}/termination-options`)
+      .get(`/api/vendors/${vendorId}/notice-options`)
       .then(({ data }) => {
         if (!active) return;
         setOptions(data);
@@ -136,24 +114,11 @@ export default function TerminationNoticeForm({ vendorId, user, onClose, onIssue
   const allSites = options?.sites ?? [];
 
   /** The lines that will actually be terminated. */
-  const chosen = useMemo(
-    () =>
-      selectedSites
-        .map((s) => ({ ...s, lines: s.lines.filter((l) => !excluded.has(l.assignment_id)) }))
-        .filter((s) => s.lines.length),
-    [selectedSites, excluded],
-  );
+  const chosen = useMemo(() => chosenLines(selectedSites, excluded), [selectedSites, excluded]);
   const lineIds = chosen.flatMap((s) => s.lines.map((l) => l.assignment_id));
   const primaryCount = chosen.reduce((n, s) => n + s.lines.filter((l) => l.is_primary).length, 0);
   const totalLines = allSites.reduce((n, s) => n + s.lines.length, 0);
   const everything = lineIds.length > 0 && lineIds.length === totalLines;
-
-  const toggleLine = (id) =>
-    setExcluded((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
 
   const missing = [
     !effectiveDate && "effective date",
@@ -276,81 +241,15 @@ export default function TerminationNoticeForm({ vendorId, user, onClose, onIssue
           </Stack>
 
           <Section title="Where">
-            <SiteTerminationAutocomplete
+            <NoticeLinePicker
               sites={allSites}
               selectedSites={selectedSites}
               setSelectedSites={setSelectedSites}
+              excluded={excluded}
+              setExcluded={setExcluded}
+              label="Sites to terminate"
+              untickHint="Untick a service line to keep them on it."
             />
-
-            {/* The service lines at each picked site; untick any to keep. */}
-            {selectedSites.length > 0 && (
-              <Box
-                sx={{
-                  mt: 1.5,
-                  border: 1,
-                  borderColor: "divider",
-                  borderRadius: 1.5,
-                  maxHeight: 240,
-                  overflowY: "auto",
-                }}
-              >
-                {selectedSites.map((s, i) => (
-                  <Box
-                    key={s.site_id}
-                    sx={{
-                      px: 1.5,
-                      py: 0.75,
-                      borderTop: i ? 1 : 0,
-                      borderColor: "divider",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1.5,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <Box sx={{ minWidth: 150, flex: "1 1 150px" }}>
-                      <Typography sx={{ fontSize: "0.82rem", fontWeight: 600 }} noWrap>
-                        {s.store}
-                      </Typography>
-                      <Typography sx={{ fontSize: "0.7rem", color: "text.secondary" }} noWrap>
-                        {s.client}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: "flex", flexWrap: "wrap", columnGap: 1 }}>
-                      {s.lines.map((l) => (
-                        <FormControlLabel
-                          key={l.assignment_id}
-                          sx={{ mr: 0 }}
-                          control={
-                            <Checkbox
-                              size="small"
-                              checked={!excluded.has(l.assignment_id)}
-                              onChange={() => toggleLine(l.assignment_id)}
-                              sx={{ p: 0.5 }}
-                            />
-                          }
-                          label={
-                            <Typography sx={{ fontSize: "0.8rem" }}>
-                              {l.service_line}
-                              {!l.is_primary && (
-                                <Box component="span" sx={{ color: "text.secondary" }}>
-                                  {" "}
-                                  (backup)
-                                </Box>
-                              )}
-                            </Typography>
-                          }
-                        />
-                      ))}
-                    </Box>
-                  </Box>
-                ))}
-              </Box>
-            )}
-            <Typography sx={{ fontSize: "0.72rem", color: "text.secondary", mt: 0.75 }}>
-              {lineIds.length} service line{lineIds.length === 1 ? "" : "s"} at {chosen.length} site
-              {chosen.length === 1 ? "" : "s"}. Untick a service line to keep them on it.
-            </Typography>
           </Section>
 
           <FormControl>

@@ -1,9 +1,9 @@
 /**
  * Terminating a vendor from service lines with a documented notice.
  *
- *   GET  /api/vendors/:id/termination-options
+ *   GET  /api/vendors/:id/notice-options   (also /termination-options)
  *        the vendor's live assignments, grouped by site, and who the notice
- *        would go to
+ *        would go to — shared with the warning form
  *
  *   POST /api/vendors/:id/notices/termination
  *        { effective_date: "YYYY-MM-DD", reason, back_charge, back_charge_details,
@@ -34,9 +34,20 @@ import { sendMail } from "../services/mail.js";
 import { closeAssignments } from "../services/sourcing/closeAssignments.js";
 import {
   sendTerminationNotice,
-  siteAddress,
   terminationRecipient,
 } from "../services/pandadoc/send/sendTerminationNotice.js";
+import {
+  ASSIGNMENT_SELECT,
+  VENDOR_SELECT,
+  clean,
+  groupBySite,
+  liveWhere,
+  noticeOptionsHandler,
+  pandadocUrl,
+  serializeNotice,
+  sitesForNotice,
+  todayIso,
+} from "../services/notices/noticeData.js";
 import {
   buildTerminationEmailBody,
   buildTerminationSubject,
@@ -47,115 +58,12 @@ const SITE_ENTITY_TYPE_ID = 2;
 const TERMINATED_STATUS = "Terminated";
 const TEXT_MAX = 1000;
 
-export const pandadocUrl = (id) =>
-  id ? `https://app.pandadoc.com/a/#/documents/${id}` : null;
-
-/** A notice as the Notices list shows it. */
-export const serializeNotice = (n) => ({
-  ...n,
-  pandadoc_url: pandadocUrl(n.pandadoc_id),
-});
-
-const VENDOR_SELECT = {
-  id: true,
-  company: true,
-  contact_email: true,
-  mailing_address: true,
-  mailing_city: true,
-  mailing_state: true,
-  mailing_zipcode: true,
-  status_id: true,
-  Contacts: { select: { name: true, email: true, contact_role_id: true } },
-};
-
-const ASSIGNMENT_SELECT = {
-  id: true,
-  contract_site_id: true,
-  is_primary: true,
-  ContractSite: {
-    select: {
-      site_id: true,
-      Site: {
-        select: {
-          store: true,
-          mailing_address: true,
-          mailing_city: true,
-          mailing_state: true,
-          mailing_zipcode: true,
-          Client: { select: { client: true } },
-        },
-      },
-      Contract: { select: { ServiceLine: { select: { name: true } } } },
-    },
-  },
-};
-
-const liveWhere = (vendorId) => ({
-  vendor_id: vendorId,
-  VendorSiteStatus: { category: { not: "closed" } },
-});
-
-/** Assignments → [{ site_id, client, store, address, lines: [...] }] */
-function groupBySite(assignments) {
-  const sites = new Map();
-  for (const a of assignments) {
-    const cs = a.ContractSite;
-    const key = cs.site_id;
-    if (!sites.has(key)) {
-      sites.set(key, {
-        site_id: key,
-        client: cs.Site?.Client?.client ?? "",
-        store: cs.Site?.store ?? `Site ${key}`,
-        address: siteAddress(cs.Site),
-        lines: [],
-      });
-    }
-    sites.get(key).lines.push({
-      assignment_id: a.id,
-      contract_site_id: a.contract_site_id,
-      service_line: cs.Contract?.ServiceLine?.name ?? "Service line",
-      is_primary: a.is_primary,
-    });
-  }
-  return [...sites.values()]
-    .map((s) => ({ ...s, lines: s.lines.sort((x, y) => x.service_line.localeCompare(y.service_line)) }))
-    .sort((a, b) => a.client.localeCompare(b.client) || a.store.localeCompare(b.store, undefined, { numeric: true }));
-}
-
-/** Today as YYYY-MM-DD in the server's time zone. */
-const todayIso = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
-
-const clean = (v) => (typeof v === "string" ? v.trim() : "");
-
 export function registerTerminationRoutes(router, prisma) {
-  // ── GET /api/vendors/:id/termination-options ────────────────────────────
-  router.get("/:id/termination-options", async (req, res) => {
-    const id = Number(req.params.id);
-    try {
-      const vendor = await prisma.vendors.findUnique({ where: { id }, select: VENDOR_SELECT });
-      if (!vendor) return res.status(404).json({ error: "Vendor not found" });
-
-      const assignments = await prisma.vendorContractSites.findMany({
-        where: liveWhere(id),
-        select: ASSIGNMENT_SELECT,
-      });
-
-      res.json({
-        vendor: {
-          id: vendor.id,
-          company: vendor.company,
-          recipient: terminationRecipient(vendor),
-        },
-        sites: groupBySite(assignments),
-      });
-    } catch (e) {
-      console.error("Error loading termination options:", e);
-      res.status(500).json({ error: "Internal Server Error" });
-    }
-  });
+  // ── GET /api/vendors/:id/notice-options (and the older name) ───────────
+  // The vendor's live service lines by site, and who a notice would go to.
+  const options = noticeOptionsHandler(prisma, terminationRecipient);
+  router.get("/:id/notice-options", options);
+  router.get("/:id/termination-options", options);
 
   // ── POST /api/vendors/:id/notices/termination ───────────────────────────
   router.post("/:id/notices/termination", async (req, res) => {
@@ -213,7 +121,7 @@ export function registerTerminationRoutes(router, prisma) {
       }
 
       const sites = groupBySite(assignments);
-      const siteSummary = sites.map((s) => ({ ...s, lines: s.lines.map((l) => l.service_line) }));
+      const siteSummary = sitesForNotice(sites);
       const notice = {
         effectiveDate: effective,
         reason,

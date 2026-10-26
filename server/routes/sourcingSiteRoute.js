@@ -42,6 +42,22 @@ async function assignmentsByContractSite(prisma, contractSiteIds) {
       VendorSiteStatus: { select: { id: true, name: true, category: true } },
       // The termination (or, later, end-of-service) notice behind a removal.
       Notice: { select: { id: true, notice_type: true, pandadoc_id: true } },
+      // Warnings and compliance notices sent about this vendor on this line.
+      Warnings: {
+        select: {
+          Warning: {
+            select: {
+              id: true,
+              notice_type: true,
+              date_sent: true,
+              pandadoc_id: true,
+              reason: true,
+              status: true,
+              penalty_amount: true,
+            },
+          },
+        },
+      },
     },
     orderBy: [{ is_primary: "desc" }, { created_at: "desc" }],
   });
@@ -66,6 +82,19 @@ async function assignmentsByContractSite(prisma, contractSiteIds) {
       notice_url: a.Notice?.pandadoc_id
         ? `https://app.pandadoc.com/a/#/documents/${a.Notice.pandadoc_id}`
         : null,
+      // Newest first. Voided warnings (sent in error) don't count.
+      warnings: (a.Warnings ?? [])
+        .map((w) => w.Warning)
+        .filter((w) => w && w.status !== "voided")
+        .sort((x, y) => new Date(y.date_sent) - new Date(x.date_sent))
+        .map((w) => ({
+          id: w.id,
+          type: w.notice_type,
+          penalty: w.penalty_amount == null ? null : Number(w.penalty_amount),
+          date_sent: w.date_sent,
+          complaint: w.reason,
+          url: w.pandadoc_id ? `https://app.pandadoc.com/a/#/documents/${w.pandadoc_id}` : null,
+        })),
     });
   }
   return map;

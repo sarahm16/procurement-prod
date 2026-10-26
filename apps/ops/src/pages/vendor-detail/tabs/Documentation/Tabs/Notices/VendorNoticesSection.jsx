@@ -24,12 +24,16 @@ import NotificationImportantOutlinedIcon from "@mui/icons-material/NotificationI
 import useAuthenticatedUser from "../../../../../../*/hooks/useAuthenticatedUser";
 import { fmtDate } from "../../../../../../utils/date";
 // Type-specific form modals — build these out as you define each form.
-// import ComplianceNoticeForm from "./Forms/ComplianceNoticeForm";
-// import WarningForm from "./Forms/WarningNoticeForm";
+import ComplianceNoticeForm from "./Forms/ComplianceNoticeForm";
+import WarningNoticeForm from "./Forms/WarningNoticeForm";
 import TerminationNoticeForm from "./Forms/TerminationNoticeForm";
+import { NOTICES_CHANGED } from "../../../../components/VendorNoticesSummary";
 
 // Which types have a working form yet.
-const READY = new Set(["termination"]);
+const READY = new Set(["compliance", "warning", "termination"]);
+
+const money = (v) =>
+  Number(v).toLocaleString("en-US", { style: "currency", currency: "USD" });
 
 const pandadocUrl = (n) =>
   n.pandadoc_url ??
@@ -128,11 +132,21 @@ function NoticeRow({ notice }) {
           {notice.SentBy?.name ? ` · by ${notice.SentBy.name}` : ""}
           {notice.effective_date ? ` · effective ${fmtDay(notice.effective_date)}` : ""}
           {notice.back_charge ? " · back charge" : ""}
+          {notice.deadline ? ` · deadline: ${notice.deadline}` : ""}
+          {notice.penalty_amount != null ? ` · penalty ${money(notice.penalty_amount)}` : ""}
+          {notice.photo_count ? ` · ${notice.photo_count} photo${notice.photo_count === 1 ? "" : "s"}` : ""}
+          {notice.attachment_count
+            ? ` · ${notice.attachment_count} PDF${notice.attachment_count === 1 ? "" : "s"}`
+            : ""}
         </Typography>
         {notice.reason && (
           <Typography
             sx={{ fontSize: "0.75rem", color: "text.primary", mt: 0.25 }}
-            title={notice.reason}
+            title={
+              notice.resolution
+                ? `${notice.reason}\n\nExpected: ${notice.resolution}`
+                : notice.reason
+            }
             noWrap
           >
             {notice.reason}
@@ -232,6 +246,8 @@ export default function VendorNoticesSection({ vendorId }) {
     setNotices((prev) => [newNotice, ...prev]);
     setLastResult(result?.notice ? result : null);
     setActiveForm(null);
+    // The Details tab card and the header chip listen for this.
+    window.dispatchEvent(new CustomEvent(NOTICES_CHANGED, { detail: { vendorId } }));
   };
 
   return (
@@ -291,7 +307,7 @@ export default function VendorNoticesSection({ vendorId }) {
       </Box>
 
       {/* What the last send did, so nobody has to go check. */}
-      {lastResult && (
+      {lastResult?.notice?.notice_type === "termination" && (
         <Alert
           severity={lastResult.email?.failed || lastResult.email?.skipped ? "warning" : "success"}
           onClose={() => setLastResult(null)}
@@ -308,6 +324,35 @@ export default function VendorNoticesSection({ vendorId }) {
             : lastResult.email?.failed
               ? `The accounting email failed for ${lastResult.email.failed} recipient(s); let them know directly.`
               : "Accounting has been emailed."}
+        </Alert>
+      )}
+      {lastResult?.notice?.notice_type === "compliance" && (
+        <Alert
+          severity={lastResult.email?.failed || lastResult.email?.skipped ? "warning" : "success"}
+          onClose={() => setLastResult(null)}
+          sx={{ mb: 2 }}
+        >
+          Compliance notice sent to <strong>{lastResult.recipient}</strong> about {lastResult.lines}{" "}
+          service line{lastResult.lines === 1 ? "" : "s"} at {lastResult.sites} site
+          {lastResult.sites === 1 ? "" : "s"}
+          {lastResult.penalty != null ? `, with a ${money(lastResult.penalty)} penalty` : ""}.{" "}
+          {lastResult.email?.skipped
+            ? "Accounting wasn't emailed: no recipients are set up on the server."
+            : lastResult.email?.failed
+              ? `The accounting email failed for ${lastResult.email.failed} recipient(s); let them know directly.`
+              : "Accounting has been emailed."}
+        </Alert>
+      )}
+      {lastResult?.notice?.notice_type === "warning" && (
+        <Alert severity="success" onClose={() => setLastResult(null)} sx={{ mb: 2 }}>
+          Warning sent to <strong>{lastResult.recipient}</strong> about {lastResult.lines} service
+          line{lastResult.lines === 1 ? "" : "s"} at {lastResult.sites} site
+          {lastResult.sites === 1 ? "" : "s"}
+          {lastResult.photos ? `, with ${lastResult.photos} photo${lastResult.photos === 1 ? "" : "s"}` : ""}
+          {lastResult.attachments
+            ? ` and ${lastResult.attachments} PDF${lastResult.attachments === 1 ? "" : "s"} attached`
+            : ""}
+          . It's on each line's history in Sourcing.
         </Alert>
       )}
 
@@ -343,18 +388,8 @@ export default function VendorNoticesSection({ vendorId }) {
         </Box>
       )}
 
-      {/* Type-specific form modals — each notice type has its own form.
-          Build these out; each posts to /api/vendors/:id/notices/:type and
-          calls handleIssued with the created record. */}
-      {activeForm === "termination" && (
-        <TerminationNoticeForm
-          vendorId={vendorId}
-          user={user}
-          onClose={() => setActiveForm(null)}
-          onIssued={handleIssued}
-        />
-      )}
-      {/*
+      {/* Each notice type has its own form; each posts to
+          /api/vendors/:id/notices/:type and hands handleIssued the result. */}
       {activeForm === "compliance" && (
         <ComplianceNoticeForm
           vendorId={vendorId}
@@ -364,14 +399,22 @@ export default function VendorNoticesSection({ vendorId }) {
         />
       )}
       {activeForm === "warning" && (
-        <WarningForm
+        <WarningNoticeForm
           vendorId={vendorId}
           user={user}
           onClose={() => setActiveForm(null)}
           onIssued={handleIssued}
         />
       )}
-      */}
+      {activeForm === "termination" && (
+        <TerminationNoticeForm
+          vendorId={vendorId}
+          user={user}
+          onClose={() => setActiveForm(null)}
+          onIssued={handleIssued}
+        />
+      )}
+
     </Box>
   );
 }

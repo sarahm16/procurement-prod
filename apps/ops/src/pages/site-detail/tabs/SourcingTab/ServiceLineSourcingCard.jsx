@@ -33,6 +33,7 @@ import PersonAddAltIcon from "@mui/icons-material/PersonAddAlt";
 import HistoryIcon from "@mui/icons-material/History";
 import StarIcon from "@mui/icons-material/Star";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
 
 import { useContractSiteServices } from "./useSiteSourcing";
 // Adjust this path to wherever constants/ lives relative to pages/Sites.
@@ -107,10 +108,7 @@ export function lineStatus(row) {
 export function StatusChip({ row, size = "small" }) {
   if (row.needs_resourcing) {
     return (
-      <Tooltip
-        title={row.resource_reason ?? "The primary vendor was terminated"}
-        arrow
-      >
+      <Tooltip title={row.resource_reason ?? "The primary vendor was terminated"} arrow>
         <Chip
           size={size}
           label="Resource now"
@@ -131,6 +129,59 @@ export function StatusChip({ row, size = "small" }) {
       icon={s.key === "done" ? <CheckIcon /> : undefined}
       sx={{ fontWeight: 600, fontSize: "0.7rem", height: 22 }}
     />
+  );
+}
+
+/** "2 warnings", "1 compliance notice", or "3 notices" when it's a mix. */
+export function noticesLabel(notices) {
+  const n = notices.length;
+  const types = new Set(notices.map((w) => w.type ?? "warning"));
+  const noun =
+    types.size > 1 ? "notice" : types.has("compliance") ? "compliance notice" : "warning";
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
+}
+
+/**
+ * Warnings and compliance notices for a vendor on this line, with dates,
+ * complaints and any penalty on hover. Nothing when there are none.
+ */
+function WarningsChip({ warnings }) {
+  if (!warnings?.length) return null;
+  const n = warnings.length;
+  return (
+    <Tooltip
+      arrow
+      title={
+        <Box>
+          {warnings.slice(0, 5).map((w) => (
+            <Typography key={w.id} sx={{ fontSize: "0.72rem", mb: 0.25 }}>
+              <strong>
+                {w.type === "compliance" ? "Compliance" : "Warning"} {fmtDate(w.date_sent)}
+              </strong>
+              {w.penalty != null ? ` · penalty ${money(w.penalty)}` : ""}
+              {w.complaint ? ` · ${w.complaint}` : ""}
+            </Typography>
+          ))}
+          {n > 5 && (
+            <Typography sx={{ fontSize: "0.7rem", opacity: 0.8 }}>…and {n - 5} more</Typography>
+          )}
+        </Box>
+      }
+    >
+      <Chip
+        size="small"
+        color="warning"
+        variant="outlined"
+        icon={<ReportProblemOutlinedIcon sx={{ fontSize: "15px !important" }} />}
+        label={noticesLabel(warnings)}
+        component={warnings[0].url ? "a" : "div"}
+        href={warnings[0].url ?? undefined}
+        target="_blank"
+        rel="noopener noreferrer"
+        clickable={Boolean(warnings[0].url)}
+        sx={{ height: 22, fontSize: "0.68rem", fontWeight: 600 }}
+      />
+    </Tooltip>
   );
 }
 
@@ -635,9 +686,7 @@ function PriorVendors({ rows }) {
                   label={a.removed_reason ?? a.status}
                   size="small"
                   variant="outlined"
-                  color={
-                    a.removed_reason === "Terminated" ? "error" : "default"
-                  }
+                  color={a.removed_reason === "Terminated" ? "error" : "default"}
                   sx={{ height: 17, fontSize: "0.58rem" }}
                 />
               )}
@@ -648,11 +697,7 @@ function PriorVendors({ rows }) {
               </Typography>
               {a.notice_url && (
                 <Tooltip
-                  title={
-                    a.removed_notes
-                      ? `Notice: ${a.removed_notes}`
-                      : "Open the notice"
-                  }
+                  title={a.removed_notes ? `Notice: ${a.removed_notes}` : "Open the notice"}
                   arrow
                 >
                   <IconButton
@@ -690,12 +735,14 @@ export default function ServiceLineSourcingCard({
   const done = row.completed_steps ?? 0;
   const list = assigned ? steps(row) : null;
 
+  // Warnings per vendor on this line, from the site route's assignments.
+  const warningsFor = (assignmentId) =>
+    (row.assignments ?? []).find((a) => a.assignment_id === assignmentId)?.warnings ?? [];
+
   // Flagged when the primary was terminated; clears once a primary is back.
   const urgent = Boolean(row.needs_resourcing);
   const urgentText = row.resource_reason ?? "The primary vendor was terminated";
-  const urgentSince = row.resource_needed_at
-    ? fmtDate(row.resource_needed_at)
-    : null;
+  const urgentSince = row.resource_needed_at ? fmtDate(row.resource_needed_at) : null;
 
   return (
     <Stack spacing={2}>
@@ -745,11 +792,7 @@ export default function ServiceLineSourcingCard({
           severity="error"
           icon={<PriorityHighRoundedIcon fontSize="small" />}
           action={
-            <Button
-              color="inherit"
-              size="small"
-              onClick={() => onManage?.(row)}
-            >
+            <Button color="inherit" size="small" onClick={() => onManage?.(row)}>
               Pick a new primary
             </Button>
           }
@@ -847,6 +890,7 @@ export default function ServiceLineSourcingCard({
               <Typography variant="body2" sx={{ color: "text.secondary" }}>
                 {row.is_primary ? "Primary" : "Backup"}
               </Typography>
+              <WarningsChip warnings={warningsFor(row.assignment_id)} />
             </Stack>
             {backups.length > 0 && (
               <Stack
@@ -860,19 +904,25 @@ export default function ServiceLineSourcingCard({
                 <Typography variant="body2" sx={{ color: "text.secondary" }}>
                   Backup{backups.length > 1 ? "s" : ""}:
                 </Typography>
-                {backups.map((a) => (
-                  <Tooltip
-                    key={a.assignment_id}
-                    title={`${a.status ?? "Backup"} · added ${fmtDate(a.created_at)}`}
-                    arrow
-                  >
-                    <Chip
-                      label={a.vendor ?? "Unknown vendor"}
-                      size="small"
-                      variant="outlined"
-                    />
-                  </Tooltip>
-                ))}
+                {backups.map((a) => {
+                  const w = a.warnings?.length ?? 0;
+                  return (
+                    <Tooltip
+                      key={a.assignment_id}
+                      title={`${a.status ?? "Backup"} · added ${fmtDate(a.created_at)}${
+                        w ? ` · ${noticesLabel(a.warnings)} on this line` : ""
+                      }`}
+                      arrow
+                    >
+                      <Chip
+                        label={`${a.vendor ?? "Unknown vendor"}${w ? ` · ${noticesLabel(a.warnings)}` : ""}`}
+                        size="small"
+                        variant="outlined"
+                        color={w ? "warning" : "default"}
+                      />
+                    </Tooltip>
+                  );
+                })}
               </Stack>
             )}
             {row.prior_assignments?.length > 0 && (

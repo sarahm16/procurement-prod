@@ -87,8 +87,7 @@ model VendorContractSites {
   VendorSiteStatus  VendorSiteStatuses @relation(fields: [status_id], references: [id], onUpdate: NoAction)
   Vendor            Vendors            @relation(fields: [vendor_id], references: [id], onUpdate: NoAction)
   
-
-
+  Warnings          VendorWarningContractSites[]
   ServicePricing    VendorServicePricing[]
   Exhibits          VendorExhibitContractSites[]
 
@@ -210,12 +209,35 @@ model VendorWarnings {
   created_at     DateTime  @default(now())
   SentBy         Employees @relation(fields: [sent_by], references: [id])
   Vendor         Vendors   @relation(fields: [vendor_id], references: [id])
-    effective_date      DateTime?  @db.Date
+  effective_date      DateTime?  @db.Date
   reason              String?    @db.VarChar(1000)
   back_charge         Boolean    @default(false)
   back_charge_details String?    @db.VarChar(1000)
+  resolution          String?    @db.VarChar(1000)
+  deadline            String?    @db.VarChar(100)
+  photo_count         Int        @default(0)
+  attachment_count    Int        @default(0)
+  impact              String?    @db.VarChar(1000)
+  msa_last_updated    DateTime?  @db.Date
+  penalty_amount      Decimal?   @db.Decimal(10, 2)
+  penalty_reason      String?    @db.VarChar(1000)
+  // Service lines a warning (or other notice) is about.
+  ContractSites       VendorWarningContractSites[]
   // Service lines this notice took the vendor off.
   Assignments         VendorContractSites[]
 
   @@index([vendor_id])
+}
+
+model VendorWarningContractSites {
+  id                      Int                 @id @default(autoincrement())
+  warning_id              Int
+  vendor_contract_site_id Int
+  created_at              DateTime            @default(now())
+
+  Warning            VendorWarnings      @relation(fields: [warning_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  VendorContractSite VendorContractSites @relation(fields: [vendor_contract_site_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([warning_id, vendor_contract_site_id])
+  @@index([vendor_contract_site_id])
 }

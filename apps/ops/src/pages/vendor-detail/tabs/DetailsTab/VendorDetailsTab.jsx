@@ -18,6 +18,7 @@ import AddressCard from "../../../../components/AddressCard";
 import Contacts from "../../../../components/Contacts";
 import TeamCard from "../../../../components/TeamCard";
 import VendorQuickBooksCard from "./VendorQuickBooksCard";
+import VendorNoticesSummary from "../../components/VendorNoticesSummary";
 
 import {
   useVendorActions,
@@ -105,6 +106,7 @@ function VendorDetailsTab() {
       }
       main={
         <>
+          <VendorNoticesSummary vendorId={Number(id)} />
           <ChipSelectCard
             title="Trades"
             icon={<HandymanOutlinedIcon />}
