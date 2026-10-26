@@ -4,6 +4,7 @@ import { logActivity } from "../utils/logActivity.js";
 import { registerPricingRoutes } from "./sourcingPricingRoutes.js";
 import { registerReplaceRoute } from "./sourcingReplaceRoute.js";
 import { registerAssignRoute } from "./sourcingAssignRoute.js";
+import { registerResourcingFlagRoute } from "./sourcingFlagRoute.js";
 import registerSiteSourcingRoute from "./sourcingSiteRoute.js";
 import registerVendorSitesRoute from "./sourcingVendorRoute.js";
 import registerVendorWorkOrdersRoute from "./vendorWorkordersRoute.js";
@@ -96,9 +97,12 @@ const serializeGridRow = (r) => ({
 
   client_price_total: num(r.client_price_total),
   vendor_price_total: num(r.vendor_price_total),
-  vendor: r.company,
-  is_primary: r.is_primary,
   vendor_count: r.vendor_count,
+
+  // Set when the primary was terminated and nobody has replaced them yet.
+  needs_resourcing: Boolean(r.needs_resourcing),
+  resource_needed_at: r.needs_resourcing ? r.resource_needed_at : null,
+  resource_reason: r.needs_resourcing ? r.resource_reason : null,
   backup_vendor_count: r.backup_vendor_count,
 });
 
@@ -116,12 +120,15 @@ export default function sourcingRouter(prisma) {
   registerPricingRoutes(router, prisma, serializeGridRow);
   registerReplaceRoute(router, prisma, serializeGridRow);
   registerAssignRoute(router, prisma, serializeGridRow);
+  registerResourcingFlagRoute(router, prisma, serializeGridRow);
 
   // GET /api/sourcing
   //   ?q=              free text over site, client, vendor
   //   &client_id=      exact client
   //   &service_line_id=1,2
-  //   &state=          todo (default) | sourced | all
+  //   &state=          todo (default) | urgent | sourced | all
+  //                    todo includes lines flagged to resource immediately
+  //                    even if a backup is still on them; urgent is only those
   //   &missing=coi,ach rows missing ANY of these
   //   &sort=site&dir=asc
   //   &page=1&limit=100
@@ -162,8 +169,13 @@ export default function sourcingRouter(prisma) {
       .filter((n) => !isNaN(n));
     if (lineIds.length) AND.push({ service_line_id: { in: lineIds } });
 
-    if (state === "todo") AND.push({ is_sourced: false });
-    else if (state === "sourced") AND.push({ is_sourced: true });
+    if (state === "todo") {
+      AND.push({ OR: [{ is_sourced: false }, { needs_resourcing: true }] });
+    } else if (state === "urgent") {
+      AND.push({ needs_resourcing: true });
+    } else if (state === "sourced") {
+      AND.push({ is_sourced: true, needs_resourcing: false });
+    }
 
     const missing = listParam(req.query.missing).filter((k) => MISSING[k]);
     if (missing.length) AND.push({ OR: missing.map((k) => MISSING[k]) });
@@ -171,23 +183,28 @@ export default function sourcingRouter(prisma) {
     const field = SORTS[sort] || SORTS.site;
     const direction = dir === "desc" ? "desc" : "asc";
 
-    // Checklist columns sort gaps first, so "sort by COI" surfaces the ones
-    // that need chasing rather than the ones already done.
-    const orderBy = [{ [field]: direction }];
+    // Lines that need a vendor now always come first, whatever the sort.
+    // Then checklist columns sort gaps first, so "sort by COI" surfaces the
+    // ones that need chasing rather than the ones already done.
+    const orderBy = [{ needs_resourcing: "desc" }, { [field]: direction }];
     if (field !== "store") orderBy.push({ store: "asc" });
     orderBy.push({ service_line: "asc" });
 
     const where = AND.length ? { AND } : {};
 
     try {
-      const [rows, total] = await Promise.all([
+      const [rows, total, urgent] = await Promise.all([
         prisma.sourcingGrid.findMany({ where, orderBy, skip, take }),
         prisma.sourcingGrid.count({ where }),
+        // For the "Resource now" button: every flagged line, whatever the
+        // other filters, so it can't hide behind one.
+        prisma.sourcingGrid.count({ where: { needs_resourcing: true } }),
       ]);
 
       res.json({
         rows: rows.map(serializeGridRow),
         total,
+        urgent_count: urgent,
         page: Number(page) || 1,
         limit: take,
       });

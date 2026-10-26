@@ -20,6 +20,7 @@
 
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { logActivity } from "../utils/logActivity.js";
+import { clearResourcingFlag } from "../services/sourcing/closeAssignments.js";
 
 const SITE_ENTITY_TYPE_ID = 2;
 
@@ -113,6 +114,7 @@ export function registerReplaceRoute(router, prisma, serializeGridRow) {
             where: { contract_site_id: contractSiteId, is_primary: true },
             data: { is_primary: false },
           });
+          await clearResourcingFlag(tx, contractSiteId);
         }
 
         const include = { Vendor: { select: { company: true } } };

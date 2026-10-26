@@ -97,6 +97,11 @@ model ContractSites {
   created_at           DateTime               @default(now())
   start_date           DateTime               @default(now()) @db.Date
   end_date             DateTime?              @db.Date
+  
+  // Set when the primary vendor is terminated; the line needs a new one now.
+  resource_needed_at   DateTime?
+  resource_reason      String?                @db.VarChar(300)
+  resource_flagged_by  Int?
 
   Contract             Contracts              @relation(fields: [contract_id], references: [id], onUpdate: NoAction)
   Site                 Sites                  @relation(fields: [site_id], references: [id], onUpdate: NoAction)

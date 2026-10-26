@@ -40,6 +40,8 @@ async function assignmentsByContractSite(prisma, contractSiteIds) {
     include: {
       Vendor: { select: { id: true, company: true } },
       VendorSiteStatus: { select: { id: true, name: true, category: true } },
+      // The termination (or, later, end-of-service) notice behind a removal.
+      Notice: { select: { id: true, notice_type: true, pandadoc_id: true } },
     },
     orderBy: [{ is_primary: "desc" }, { created_at: "desc" }],
   });
@@ -56,6 +58,14 @@ async function assignmentsByContractSite(prisma, contractSiteIds) {
       status: a.VendorSiteStatus?.name ?? null,
       status_category: a.VendorSiteStatus?.category ?? null,
       created_at: a.created_at,
+      // Set when they came off the line by notice (rather than replaced).
+      removed_at: a.removed_at ?? null,
+      removed_reason: a.removed_reason ?? null,
+      removed_notes: a.removed_notes ?? null,
+      notice_type: a.Notice?.notice_type ?? null,
+      notice_url: a.Notice?.pandadoc_id
+        ? `https://app.pandadoc.com/a/#/documents/${a.Notice.pandadoc_id}`
+        : null,
     });
   }
   return map;

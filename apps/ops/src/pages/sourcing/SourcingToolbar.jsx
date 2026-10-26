@@ -45,6 +45,7 @@ export default function SourcingToolbar({
   searchText,
   onSearchText,
   onReset,
+  urgentCount = 0,
 }) {
   const set = (patch) => onChange({ ...filters, ...patch, page: 1 });
 
@@ -129,6 +130,19 @@ export default function SourcingToolbar({
           onChange={(_, v) => v && set({ state: v })}
         >
           <ToggleButton value="todo">Not sourced</ToggleButton>
+          {/* Lines whose primary was removed: the ones to work first. */}
+          <ToggleButton
+            value="urgent"
+            disabled={!urgentCount && filters.state !== "urgent"}
+            sx={{
+              color: urgentCount ? "error.main" : undefined,
+              fontWeight: urgentCount ? 700 : undefined,
+              "&.Mui-selected": { color: "error.contrastText", bgcolor: "error.main" },
+              "&.Mui-selected:hover": { bgcolor: "error.dark" },
+            }}
+          >
+            Resource now{urgentCount ? ` (${urgentCount})` : ""}
+          </ToggleButton>
           <ToggleButton value="sourced">Sourced</ToggleButton>
           <ToggleButton value="all">All</ToggleButton>
         </ToggleButtonGroup>

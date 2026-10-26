@@ -28,7 +28,8 @@ export default function Sourcing() {
     [base, debouncedSearch],
   );
 
-  const { rows, total, loading, error, patchRows } = useSourcing(filters);
+  const { rows, total, urgentCount, loading, error, patchRows } =
+    useSourcing(filters);
   const clients = useClients();
   const serviceLines = useServiceLines();
 
@@ -76,14 +77,13 @@ export default function Sourcing() {
 
   /** The single write path for every assign — inline, bulk, or confirmed. */
   const commitAssign = useCallback(
-    async (vendor, targetRows, mode, makePrimary = false) => {
+    async (vendor, targetRows, mode) => {
       setBusy(true);
       try {
         const { data } = await axios.post("/api/sourcing/assignments", {
           vendor_id: vendor.id,
           contract_site_ids: targetRows.map((r) => r.contract_site_id),
           mode,
-          make_primary: makePrimary,
           user_id: user?.id,
         });
 
@@ -94,16 +94,11 @@ export default function Sourcing() {
 
         const {
           assigned = [],
-          added = [],
           replaced = [],
           skipped = [],
         } = data.summary ?? {};
-        const asPrimary = added.filter((a) => a.is_primary).length;
-        const asBackup = added.length - asPrimary;
         const parts = [];
         if (assigned.length) parts.push(`${assigned.length} assigned`);
-        if (asPrimary) parts.push(`${asPrimary} made primary`);
-        if (asBackup) parts.push(`${asBackup} added as backup`);
         if (replaced.length) parts.push(`${replaced.length} replaced`);
         if (skipped.length) parts.push(`${skipped.length} skipped`);
         setToast(`${vendor.company} — ${parts.join(", ") || "no changes"}`);
@@ -209,6 +204,7 @@ export default function Sourcing() {
         serviceLines={serviceLines}
         searchText={searchText}
         onSearchText={setSearchText}
+        urgentCount={urgentCount}
         onReset={() => {
           setSearchText("");
           setBase(DEFAULT_FILTERS);
@@ -268,9 +264,7 @@ export default function Sourcing() {
         rows={pending?.rows ?? []}
         busy={busy}
         onCancel={() => setPending(null)}
-        onConfirm={(mode, makePrimary) =>
-          commitAssign(pending.vendor, pending.rows, mode, makePrimary)
-        }
+        onConfirm={(mode) => commitAssign(pending.vendor, pending.rows, mode)}
       />
 
       <SourcingPanel

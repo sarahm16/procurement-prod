@@ -16,6 +16,11 @@
 -- marked, the newest live assignment). vendor_count / backup_vendor_count say
 -- how many others there are; vw_SourcingGridVendors lists them all.
 --
+-- needs_resourcing: the line was flagged when its primary vendor came off
+-- (ContractSites.resource_needed_at, set when the primary is terminated) AND no live primary has been put back.
+-- The API also clears the flag when a primary is assigned, so this is a
+-- second safety net, not the only one.
+--
 -- Re-run after every `prisma db push`: push does not know this view exists,
 -- and a column change silently invalidates it.
 --
@@ -51,6 +56,9 @@ WITH base AS (
         sl.id                   AS service_line_id,
         sl.name                 AS service_line,
 
+        cs.resource_needed_at,
+        cs.resource_reason,
+
         a.id                    AS assignment_id,
         a.status_id             AS assignment_status_id,
         a.is_primary,
@@ -58,6 +66,7 @@ WITH base AS (
 
         ISNULL(vc.vendor_count, 0)        AS vendor_count,
         ISNULL(vc.backup_vendor_count, 0) AS backup_vendor_count,
+        ISNULL(vc.primary_count, 0)       AS primary_count,
 
         v.id                    AS vendor_id,
         v.company,
@@ -73,7 +82,7 @@ WITH base AS (
         CAST(CASE WHEN EXISTS (
             SELECT 1 FROM VendorComplianceDocuments d
              WHERE d.vendor_id = v.id
-               AND d.document_type = 'W-9'
+               AND d.document_type = 'W9'
                AND d.date_completed IS NOT NULL
         ) THEN 1 ELSE 0 END AS BIT)                     AS has_w9,
 
@@ -166,7 +175,8 @@ WITH base AS (
     -- How many live vendors the site has in total, and how many are backups.
     OUTER APPLY (
         SELECT COUNT(*)                                          AS vendor_count,
-               SUM(CASE WHEN vcs.is_primary = 0 THEN 1 ELSE 0 END) AS backup_vendor_count
+               SUM(CASE WHEN vcs.is_primary = 0 THEN 1 ELSE 0 END) AS backup_vendor_count,
+               SUM(CASE WHEN vcs.is_primary = 1 THEN 1 ELSE 0 END) AS primary_count
           FROM VendorContractSites vcs
           JOIN VendorSiteStatuses vss ON vss.id = vcs.status_id
          WHERE vcs.contract_site_id = cs.id
@@ -186,6 +196,11 @@ SELECT
 
     CAST(CASE WHEN b.exhibit_sent_at   IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS exhibit_sent,
     CAST(CASE WHEN b.exhibit_signed_at IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS exhibit_signed,
+
+    -- Flagged to resource immediately, and still no primary on the line.
+    CAST(CASE WHEN b.resource_needed_at IS NOT NULL
+               AND b.primary_count = 0
+         THEN 1 ELSE 0 END AS BIT)                      AS needs_resourcing,
 
     -- The grid's only status: everything done, or not.
     CAST(CASE WHEN b.vendor_id IS NOT NULL

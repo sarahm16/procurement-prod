@@ -12,6 +12,7 @@ import {
   Chip,
   Collapse,
   Divider,
+  IconButton,
   InputAdornment,
   LinearProgress,
   Paper,
@@ -24,12 +25,14 @@ import {
 import { alpha } from "@mui/material/styles";
 import CheckIcon from "@mui/icons-material/Check";
 import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
+import PriorityHighRoundedIcon from "@mui/icons-material/PriorityHighRounded";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import PersonAddAltIcon from "@mui/icons-material/PersonAddAlt";
 import HistoryIcon from "@mui/icons-material/History";
 import StarIcon from "@mui/icons-material/Star";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
 import { useContractSiteServices } from "./useSiteSourcing";
 // Adjust this path to wherever constants/ lives relative to pages/Sites.
@@ -95,7 +98,29 @@ export function lineStatus(row) {
   };
 }
 
+/**
+ * A line flagged to resource immediately (its primary was terminated) says
+ * so instead of its usual status, on the list and the header alike.
+ * lineStatus() itself is unchanged, so anything filtering on its keys keeps
+ * working.
+ */
 export function StatusChip({ row, size = "small" }) {
+  if (row.needs_resourcing) {
+    return (
+      <Tooltip
+        title={row.resource_reason ?? "The primary vendor was terminated"}
+        arrow
+      >
+        <Chip
+          size={size}
+          label="Resource now"
+          color="error"
+          icon={<PriorityHighRoundedIcon />}
+          sx={{ fontWeight: 700, fontSize: "0.7rem", height: 22 }}
+        />
+      </Tooltip>
+    );
+  }
   const s = lineStatus(row);
   return (
     <Chip
@@ -570,6 +595,11 @@ const HeadCell = ({ children, align = "left" }) => (
 
 /* ── Prior vendors ───────────────────────────────────────────────────────── */
 
+/**
+ * Who used to be on this line. A vendor taken off by a termination notice
+ * shows "Terminated", the dates they were on the line, and a link to the
+ * notice.
+ */
 function PriorVendors({ rows }) {
   const [open, setOpen] = useState(false);
   if (!rows?.length) return null;
@@ -600,17 +630,43 @@ function PriorVendors({ rows }) {
               >
                 {a.vendor ?? "Unknown vendor"}
               </Typography>
-              {a.status && (
+              {(a.removed_reason || a.status) && (
                 <Chip
-                  label={a.status}
+                  label={a.removed_reason ?? a.status}
                   size="small"
                   variant="outlined"
+                  color={
+                    a.removed_reason === "Terminated" ? "error" : "default"
+                  }
                   sx={{ height: 17, fontSize: "0.58rem" }}
                 />
               )}
               <Typography variant="caption" sx={{ color: "text.disabled" }}>
-                added {fmtDate(a.created_at)}
+                {a.removed_at
+                  ? `${fmtDate(a.created_at)} – ${fmtDate(a.removed_at)}`
+                  : `added ${fmtDate(a.created_at)}`}
               </Typography>
+              {a.notice_url && (
+                <Tooltip
+                  title={
+                    a.removed_notes
+                      ? `Notice: ${a.removed_notes}`
+                      : "Open the notice"
+                  }
+                  arrow
+                >
+                  <IconButton
+                    size="small"
+                    component="a"
+                    href={a.notice_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    sx={{ p: 0.25 }}
+                  >
+                    <OpenInNewIcon sx={{ fontSize: 13 }} />
+                  </IconButton>
+                </Tooltip>
+              )}
             </Stack>
           ))}
         </Stack>
@@ -633,6 +689,13 @@ export default function ServiceLineSourcingCard({
   const needsPrimary = assigned && !row.is_primary;
   const done = row.completed_steps ?? 0;
   const list = assigned ? steps(row) : null;
+
+  // Flagged when the primary was terminated; clears once a primary is back.
+  const urgent = Boolean(row.needs_resourcing);
+  const urgentText = row.resource_reason ?? "The primary vendor was terminated";
+  const urgentSince = row.resource_needed_at
+    ? fmtDate(row.resource_needed_at)
+    : null;
 
   return (
     <Stack spacing={2}>
@@ -675,6 +738,27 @@ export default function ServiceLineSourcingCard({
         <StatusChip row={row} size="medium" />
       </Stack>
 
+      {/* A backup can still be on a flagged line, so this sits above the
+          vendor section rather than replacing it. */}
+      {urgent && assigned && (
+        <Alert
+          severity="error"
+          icon={<PriorityHighRoundedIcon fontSize="small" />}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => onManage?.(row)}
+            >
+              Pick a new primary
+            </Button>
+          }
+        >
+          <strong>Resource immediately.</strong> {urgentText}
+          {urgentSince ? ` (since ${urgentSince})` : ""}.
+        </Alert>
+      )}
+
       {/* No vendor: that's the only thing worth showing. */}
       {!assigned ? (
         <Paper
@@ -684,24 +768,40 @@ export default function ServiceLineSourcingCard({
             textAlign: "center",
             borderStyle: "dashed",
             borderWidth: 2,
+            ...(urgent && {
+              borderColor: "error.main",
+              bgcolor: (t) => alpha(t.palette.error.main, 0.04),
+            }),
           }}
         >
           <Typography sx={{ fontWeight: 700, fontSize: "1rem" }}>
-            No vendor on {row.service_line} yet
+            {urgent
+              ? `${row.service_line} needs a new vendor now`
+              : `No vendor on ${row.service_line} yet`}
           </Typography>
           <Typography
             variant="body2"
             sx={{ color: "text.secondary", mt: 0.5, mb: 2 }}
           >
-            Assign one to start the checklist and enter rates.
+            {urgent
+              ? `${urgentText}${urgentSince ? ` on ${urgentSince}` : ""}.`
+              : "Assign one to start the checklist and enter rates."}
           </Typography>
           <Button
             variant="contained"
+            color={urgent ? "error" : "primary"}
             startIcon={<PersonAddAltIcon />}
             onClick={() => onManage?.(row)}
           >
             Assign a vendor
           </Button>
+          {/* After a termination the line is empty, but who was on it (and
+              the notice) is still worth a click. */}
+          {row.prior_assignments?.length > 0 && (
+            <Box sx={{ mt: 2, display: "flex", justifyContent: "center" }}>
+              <PriorVendors rows={row.prior_assignments} />
+            </Box>
+          )}
         </Paper>
       ) : (
         <>
@@ -719,7 +819,8 @@ export default function ServiceLineSourcingCard({
               </Button>
             }
           >
-            {needsPrimary && (
+            {/* The urgent alert above already says this. */}
+            {needsPrimary && !urgent && (
               <Alert
                 severity="warning"
                 sx={{ mb: 1.5 }}

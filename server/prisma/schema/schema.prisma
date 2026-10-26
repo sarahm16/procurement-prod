@@ -34,6 +34,11 @@ view SourcingGrid {
   vendor_count            Int
   backup_vendor_count     Int
 
+    resource_needed_at      DateTime?
+  resource_reason         String?
+  primary_count           Int
+  needs_resourcing        Boolean
+
   vendor_id               Int?
   company                 String?
   vendor_lat              Decimal?

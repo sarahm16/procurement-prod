@@ -2,6 +2,7 @@
 import { useState, useMemo, useEffect } from "react";
 import axios from "axios";
 import {
+  Alert,
   Box,
   Typography,
   Chip,
@@ -23,9 +24,27 @@ import NotificationImportantOutlinedIcon from "@mui/icons-material/NotificationI
 import useAuthenticatedUser from "../../../../../../*/hooks/useAuthenticatedUser";
 import { fmtDate } from "../../../../../../utils/date";
 // Type-specific form modals — build these out as you define each form.
-// import ComplianceNoticeForm from "./forms/ComplianceNoticeForm";
-// import WarningForm from "./forms/WarningForm";
-// import TerminationForm from "./forms/TerminationForm";
+// import ComplianceNoticeForm from "./Forms/ComplianceNoticeForm";
+// import WarningForm from "./Forms/WarningNoticeForm";
+import TerminationNoticeForm from "./Forms/TerminationNoticeForm";
+
+// Which types have a working form yet.
+const READY = new Set(["termination"]);
+
+const pandadocUrl = (n) =>
+  n.pandadoc_url ??
+  (n.pandadoc_id ? `https://app.pandadoc.com/a/#/documents/${n.pandadoc_id}` : null);
+
+/** Effective dates are date-only; read them without a time-zone shift. */
+const fmtDay = (v) => {
+  if (!v) return null;
+  const [y, m, d] = String(v).slice(0, 10).split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
 
 // The three notice types, in ascending severity, each with its own color + form.
 const NOTICE_TYPES = [
@@ -68,6 +87,7 @@ function NoticeRow({ notice }) {
   const [menuAnchor, setMenuAnchor] = useState(null);
   const meta = NOTICE_META[notice.notice_type] ?? {};
   const statusColor = STATUS_COLORS[notice.status] ?? "#6b7280";
+  const url = pandadocUrl(notice);
 
   return (
     <Box
@@ -106,7 +126,18 @@ function NoticeRow({ notice }) {
         <Typography sx={{ fontSize: "0.72rem", color: "text.secondary" }}>
           Sent {fmtDate(notice.date_sent)}
           {notice.SentBy?.name ? ` · by ${notice.SentBy.name}` : ""}
+          {notice.effective_date ? ` · effective ${fmtDay(notice.effective_date)}` : ""}
+          {notice.back_charge ? " · back charge" : ""}
         </Typography>
+        {notice.reason && (
+          <Typography
+            sx={{ fontSize: "0.75rem", color: "text.primary", mt: 0.25 }}
+            title={notice.reason}
+            noWrap
+          >
+            {notice.reason}
+          </Typography>
+        )}
       </Box>
 
       {/* Status */}
@@ -124,9 +155,9 @@ function NoticeRow({ notice }) {
       />
 
       {/* Open link */}
-      {notice.pandadoc_url && (
+      {url && (
         <Link
-          href={notice.pandadoc_url}
+          href={url}
           target="_blank"
           rel="noopener"
           sx={{
@@ -168,6 +199,7 @@ export default function VendorNoticesSection({ vendorId }) {
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeForm, setActiveForm] = useState(null); // which notice type's form is open
+  const [lastResult, setLastResult] = useState(null); // what the last send did
 
   const fetchNotices = async () => {
     setLoading(true);
@@ -195,8 +227,10 @@ export default function VendorNoticesSection({ vendorId }) {
   );
 
   // Called by each type's form on successful send.
-  const handleIssued = (newNotice) => {
+  const handleIssued = (result) => {
+    const newNotice = result?.notice ?? result;
     setNotices((prev) => [newNotice, ...prev]);
+    setLastResult(result?.notice ? result : null);
     setActiveForm(null);
   };
 
@@ -238,6 +272,8 @@ export default function VendorNoticesSection({ vendorId }) {
               variant="outlined"
               startIcon={t.icon}
               onClick={() => setActiveForm(t.type)}
+              disabled={!READY.has(t.type)}
+              title={READY.has(t.type) ? undefined : "Coming soon"}
               sx={{
                 fontSize: "0.75rem",
                 color: t.color,
@@ -253,6 +289,27 @@ export default function VendorNoticesSection({ vendorId }) {
           ))}
         </Box>
       </Box>
+
+      {/* What the last send did, so nobody has to go check. */}
+      {lastResult && (
+        <Alert
+          severity={lastResult.email?.failed || lastResult.email?.skipped ? "warning" : "success"}
+          onClose={() => setLastResult(null)}
+          sx={{ mb: 2 }}
+        >
+          Termination notice sent to <strong>{lastResult.recipient}</strong>.{" "}
+          {lastResult.closed} service line{lastResult.closed === 1 ? "" : "s"} closed
+          {lastResult.flagged
+            ? `, ${lastResult.flagged} flagged "Resource now" in Sourcing`
+            : ""}
+          .{lastResult.vendor_terminated ? " Vendor status is now Terminated." : ""}{" "}
+          {lastResult.email?.skipped
+            ? "Accounting wasn't emailed: no recipients are set up on the server."
+            : lastResult.email?.failed
+              ? `The accounting email failed for ${lastResult.email.failed} recipient(s); let them know directly.`
+              : "Accounting has been emailed."}
+        </Alert>
+      )}
 
       {/* History list */}
       {loading ? (
@@ -289,6 +346,14 @@ export default function VendorNoticesSection({ vendorId }) {
       {/* Type-specific form modals — each notice type has its own form.
           Build these out; each posts to /api/vendors/:id/notices/:type and
           calls handleIssued with the created record. */}
+      {activeForm === "termination" && (
+        <TerminationNoticeForm
+          vendorId={vendorId}
+          user={user}
+          onClose={() => setActiveForm(null)}
+          onIssued={handleIssued}
+        />
+      )}
       {/*
       {activeForm === "compliance" && (
         <ComplianceNoticeForm
@@ -300,14 +365,6 @@ export default function VendorNoticesSection({ vendorId }) {
       )}
       {activeForm === "warning" && (
         <WarningForm
-          vendorId={vendorId}
-          user={user}
-          onClose={() => setActiveForm(null)}
-          onIssued={handleIssued}
-        />
-      )}
-      {activeForm === "termination" && (
-        <TerminationForm
           vendorId={vendorId}
           user={user}
           onClose={() => setActiveForm(null)}

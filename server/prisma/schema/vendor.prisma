@@ -75,10 +75,19 @@ model VendorContractSites {
   vendor_id         Int
   contract_site_id  Int
   created_at        DateTime           @default(now())
-  
+    // Set when the vendor came off the line by notice (rather than replaced)
+  removed_at        DateTime?
+  removed_reason    String?            @db.VarChar(50)
+  removed_notes     String?            @db.VarChar(500)
+  removed_by        Int?
+  notice_id         Int?
+
+  Notice            VendorWarnings?    @relation(fields: [notice_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   ContractSite      ContractSites      @relation(fields: [contract_site_id], references: [id], onUpdate: NoAction)
   VendorSiteStatus  VendorSiteStatuses @relation(fields: [status_id], references: [id], onUpdate: NoAction)
   Vendor            Vendors            @relation(fields: [vendor_id], references: [id], onUpdate: NoAction)
+  
+
 
   ServicePricing    VendorServicePricing[]
   Exhibits          VendorExhibitContractSites[]
@@ -201,6 +210,12 @@ model VendorWarnings {
   created_at     DateTime  @default(now())
   SentBy         Employees @relation(fields: [sent_by], references: [id])
   Vendor         Vendors   @relation(fields: [vendor_id], references: [id])
+    effective_date      DateTime?  @db.Date
+  reason              String?    @db.VarChar(1000)
+  back_charge         Boolean    @default(false)
+  back_charge_details String?    @db.VarChar(1000)
+  // Service lines this notice took the vendor off.
+  Assignments         VendorContractSites[]
 
   @@index([vendor_id])
 }

@@ -15,7 +15,7 @@ export const DEFAULT_FILTERS = {
   q: "",
   clientId: null,
   serviceLineIds: [],
-  state: "todo", // todo | sourced | all
+  state: "todo", // todo | urgent | sourced | all
   missing: [],
   sort: "site",
   dir: "asc",
@@ -45,7 +45,7 @@ export function buildQuery(f) {
 export function useSourcing(filters) {
   const qs = useMemo(() => buildQuery(filters), [filters]);
 
-  const [data, setData] = useState({ rows: [], total: 0 });
+  const [data, setData] = useState({ rows: [], total: 0, urgentCount: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const abortRef = useRef(null);
@@ -61,7 +61,12 @@ export function useSourcing(filters) {
       const { data: res } = await axios.get(`/api/sourcing?${query}`, {
         signal: controller.signal,
       });
-      setData({ rows: res.rows, total: res.total });
+      setData({
+        rows: res.rows,
+        total: res.total,
+        // Every line flagged to resource now, whatever the filters.
+        urgentCount: res.urgent_count ?? 0,
+      });
     } catch (err) {
       if (axios.isCancel?.(err) || err.name === "CanceledError") return;
       console.error("Error fetching sourcing grid:", err);
@@ -79,13 +84,20 @@ export function useSourcing(filters) {
   /** Merge rows the server handed back after a write, keyed by contract site. */
   const patchRows = useCallback((updated) => {
     if (!updated?.length) return;
-    setData((d) => ({
-      ...d,
-      rows: d.rows.map(
-        (r) =>
-          updated.find((u) => u.contract_site_id === r.contract_site_id) || r,
-      ),
-    }));
+    setData((d) => {
+      // Keep the "Resource now" count honest after a remove / assign,
+      // without waiting for a refetch.
+      let urgentCount = d.urgentCount;
+      const rows = d.rows.map((r) => {
+        const u = updated.find((x) => x.contract_site_id === r.contract_site_id);
+        if (!u) return r;
+        if (Boolean(u.needs_resourcing) !== Boolean(r.needs_resourcing)) {
+          urgentCount += u.needs_resourcing ? 1 : -1;
+        }
+        return u;
+      });
+      return { ...d, rows, urgentCount: Math.max(0, urgentCount) };
+    });
   }, []);
 
   return { ...data, loading, error, refetch: () => load(qs), patchRows };

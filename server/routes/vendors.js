@@ -18,6 +18,7 @@ import { getAccountingToken } from "../services/pandadoc/tokens/accountingToken.
 import { getValidUserToken } from "../services/pandadoc/tokens/getValidUserToken.js";
 import { sendMsa } from "../services/pandadoc/send/sendMsa.js";
 import { registerAssignableVendorsRoute } from "./vendorAssignableRoute.js";
+import { registerTerminationRoutes } from "./vendorTerminationRoutes.js";
 
 // Use MEMORY storage — the file stays in RAM as a Buffer, we hand it straight
 // to blob storage, nothing touches local disk (which is ephemeral on Azure anyway).
@@ -110,6 +111,7 @@ const DOC_CONFIG = {
 export default function vendorsRouter(prisma) {
   const router = Router();
   registerAssignableVendorsRoute(router, prisma);
+  registerTerminationRoutes(router, prisma);
 
   // GET /api/vendors
   router.get("/", async (req, res) => {

@@ -16,6 +16,7 @@
 
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { logActivity } from "../utils/logActivity.js";
+import { clearResourcingFlag } from "../services/sourcing/closeAssignments.js";
 
 const SITE_ENTITY_TYPE_ID = 2;
 const MODES = ["skip", "add", "replace"];
@@ -203,7 +204,11 @@ export function registerAssignRoute(router, prisma, serializeGridRow) {
                 data: { status_id: closed.id, is_primary: false },
               });
             }
-            if (becomesPrimary) await clearPrimary(tx, csId);
+            if (becomesPrimary) {
+              await clearPrimary(tx, csId);
+              // A primary is back on the line: it no longer needs resourcing.
+              await clearResourcingFlag(tx, csId);
+            }
 
             // The vendor may already have a closed assignment here from a
             // previous season — @@unique([vendor_id, contract_site_id]) means
@@ -335,6 +340,7 @@ export function registerAssignRoute(router, prisma, serializeGridRow) {
             where: { id: assignmentId },
             data: { is_primary: true },
           });
+          await clearResourcingFlag(tx, csId);
 
           const line =
             assignment.ContractSite.Contract?.ServiceLine?.name ??
