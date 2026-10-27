@@ -4,6 +4,8 @@ model Employees {
   name                    String                      @db.VarChar(100)
   email                   String                      @db.VarChar(100)
   terminated              Boolean                     @default(false)
+    AssignedNoteTasks       Notes[]                     @relation("NoteTaskAssignee")
+  CompletedNoteTasks      Notes[]                     @relation("NoteTaskCompletedBy")
   ActivityLog             ActivityLog[]
   AuthoredNotes           Notes[]                     @relation("NoteAuthor")
   TaggedInNotes           NoteTaggedUsers[]           @relation("NoteTaggedUser")
