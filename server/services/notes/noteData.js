@@ -192,10 +192,12 @@ export function serializeNote(note, { today = todayIso(), entity } = {}) {
     author_name: note.Author?.name ?? null,
     tagged_users: tagged.map((u) => u.name),
     tagged_user_ids: tagged.map((u) => u.id),
+    tagged_user_emails: tagged.map((u) => u.email ?? null),
     task: note.assignee_id
       ? {
           assignee_id: note.assignee_id,
           assignee_name: note.Assignee?.name ?? null,
+          assignee_email: note.Assignee?.email ?? null,
           due_date: isoDay(note.due_date),
           completed_at: note.completed_at ?? null,
           completed_by: note.completed_by ?? null,
