@@ -7,17 +7,20 @@
 //
 // Two steps:
 //   1. The form: effective date, reason, which sites (and which service lines
-//      at each), back charge, and the sender's title and phone.
+//      at each), whether those lines need sourcing again now, back charge,
+//      and the sender's title and phone.
 //   2. A confirm screen that says exactly what will happen.
 // Sending: PandaDoc notice to the vendor → their assignments close and lines
-// they were primary on are flagged "Resource now" in sourcing → accounting
-// is emailed. See vendorTerminationRoutes.js on the server.
+// they were primary on are flagged "Resource now" in sourcing (only the ones
+// the sender says need it now) → accounting is emailed. See
+// vendorTerminationRoutes.js on the server.
 import axios from "axios";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -83,6 +86,12 @@ export default function TerminationNoticeForm({ vendorId, user, onClose, onIssue
   const [reason, setReason] = useState("");
   const [selectedSites, setSelectedSites] = useState([]);
   const [excluded, setExcluded] = useState(() => new Set()); // assignment ids unticked
+  // Do the lines they were primary on need a new vendor now?
+  //   now    → all flagged "Resource now"
+  //   later  → none flagged (e.g. the season's over)
+  //   choose → by service line
+  const [resourceMode, setResourceMode] = useState("now");
+  const [laterLines, setLaterLines] = useState(() => new Set()); // service line names NOT re-sourced now
   const [backCharge, setBackCharge] = useState(false);
   const [backChargeDetails, setBackChargeDetails] = useState("");
   const [title, setTitle] = useState(() => loadSender().title);
@@ -116,7 +125,21 @@ export default function TerminationNoticeForm({ vendorId, user, onClose, onIssue
   /** The lines that will actually be terminated. */
   const chosen = useMemo(() => chosenLines(selectedSites, excluded), [selectedSites, excluded]);
   const lineIds = chosen.flatMap((s) => s.lines.map((l) => l.assignment_id));
-  const primaryCount = chosen.reduce((n, s) => n + s.lines.filter((l) => l.is_primary).length, 0);
+  const primaryLines = chosen.flatMap((s) => s.lines.filter((l) => l.is_primary));
+  const primaryCount = primaryLines.length;
+  /** Service lines among the primary lines, with how many lines each. */
+  const primaryServiceLines = useMemo(() => {
+    const m = new Map();
+    for (const l of primaryLines) m.set(l.service_line, (m.get(l.service_line) ?? 0) + 1);
+    return [...m].sort((a, b) => a[0].localeCompare(b[0]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [primaryLines.map((l) => l.assignment_id).join(",")]);
+  const canChoose = primaryServiceLines.length > 1;
+  const mode = resourceMode === "choose" && !canChoose ? "now" : resourceMode;
+  const resourceNowIds = primaryLines
+    .filter((l) => mode === "now" || (mode === "choose" && !laterLines.has(l.service_line)))
+    .map((l) => l.assignment_id);
+  const notNowCount = primaryCount - resourceNowIds.length;
   const totalLines = allSites.reduce((n, s) => n + s.lines.length, 0);
   const everything = lineIds.length > 0 && lineIds.length === totalLines;
 
@@ -145,6 +168,7 @@ export default function TerminationNoticeForm({ vendorId, user, onClose, onIssue
         sender_title: title.trim(),
         sender_phone: phone.trim(),
         assignment_ids: lineIds,
+        resource_now_ids: resourceNowIds,
         user_id: user?.id,
       });
       onIssued?.(data);
@@ -252,6 +276,86 @@ export default function TerminationNoticeForm({ vendorId, user, onClose, onIssue
             />
           </Section>
 
+          {primaryCount > 0 && (
+            <FormControl>
+              <FormLabel sx={{ fontSize: "0.85rem" }}>
+                Do {primaryCount === 1 ? "this line" : `these ${primaryCount} lines`} need a new vendor now?
+              </FormLabel>
+              <Typography sx={{ fontSize: "0.72rem", color: "text.secondary", mb: 0.5 }}>
+                The lines {vendor?.company ?? "they"} {primaryCount === 1 ? "was" : "were"} the primary vendor on.
+                Backup lines just close.
+              </Typography>
+              <RadioGroup value={mode} onChange={(e) => setResourceMode(e.target.value)}>
+                <FormControlLabel
+                  value="now"
+                  control={<Radio size="small" />}
+                  label={
+                    <Typography sx={{ fontSize: "0.85rem" }}>
+                      Yes, re-source now{" "}
+                      <Box component="span" sx={{ color: "text.secondary", fontSize: "0.75rem" }}>
+                        · they go to the top of Sourcing as "Resource now"
+                      </Box>
+                    </Typography>
+                  }
+                />
+                <FormControlLabel
+                  value="later"
+                  control={<Radio size="small" />}
+                  label={
+                    <Typography sx={{ fontSize: "0.85rem" }}>
+                      Not now{" "}
+                      <Box component="span" sx={{ color: "text.secondary", fontSize: "0.75rem" }}>
+                        · e.g. the season's over. They're left without a vendor but not flagged.
+                      </Box>
+                    </Typography>
+                  }
+                />
+                {canChoose && (
+                  <FormControlLabel
+                    value="choose"
+                    control={<Radio size="small" />}
+                    label={<Typography sx={{ fontSize: "0.85rem" }}>Some service lines now, some later</Typography>}
+                  />
+                )}
+              </RadioGroup>
+              {mode === "choose" && (
+                <Box sx={{ ml: 3.5, mt: 0.25, display: "flex", flexDirection: "column" }}>
+                  <Typography sx={{ fontSize: "0.72rem", color: "text.secondary" }}>
+                    Tick the service lines to re-source now:
+                  </Typography>
+                  {primaryServiceLines.map(([name, n]) => (
+                    <FormControlLabel
+                      key={name}
+                      sx={{ mr: 0 }}
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={!laterLines.has(name)}
+                          onChange={() =>
+                            setLaterLines((prev) => {
+                              const next = new Set(prev);
+                              next.has(name) ? next.delete(name) : next.add(name);
+                              return next;
+                            })
+                          }
+                          sx={{ p: 0.5 }}
+                        />
+                      }
+                      label={
+                        <Typography sx={{ fontSize: "0.82rem" }}>
+                          {name}{" "}
+                          <Box component="span" sx={{ color: "text.secondary" }}>
+                            ({n} line{n === 1 ? "" : "s"})
+                          </Box>
+                        </Typography>
+                      }
+                    />
+                  ))}
+                </Box>
+              )}
+            </FormControl>
+          )}
+
           <FormControl>
             <FormLabel sx={{ fontSize: "0.85rem" }}>Is there a back charge?</FormLabel>
             <RadioGroup row value={String(backCharge)} onChange={(e) => setBackCharge(e.target.value === "true")}>
@@ -310,12 +414,20 @@ export default function TerminationNoticeForm({ vendorId, user, onClose, onIssue
               {vendor.company} comes off <strong>{lineIds.length} service line{lineIds.length === 1 ? "" : "s"}</strong>{" "}
               at {chosen.length} site{chosen.length === 1 ? "" : "s"} right away.
             </li>
-            {primaryCount > 0 && (
+            {resourceNowIds.length > 0 && (
               <li>
                 <Box component="span" sx={{ color: "error.main", fontWeight: 600 }}>
-                  {primaryCount} line{primaryCount === 1 ? "" : "s"} they were the primary vendor on
-                  {primaryCount === 1 ? " goes" : " go"} to the top of Sourcing as "Resource now".
+                  {resourceNowIds.length} line{resourceNowIds.length === 1 ? "" : "s"} they were the primary vendor on
+                  {resourceNowIds.length === 1 ? " goes" : " go"} to the top of Sourcing as "Resource now".
                 </Box>
+              </li>
+            )}
+            {notNowCount > 0 && (
+              <li>
+                {notNowCount} line{notNowCount === 1 ? "" : "s"} they were primary on{" "}
+                {notNowCount === 1 ? "is" : "are"} <strong>not</strong> flagged for re-sourcing now
+                {mode === "choose" ? ` (${[...laterLines].filter((n) => primaryServiceLines.some(([x]) => x === n)).join(", ")})` : ""}.{" "}
+                {notNowCount === 1 ? "It stays" : "They stay"} on the Sourcing page without a vendor.
               </li>
             )}
             {everything && (
@@ -330,7 +442,16 @@ export default function TerminationNoticeForm({ vendorId, user, onClose, onIssue
           <Box sx={{ maxHeight: 180, overflowY: "auto", pl: 0.5 }}>
             {chosen.map((s) => (
               <Typography key={s.site_id} sx={{ fontSize: "0.78rem", color: "text.secondary" }}>
-                • {s.client} - {s.store}: {s.lines.map((l) => l.service_line).join(", ")}
+                • {s.client} - {s.store}:{" "}
+                {s.lines
+                  .map((l) =>
+                    !l.is_primary
+                      ? `${l.service_line} (backup)`
+                      : resourceNowIds.includes(l.assignment_id)
+                        ? `${l.service_line} (re-source now)`
+                        : `${l.service_line} (not now)`,
+                  )
+                  .join(", ")}
               </Typography>
             ))}
           </Box>

@@ -7,8 +7,11 @@
 // For each assignment:
 //   - it's closed (never deleted), with when, why and which notice
 //   - if the vendor was the PRIMARY on the line, the line is flagged
-//     "Resource now" so it jumps to the top of the Sourcing page. The flag
-//     clears when a primary is put back (see clearResourcingFlag).
+//     "Resource now" so it jumps to the top of the Sourcing page — unless
+//     the caller says that line doesn't need sourcing yet (opts.flagIds).
+//     The flag clears when a primary is put back (see clearResourcingFlag).
+//     An unflagged line still shows on the Sourcing page without a vendor;
+//     it just isn't pushed to the top.
 //
 // Must run inside a transaction: pass the `tx` client.
 
@@ -49,18 +52,24 @@ export function clearResourcingFlag(tx, contractSiteId) {
  * @param opts.noticeId   VendorWarnings id the removal is documented by (optional)
  * @param opts.flagReason text shown on flagged lines in sourcing
  * @param opts.userId     employee doing it
- * @returns { closed, flagged }  counts
+ * @param opts.flagIds    assignment ids whose lines should be flagged
+ *                        "Resource now". Omit to flag every primary line
+ *                        (the old behaviour). Only primaries are ever flagged.
+ * @returns { closed, flagged, not_flagged }  counts; not_flagged = primary
+ *          lines left unflagged by choice
  */
 export async function closeAssignments(
   tx,
   assignments,
-  { reason, notes = null, noticeId = null, flagReason, userId = null },
+  { reason, notes = null, noticeId = null, flagReason, userId = null, flagIds = null },
 ) {
-  if (!assignments.length) return { closed: 0, flagged: 0 };
+  if (!assignments.length) return { closed: 0, flagged: 0, not_flagged: 0 };
+  const shouldFlag = (a) => a.is_primary && (!flagIds || flagIds.has(a.id));
 
   const closedStatus = await statusByCategory(tx, "closed");
   const now = new Date();
   let flagged = 0;
+  let notFlagged = 0;
 
   for (const a of assignments) {
     // Clear primary as part of closing: the unique index allows one primary
@@ -78,7 +87,8 @@ export async function closeAssignments(
       },
     });
 
-    if (a.is_primary) {
+    if (a.is_primary && !shouldFlag(a)) notFlagged += 1;
+    if (shouldFlag(a)) {
       await tx.contractSites.update({
         where: { id: a.contract_site_id },
         data: {
@@ -91,5 +101,5 @@ export async function closeAssignments(
     }
   }
 
-  return { closed: assignments.length, flagged };
+  return { closed: assignments.length, flagged, not_flagged: notFlagged };
 }

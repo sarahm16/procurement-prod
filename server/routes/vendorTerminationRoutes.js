@@ -7,13 +7,20 @@
  *
  *   POST /api/vendors/:id/notices/termination
  *        { effective_date: "YYYY-MM-DD", reason, back_charge, back_charge_details,
- *          sender_title, sender_phone, assignment_ids: [..], user_id }
+ *          sender_title, sender_phone, assignment_ids: [..],
+ *          resource_now_ids: [..] (optional), user_id }
+ *
+ *        resource_now_ids: which of the terminated lines need sourcing again
+ *        now. Lines the vendor was primary on that aren't listed are closed
+ *        but not flagged "Resource now" (e.g. a season that's over). Leave
+ *        it out to flag every primary line.
  *
  * Sending, in order:
  *   1. The PandaDoc notice goes to the vendor (from the sender's PandaDoc).
  *   2. One transaction: the notice is recorded in VendorWarnings; the
  *      assignments close ("Terminated", linked to the notice); every line the
- *      vendor was primary on is flagged "Resource now" in sourcing; if that
+ *      vendor was primary on is flagged "Resource now" in sourcing (unless
+ *      the sender said it doesn't need sourcing yet); if that
  *      was every line they had, the vendor's status becomes Terminated.
  *   3. Accounting gets the termination email so they stop paying the vendor.
  *      A mail failure is reported back but doesn't undo anything.
@@ -77,6 +84,10 @@ export function registerTerminationRoutes(router, prisma) {
     const senderTitle = clean(b.sender_title);
     const senderPhone = clean(b.sender_phone);
     const ids = [...new Set((b.assignment_ids ?? []).map(Number))].filter(Number.isInteger);
+    // null → flag every primary line, as before.
+    const resourceNow = Array.isArray(b.resource_now_ids)
+      ? new Set(b.resource_now_ids.map(Number).filter(Number.isInteger))
+      : null;
 
     // ── Check the form ──
     const problems = [];
@@ -93,6 +104,9 @@ export function registerTerminationRoutes(router, prisma) {
     if (!ids.length) problems.push("at least one service line");
     if (problems.length) {
       return res.status(400).json({ error: `Missing ${problems.join(", ")}` });
+    }
+    if (resourceNow && [...resourceNow].some((x) => !ids.includes(x))) {
+      return res.status(400).json({ error: "A line marked for re-sourcing isn't one of the lines being terminated" });
     }
     if ([reason, backChargeDetails].some((t) => t.length > TEXT_MAX)) {
       return res.status(400).json({ error: `Keep the reason and back charge under ${TEXT_MAX} characters` });
@@ -168,12 +182,13 @@ export function registerTerminationRoutes(router, prisma) {
             include: { SentBy: { select: { id: true, name: true } } },
           });
 
-          const { closed, flagged } = await closeAssignments(tx, assignments, {
+          const { closed, flagged, not_flagged } = await closeAssignments(tx, assignments, {
             reason: "Terminated",
             notes: reason,
             noticeId: record.id,
             flagReason: `${vendor.company} terminated: ${reason}`,
             userId,
+            flagIds: resourceNow,
           });
 
           // Every line gone → the vendor is terminated.
@@ -199,15 +214,24 @@ export function registerTerminationRoutes(router, prisma) {
             newValue: `Sent termination notice: ${lineCount} service line${lineCount === 1 ? "" : "s"} at ${
               sites.length
             } site${sites.length === 1 ? "" : "s"}, effective ${effective}${
-              remaining === 0 && terminatedStatus ? ". Vendor terminated" : ""
-            }`,
+              not_flagged ? `. ${not_flagged} not re-sourcing yet` : ""
+            }${remaining === 0 && terminatedStatus ? ". Vendor terminated" : ""}`.slice(0, 255),
             changedBy: userId,
             action: "CREATE",
           });
+          const assignmentById = new Map(assignments.map((a) => [a.id, a]));
           for (const s of sites) {
-            const text = `${vendor.company} terminated from ${s.lines
-              .map((l) => l.service_line)
-              .join(", ")} (notice sent, effective ${effective})`;
+            // Say per line whether it's being re-sourced now.
+            const lineText = s.lines
+              .map((l) => {
+                const a = assignmentById.get(l.assignment_id);
+                if (!a?.is_primary) return `${l.service_line} (backup)`;
+                return !resourceNow || resourceNow.has(a.id)
+                  ? `${l.service_line} (re-source now)`
+                  : `${l.service_line} (not re-sourcing yet)`;
+              })
+              .join(", ");
+            const text = `${vendor.company} terminated from ${lineText}; notice sent, effective ${effective}`;
             await logActivity(tx, {
               entityTypeId: SITE_ENTITY_TYPE_ID,
               entityId: s.site_id,
@@ -223,6 +247,7 @@ export function registerTerminationRoutes(router, prisma) {
             record,
             closed,
             flagged,
+            not_flagged,
             vendor_terminated: remaining === 0 && Boolean(terminatedStatus),
           };
         });
@@ -253,6 +278,7 @@ export function registerTerminationRoutes(router, prisma) {
         recipient: sent.recipient,
         closed: result.closed,
         flagged: result.flagged,
+        not_flagged: result.not_flagged,
         vendor_terminated: result.vendor_terminated,
         email,
       });
