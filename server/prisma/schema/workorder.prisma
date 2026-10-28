@@ -127,3 +127,4 @@ model WorkOrderCommunications {
 
   @@index([work_order_id, channel])
 }
+

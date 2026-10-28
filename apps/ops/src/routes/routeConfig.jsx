@@ -8,6 +8,7 @@ import Workorders from "../pages/workorders/Workorders";
 import Dashboard from "../pages/dashboard/Dashboard";
 import Admin from "../pages/admin/Admin";
 import Sourcing from "../pages/sourcing/Sourcing";
+import Reports from "../pages/reports/Reports";
 
 // Detail Pages
 import ClientDetail from "../pages/client-detail/ClientDetail";
@@ -121,6 +122,13 @@ const routesConfig = [
     path: "/admin",
     element: <Admin />,
     icon: <AdminPanelSettingsIcon />,
+    showInLayout: true,
+  },
+  {
+    title: "Reports",
+    path: "/reports",
+    element: <Reports />,
+    icon: <AssignmentIcon />,
     showInLayout: true,
   },
 ];

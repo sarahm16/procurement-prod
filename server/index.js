@@ -37,6 +37,7 @@ import clientPortalAuthRouter from "./routes/clientPortal/auth.js";
 import quickbooksRouter from "./routes/quickbooks.js";
 import textRequestRouter from "./routes/textRequest.js";
 import dashboardRouter from "./routes/dashboard.js";
+import reportsRouter from "./routes/reports.js";
 
 import prisma from "./db.js";
 
@@ -88,6 +89,7 @@ app.use("/api/client-portal/auth", clientPortalAuthRouter(prisma));
 app.use("/api/quickbooks", quickbooksRouter(prisma));
 app.use("/api/text-request", textRequestRouter(prisma));
 app.use("/api/dashboard", dashboardRouter(prisma));
+app.use("/api/reports", reportsRouter(prisma));
 
 // Catch-all LAST — hands everything else to React Router
 // app.get("/*splat", (req, res) => {
