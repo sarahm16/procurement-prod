@@ -13,6 +13,7 @@ import {
   useSiteNotes,
   useSiteActivity,
 } from "./SiteDetailProvider";
+import useAuthenticatedUser from "../../*/hooks/useAuthenticatedUser";
 
 // Tabs
 import SiteDetailsTab from "./tabs/SiteDetailsTab/SiteDetailsTab";
@@ -80,6 +81,7 @@ function SiteDetailLayout() {
   const details = useSiteDetails();
   const notes = useSiteNotes();
   const activity = useSiteActivity();
+  const { user } = useAuthenticatedUser();
 
   return (
     <DetailPageLayout
@@ -127,7 +129,7 @@ function SiteDetailLayout() {
         { label: "Attachments", content: <SiteAttachmentsTab /> },
         {
           label: "Sourcing",
-          content: <SiteSourcingTab siteId={id} />,
+          content: <SiteSourcingTab siteId={id} userId={user?.id} />,
         },
         {
           label: "Activity",
