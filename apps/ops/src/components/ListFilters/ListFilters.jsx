@@ -6,6 +6,7 @@
 //   <FilterPanel>            the outlined panel
 //   <ChipRow>                a labelled row of toggle chips with counts
 //   <PeopleFilter>           avatar button → checklist of people
+//   <OptionsFilter>          button → searchable checklist (clients, states…)
 //   <ClearFiltersButton>     "Clear filters (3)"
 //
 // and the logic that goes with them:
@@ -29,7 +30,9 @@ import {
   ListItemText,
   Menu,
   MenuItem,
+  InputAdornment,
   Paper,
+  TextField,
   Tooltip,
   Typography,
   alpha,
@@ -38,6 +41,7 @@ import {
 import FilterAltOffOutlinedIcon from "@mui/icons-material/FilterAltOffOutlined";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import PersonOffOutlinedIcon from "@mui/icons-material/PersonOffOutlined";
+import SearchIcon from "@mui/icons-material/Search";
 
 export const NOBODY = "__none__";
 const FALLBACK = "#6b7280";
@@ -346,6 +350,112 @@ export function PeopleFilter({ options, selected, onChange, me, noun = { one: "p
             {cap(noun.many)} are set on each record's team.
           </Typography>
         )}
+      </Menu>
+    </>
+  );
+}
+
+/* ── searchable checklist ─────────────────────────────────────────────── */
+
+/**
+ * For long lists that would be too many chips (clients, states).
+ *   options: [{ value, label, count }]
+ *   noun: { one: "client", many: "clients" }
+ * The search box appears once there are more than 8 options.
+ */
+export function OptionsFilter({ options, selected, onChange, noun, width = 300 }) {
+  const [anchor, setAnchor] = useState(null);
+  const [q, setQ] = useState("");
+  const theme = useTheme();
+  const active = selected.length > 0;
+  const byValue = new Map(options.map((o) => [o.value, o]));
+  const searchable = options.length > 8;
+  const query = q.trim().toLowerCase();
+  // Picked ones first, so they're easy to untick.
+  const shown = options
+    .filter((o) => !query || String(o.label).toLowerCase().includes(query))
+    .sort((a, b) => Number(selected.includes(b.value)) - Number(selected.includes(a.value)));
+
+  const label = !active
+    ? `All ${noun.many}`
+    : selected.length === 1
+      ? (byValue.get(selected[0])?.label ?? `1 ${noun.one}`)
+      : `${selected.length} ${noun.many}`;
+
+  return (
+    <>
+      <Button
+        size="small"
+        variant="outlined"
+        color={active ? "primary" : "inherit"}
+        onClick={(e) => setAnchor(e.currentTarget)}
+        endIcon={<KeyboardArrowDownIcon />}
+        sx={{
+          height: 32,
+          maxWidth: 220,
+          textTransform: "none",
+          fontWeight: 600,
+          whiteSpace: "nowrap",
+          borderColor: active ? undefined : theme.palette.divider,
+          color: active ? undefined : "text.secondary",
+          bgcolor: active ? alpha(theme.palette.primary.main, 0.06) : undefined,
+          "& .label": { overflow: "hidden", textOverflow: "ellipsis" },
+        }}
+      >
+        <span className="label">{label}</span>
+      </Button>
+      <Menu
+        anchorEl={anchor}
+        open={Boolean(anchor)}
+        onClose={() => {
+          setAnchor(null);
+          setQ("");
+        }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        slotProps={{ paper: { sx: { width, maxHeight: 460 } } }}
+        MenuListProps={{ dense: true, autoFocusItem: !searchable }}
+      >
+        {searchable && (
+          <Box sx={{ px: 1.5, pt: 0.5, pb: 1 }} onKeyDown={(e) => e.stopPropagation()}>
+            <TextField
+              size="small"
+              fullWidth
+              autoFocus
+              placeholder={`Find a ${noun.one}…`}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ fontSize: 18 }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ "& .MuiInputBase-root": { fontSize: "0.82rem" } }}
+            />
+          </Box>
+        )}
+        <MenuItem onClick={() => onChange([])} selected={!active} sx={{ fontWeight: 600 }}>
+          All {noun.many}
+        </MenuItem>
+        <Divider />
+        {shown.length === 0 && (
+          <MenuItem disabled sx={{ fontSize: "0.8rem" }}>
+            No {noun.many} match "{q}"
+          </MenuItem>
+        )}
+        {shown.map((o) => (
+          <MenuItem key={o.value} onClick={() => onChange(toggle(selected, o.value))} sx={{ opacity: o.count === 0 && !selected.includes(o.value) ? 0.5 : 1 }}>
+            <Checkbox size="small" edge="start" checked={selected.includes(o.value)} sx={{ p: 0.5, mr: 1 }} />
+            <ListItemText primary={o.label} primaryTypographyProps={{ fontSize: "0.82rem", noWrap: true }} />
+            <Typography
+              sx={{ ml: 2, fontSize: "0.72rem", fontWeight: 700, color: "text.secondary", fontVariantNumeric: "tabular-nums" }}
+            >
+              {o.count}
+            </Typography>
+          </MenuItem>
+        ))}
       </Menu>
     </>
   );
