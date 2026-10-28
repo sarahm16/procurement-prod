@@ -160,7 +160,14 @@ export function FilterChip({ label, color = FALLBACK, icon: Icon, count, selecte
       )}
     </ButtonBase>
   );
-  return title ? <Tooltip title={title}>{chip}</Tooltip> : chip;
+  // describeChild: the tooltip describes the chip; it doesn't replace its name.
+  return title ? (
+    <Tooltip title={title} describeChild>
+      {chip}
+    </Tooltip>
+  ) : (
+    chip
+  );
 }
 
 const RowLabel = ({ children, width }) => (
