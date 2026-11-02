@@ -58,6 +58,7 @@ WITH base AS (
 
         cs.resource_needed_at,
         cs.resource_reason,
+        cs.self_perform,
 
         a.id                    AS assignment_id,
         a.status_id             AS assignment_status_id,
@@ -199,8 +200,9 @@ SELECT
 
     -- Flagged to resource immediately, and still no primary on the line.
     CAST(CASE WHEN b.resource_needed_at IS NOT NULL
-               AND b.primary_count = 0
-         THEN 1 ELSE 0 END AS BIT)                      AS needs_resourcing,
+            AND b.primary_count = 0
+            AND b.self_perform = 0
+      THEN 1 ELSE 0 END AS BIT)                      AS needs_resourcing,
 
     -- The grid's only status: everything done, or not.
     CAST(CASE WHEN b.vendor_id IS NOT NULL

@@ -5,6 +5,7 @@ import { registerPricingRoutes } from "./sourcingPricingRoutes.js";
 import { registerReplaceRoute } from "./sourcingReplaceRoute.js";
 import { registerAssignRoute } from "./sourcingAssignRoute.js";
 import { registerResourcingFlagRoute } from "./sourcingFlagRoute.js";
+import { registerSelfPerformRoute } from "./sourcingSelfPerformRoute.js";
 import registerSiteSourcingRoute from "./sourcingSiteRoute.js";
 import registerVendorSitesRoute from "./sourcingVendorRoute.js";
 import registerVendorWorkOrdersRoute from "./vendorWorkordersRoute.js";
@@ -104,6 +105,9 @@ const serializeGridRow = (r) => ({
   resource_needed_at: r.needs_resourcing ? r.resource_needed_at : null,
   resource_reason: r.needs_resourcing ? r.resource_reason : null,
   backup_vendor_count: r.backup_vendor_count,
+
+  // Our own crews do this line: it needs no vendor.
+  self_perform: Boolean(r.self_perform),
 });
 
 // Accepts ?service_line_id=1&service_line_id=2 or ?service_line_id=1,2
@@ -121,6 +125,7 @@ export default function sourcingRouter(prisma) {
   registerReplaceRoute(router, prisma, serializeGridRow);
   registerAssignRoute(router, prisma, serializeGridRow);
   registerResourcingFlagRoute(router, prisma, serializeGridRow);
+  registerSelfPerformRoute(router, prisma, serializeGridRow);
 
   // GET /api/sourcing
   //   ?q=              free text over site, client, vendor
@@ -146,7 +151,9 @@ export default function sourcingRouter(prisma) {
     const take = Math.min(Math.max(Number(limit) || 100, 1), 500);
     const skip = (Math.max(Number(page) || 1, 1) - 1) * take;
 
-    const AND = [];
+    // Self-performed lines need no vendor, so the sourcing grid never shows
+    // them. The site's Sourcing tab still does (GET /sites/:siteId).
+    const AND = [{ self_perform: false }];
 
     if (q && String(q).trim()) {
       const term = String(q).trim();
@@ -190,7 +197,7 @@ export default function sourcingRouter(prisma) {
     if (field !== "store") orderBy.push({ store: "asc" });
     orderBy.push({ service_line: "asc" });
 
-    const where = AND.length ? { AND } : {};
+    const where = { AND };
 
     try {
       const [rows, total, urgent] = await Promise.all([
@@ -198,7 +205,7 @@ export default function sourcingRouter(prisma) {
         prisma.sourcingGrid.count({ where }),
         // For the "Resource now" button: every flagged line, whatever the
         // other filters, so it can't hide behind one.
-        prisma.sourcingGrid.count({ where: { needs_resourcing: true } }),
+        prisma.sourcingGrid.count({ where: { needs_resourcing: true, self_perform: false } }),
       ]);
 
       res.json({

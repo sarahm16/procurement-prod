@@ -39,7 +39,7 @@ import {
   money,
   percent,
 } from "./reportUi";
-import { TypeScorecard } from "./TypeSections";
+import { PillarCards, PmTable, isPmPillar, isWoPillar, pillarLabel } from "./PillarSections";
 
 const Grid = ({ children, cols = { xs: "1fr", lg: "1fr 1fr" } }) => (
   <Box sx={{ display: "grid", gridTemplateColumns: cols, gap: 2, alignItems: "start" }}>{children}</Box>
@@ -54,6 +54,19 @@ const Sub = ({ children }) => (
     {children}
   </Box>
 );
+
+/** Planned Maintenance work orders aren't in this app. */
+export function ElsewhereNote({ what = "work order data" }) {
+  return (
+    <Alert severity="info" sx={{ mb: 2, fontFamily: FONT }}>
+      Planned Maintenance work orders run in UtilizeCore, so there's no {what} for it here. Its sourcing, vendors and
+      pricing are on the Overview, Pillars and Sourcing tabs.
+    </Alert>
+  );
+}
+
+/** What a scoped report is limited to: a type, else a pillar. */
+const scopeName = (data) => data.type || (isWoPillar(data.pillar) ? pillarLabel(data.pillar) : "");
 
 /* ═══ Sourcing ═══════════════════════════════════════════════════════ */
 
@@ -91,7 +104,7 @@ export function SourcingByServiceLine({ sourcing, compact }) {
   return (
     <Panel
       title="Sourcing by service line"
-      subtitle="Active lines are running now; upcoming lines start later. Counts are contract site lines."
+      subtitle="Active lines are running now; upcoming lines start later. Counts are contract site lines; self-performed lines need no vendor and are counted on their own."
       action={!compact && <Legend items={SOURCING_LEGEND} />}
     >
       <Box sx={{ px: 2, pb: 1.5 }}>
@@ -105,6 +118,11 @@ export function SourcingByServiceLine({ sourcing, compact }) {
           <Box key={sl.service_line} sx={{ py: 1, borderTop: `1px solid ${theme.palette.divider}`, "&:first-of-type": { borderTop: 0 } }}>
             <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mb: 0.25 }}>
               <Typography sx={{ fontFamily: FONT, fontWeight: 700, fontSize: "0.86rem" }}>{sl.service_line}</Typography>
+              {sl.self_performed > 0 && (
+                <Typography sx={{ fontFamily: FONT, fontSize: "0.72rem", color: "text.secondary" }}>
+                  + {count(sl.self_performed)} self-performed
+                </Typography>
+              )}
               {sl.upcoming.starting_soon_unsourced > 0 && (
                 <Typography sx={{ fontFamily: FONT, fontSize: "0.72rem", color: "error.main", fontWeight: 600 }}>
                   {sl.upcoming.starting_soon_unsourced} start within 30 days without a sourced vendor
@@ -124,8 +142,32 @@ export function SourcingSection({ data }) {
   const navigate = useNavigate();
   const s = data.sourcing;
   const up = s.totals.upcoming;
+  const self = s.totals.self_performed ?? { active: 0, upcoming: 0 };
+  if (data.pillar === "pm_self") {
+    return (
+      <>
+        <Alert severity="info" sx={{ mb: 2, fontFamily: FONT }}>
+          Self-performed lines are done by our crews, so there's nothing to source. Pick Subcontracted or all of Planned
+          Maintenance to see sourcing.
+        </Alert>
+        <KpiRow>
+          <Kpi label="Self-performed lines" value={count(self.active + self.upcoming)} hint="Snow and landscaping, now" />
+          <Kpi label="Active" value={count(self.active)} />
+          <Kpi label="Upcoming" value={count(self.upcoming)} />
+        </KpiRow>
+        <Panel title="Planned Maintenance by service line" subtitle="Every snow and landscaping line, now.">
+          <PmTable pm={data.pillars.planned_maintenance} />
+        </Panel>
+      </>
+    );
+  }
   return (
     <>
+      {isWoPillar(data.pillar) && (
+        <Alert severity="info" sx={{ mb: 2, fontFamily: FONT }}>
+          Sourcing is for contract lines (Planned Maintenance), so it isn't limited to {pillarLabel(data.pillar)}.
+        </Alert>
+      )}
       <KpiRow>
         <Kpi label="Upcoming lines sourced" value={percent(up.sourced_pct)} hint={`${count(up.sourced)} of ${count(up.total)} lines`} />
         <Kpi
@@ -141,6 +183,7 @@ export function SourcingSection({ data }) {
           value={count(s.totals.active.needs_resourcing + up.needs_resourcing)}
           hint="Lost their primary vendor"
         />
+        <Kpi label="Self-performed" value={count(self.active + self.upcoming)} hint="Lines our crews do · no vendor needed" />
       </KpiRow>
       <Stack>
         <SourcingByServiceLine sourcing={s} />
@@ -253,10 +296,40 @@ const moneyColumns = (first, { bar, max } = {}) => [
   { key: "margin_pct", label: "Margin", align: "right", render: (r) => <MarginValue value={r.margin_pct} /> },
 ];
 
+function ContractLineMargin({ m }) {
+  return (
+    <Panel
+      title="Projected margin on contract lines"
+      subtitle="From client and vendor pricing on subcontracted contract site lines that have both. Doesn't follow the date range."
+    >
+      <DataTable
+        rowKey={(r) => r.service_line}
+        columns={[
+          { key: "service_line", label: "Service line" },
+          { key: "active_lines", label: "Active lines priced", align: "right", sort: (r) => r.active.lines, render: (r) => count(r.active.lines) },
+          { key: "active_margin", label: "Active margin", align: "right", sort: (r) => r.active.margin_pct, render: (r) => <MarginValue value={r.active.margin_pct} /> },
+          { key: "upcoming_lines", label: "Upcoming lines priced", align: "right", sort: (r) => r.upcoming.lines, render: (r) => count(r.upcoming.lines) },
+          { key: "upcoming_margin", label: "Upcoming margin", align: "right", sort: (r) => r.upcoming.margin_pct, render: (r) => <MarginValue value={r.upcoming.margin_pct} /> },
+        ]}
+        rows={m.contract_lines}
+      />
+      {m.contract_lines.length === 0 && <Muted>No contract lines have both prices yet.</Muted>}
+    </Panel>
+  );
+}
+
 export function MarginSection({ data }) {
   const m = data.margin;
   const t = m.totals;
   const clientMax = Math.max(0, ...m.by_client.map((c) => c.revenue));
+  if (data.work_orders_elsewhere) {
+    return (
+      <>
+        <ElsewhereNote what="work order margin" />
+        <ContractLineMargin m={m} />
+      </>
+    );
+  }
   return (
     <>
       <KpiRow>
@@ -302,23 +375,7 @@ export function MarginSection({ data }) {
             {m.by_client.length === 0 && <Muted>No priced work orders in this range.</Muted>}
           </Panel>
         </Grid>
-        <Panel
-          title="Projected margin on contract lines"
-          subtitle="From client and vendor pricing on contract site lines that have both. Doesn't follow the date range."
-        >
-          <DataTable
-            rowKey={(r) => r.service_line}
-            columns={[
-              { key: "service_line", label: "Service line" },
-              { key: "active_lines", label: "Active lines priced", align: "right", sort: (r) => r.active.lines, render: (r) => count(r.active.lines) },
-              { key: "active_margin", label: "Active margin", align: "right", sort: (r) => r.active.margin_pct, render: (r) => <MarginValue value={r.active.margin_pct} /> },
-              { key: "upcoming_lines", label: "Upcoming lines priced", align: "right", sort: (r) => r.upcoming.lines, render: (r) => count(r.upcoming.lines) },
-              { key: "upcoming_margin", label: "Upcoming margin", align: "right", sort: (r) => r.upcoming.margin_pct, render: (r) => <MarginValue value={r.upcoming.margin_pct} /> },
-            ]}
-            rows={m.contract_lines}
-          />
-          {m.contract_lines.length === 0 && <Muted>No contract lines have both prices yet.</Muted>}
-        </Panel>
+        <ContractLineMargin m={m} />
       </Stack>
     </>
   );
@@ -550,7 +607,7 @@ export function FinanceSection({ data }) {
 
 /* ═══ Workload (loads its own data) ══════════════════════════════════ */
 
-export function WorkloadSection({ type }) {
+export function WorkloadSection({ type, pillar }) {
   const [roleId, setRoleId] = useState("");
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -559,7 +616,9 @@ export function WorkloadSection({ type }) {
     let live = true;
     setError("");
     axios
-      .get("/api/reports/workload", { params: { ...(roleId && { role_id: roleId }), ...(type && { type }) } })
+      .get("/api/reports/workload", {
+        params: { ...(roleId && { role_id: roleId }), ...(pillar && { pillar }), ...(type && { type }) },
+      })
       .then(({ data: d }) => live && setData(d))
       .catch((e) => {
         console.error("Error loading workload:", e);
@@ -568,8 +627,9 @@ export function WorkloadSection({ type }) {
     return () => {
       live = false;
     };
-  }, [roleId, type]);
+  }, [roleId, type, pillar]);
 
+  if (isPmPillar(pillar)) return <ElsewhereNote what="work order workload" />;
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!data) {
     return (
@@ -646,8 +706,8 @@ export function WorkloadSection({ type }) {
       <Panel
         title="Workload by person"
         subtitle={
-          type
-            ? `Open ${type} work orders each person is on the team for. Task counts are all of a person's tasks. This is now, not the date range.`
+          type || pillar
+            ? `Open ${type || pillarLabel(pillar)} work orders each person is on the team for. Task counts are all of a person's tasks. This is now, not the date range.`
             : "Open ops work orders each person is on the team for, and the tasks assigned to them. This is now, not the date range."
         }
         action={
@@ -699,10 +759,11 @@ export function WorkloadSection({ type }) {
 
 /* ═══ Overview ═══════════════════════════════════════════════════════ */
 
-export function OverviewSection({ data, onOpen, onSelectType }) {
+export function OverviewSection({ data, onOpen, onSelectPillar }) {
   const m = data.margin.totals;
   const f = data.fulfillment.totals;
   const up = data.sourcing.totals.upcoming;
+  const scope = scopeName(data);
   const link = (tab, text) => (
     <Typography
       component="button"
@@ -712,6 +773,9 @@ export function OverviewSection({ data, onOpen, onSelectType }) {
       {text} →
     </Typography>
   );
+
+  if (data.work_orders_elsewhere) return <PmOverview data={data} link={link} />;
+
   return (
     <>
       <KpiRow>
@@ -727,7 +791,7 @@ export function OverviewSection({ data, onOpen, onSelectType }) {
         <Kpi
           label="Upcoming lines sourced"
           value={percent(up.sourced_pct)}
-          hint={`${count(up.total - up.sourced)} still to source${data.type ? " · all types" : ""}`}
+          hint={`${count(up.total - up.sourced)} still to source${scope ? " · Planned Maintenance" : ""}`}
         >
           {link("sourcing", "Sourcing")}
         </Kpi>
@@ -736,11 +800,11 @@ export function OverviewSection({ data, onOpen, onSelectType }) {
         </Kpi>
       </KpiRow>
       <Grid>
-        {data.type ? (
-          <Panel title={`${data.type} revenue by month`} subtitle="Client price on work orders due that month, cancelled left out.">
+        {scope ? (
+          <Panel title={`${scope} revenue by month`} subtitle="Client price on work orders due that month, cancelled left out.">
             <Box sx={{ px: 1, pb: 1 }}>
               <ColumnChart
-                ariaLabel={`${data.type} revenue by month`}
+                ariaLabel={`${scope} revenue by month`}
                 height={220}
                 format={(v) => money(v, { compact: true })}
                 data={data.margin.by_month.map((x) => ({ key: x.key, label: fmtMonth(x.key), value: x.revenue, tip: monthTip(x) }))}
@@ -750,22 +814,64 @@ export function OverviewSection({ data, onOpen, onSelectType }) {
         ) : (
           <SourcingByServiceLine sourcing={data.sourcing} compact />
         )}
-        <Panel title={data.type ? `${data.type} margin by month` : "Work order margin by month"} subtitle="By due date">
+        <Panel title={scope ? `${scope} margin by month` : "Work order margin by month"} subtitle="By due date">
           <Box sx={{ px: 1, pb: 1 }}>
             <MarginTrend margin={data.margin} height={220} />
           </Box>
         </Panel>
       </Grid>
-      {!data.type && data.type_scorecard.length > 0 && (
+      {!data.pillar && !data.type && (
         <Panel
-          title="By work order type"
-          subtitle="Click a type to see the whole report for it."
-          action={link("types", "More detail")}
+          title="By pillar"
+          subtitle="Planned Maintenance is sourcing and pricing now; On Demand and Projects are work orders due in the date range. Click a pillar to see the whole report for it."
+          action={link("pillars", "More detail")}
           sx={{ mt: 2 }}
         >
-          <TypeScorecard data={data} compact onSelect={onSelectType} />
+          <Box sx={{ px: 2, pb: 2 }}>
+            <PillarCards data={data} onSelect={onSelectPillar} />
+          </Box>
         </Panel>
       )}
+    </>
+  );
+}
+
+/** Overview for Planned Maintenance (or one of its slices): sourcing and pricing. */
+function PmOverview({ data, link }) {
+  const s = data.sourcing.totals;
+  const up = s.upcoming;
+  const self = s.self_performed ?? { active: 0, upcoming: 0 };
+  const pm = data.pillars.planned_maintenance;
+  const selfOnly = data.pillar === "pm_self";
+  return (
+    <>
+      <ElsewhereNote />
+      <KpiRow>
+        {!selfOnly && (
+          <>
+            <Kpi label="Upcoming lines sourced" value={percent(up.sourced_pct)} hint={`${count(up.total - up.sourced)} still to source`}>
+              {link("sourcing", "Sourcing")}
+            </Kpi>
+            <Kpi
+              label="Starting in 30 days"
+              value={count(up.starting_soon_unsourced)}
+              accent={up.starting_soon_unsourced ? STATUS.critical : undefined}
+              hint="Upcoming lines not yet sourced"
+            />
+            <Kpi label="Need resourcing" value={count(s.active.needs_resourcing + up.needs_resourcing)} hint="Lost their primary vendor" />
+            <Kpi label="Projected margin" value={<MarginValue value={pm.subcontracted.margin_pct} size="2rem" />} hint={`${count(pm.subcontracted.priced_lines)} priced subcontracted lines`}>
+              {link("margin", "Margin")}
+            </Kpi>
+          </>
+        )}
+        <Kpi label="Self-performed lines" value={count(self.active + self.upcoming)} hint={`${count(pm.self_performed.sites)} sites · our crews`} />
+      </KpiRow>
+      <Stack>
+        <Panel title="Subcontracted and self-performed" subtitle="Every snow and landscaping line, now. Margin is projected from client and vendor pricing.">
+          <PmTable pm={pm} />
+        </Panel>
+        <SourcingByServiceLine sourcing={data.sourcing} />
+      </Stack>
     </>
   );
 }

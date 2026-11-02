@@ -23,6 +23,8 @@ view SourcingGrid {
   service_line_id         Int
   service_line            String
 
+    self_perform     Boolean
+
   /// One row per ContractSite. The assignment, vendor and progress columns
   /// describe the primary vendor (or the newest live one if none is marked).
   /// Backups are counted here and listed in full by SourcingGridVendors.

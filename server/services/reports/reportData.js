@@ -17,7 +17,13 @@
 //   margin %        (revenue − cost) / revenue, priced work orders only,
 //                   cancelled ones left out
 //   sandbox sites   left out everywhere
+//   pillar          Planned Maintenance (snow and landscaping contract lines,
+//                   subcontracted or self-performed), On Demand (every work
+//                   order type but Project) or Projects. See pillars.js.
+//   self-performed  contract lines our own crews do (ContractSites.self_perform);
+//                   they need no vendor, so they're left out of sourcing counts
 import { todayIso } from "../notes/noteData.js";
+import { isPmFilter, isPmServiceLine, lineMatchesFilter, woMatchesFilter, woPillar } from "./pillars.js";
 
 const WORK_ORDER_TYPE_ID = 4;
 export const DONE_STATUS = "Completed";
@@ -66,6 +72,7 @@ function shape(w, today) {
     label: `WO ${w.work_order_number}`,
     path: `/workorders/${w.id}`,
     type: w.type || "Unspecified",
+    pillar: woPillar(w.type),
     phase: w.phase ?? "ops",
     status,
     status_id: w.Status?.id ?? null,
@@ -191,7 +198,7 @@ function margin(wos, from, to, sourcing) {
 
   // Projected margin on contract lines, from the sourcing view's price totals.
   const lines = groupBy(
-    sourcing.filter((r) => num(r.client_price_total) > 0 && num(r.vendor_price_total) > 0),
+    sourcing.filter((r) => !r.self_perform && num(r.client_price_total) > 0 && num(r.vendor_price_total) > 0),
     (r) => r.service_line,
   );
   const contractLines = [...lines]
@@ -265,7 +272,10 @@ function fulfillment(wos, history) {
 
 /* ── Sourcing ───────────────────────────────────────────────────────── */
 
-function sourcingReport(rows, today) {
+function sourcingReport(allRows, today) {
+  // Self-performed lines need no vendor: counted on their own, not sourced.
+  const rows = allRows.filter((r) => !r.self_perform);
+  const selfRows = allRows.filter((r) => r.self_perform);
   const soon = addDays(today, 30);
   const stage = (r) => (r.is_sourced ? "sourced" : r.assignment_id ? "in_progress" : "no_vendor");
   const count = (rs) => {
@@ -281,14 +291,23 @@ function sourcingReport(rows, today) {
     return c;
   };
 
-  const bySl = groupBy(rows, (r) => r.service_line);
+  // Grouped over every line so a service line our crews do entirely still
+  // shows up (with its self-performed count).
+  const bySl = groupBy(allRows, (r) => r.service_line);
   const serviceLines = [...bySl]
-    .map(([service_line, rs]) => ({
-      service_line,
-      active: count(rs.filter((r) => r.line_status === "active")),
-      upcoming: count(rs.filter((r) => r.line_status === "upcoming")),
-    }))
-    .sort((a, b) => b.upcoming.total + b.active.total - (a.upcoming.total + a.active.total));
+    .map(([service_line, all]) => {
+      const rs = all.filter((r) => !r.self_perform);
+      return {
+        service_line,
+        active: count(rs.filter((r) => r.line_status === "active")),
+        upcoming: count(rs.filter((r) => r.line_status === "upcoming")),
+        self_performed: all.length - rs.length,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.upcoming.total + b.active.total + b.self_performed - (a.upcoming.total + a.active.total + a.self_performed),
+    );
 
   const unsourcedUpcoming = rows.filter((r) => r.line_status === "upcoming" && !r.is_sourced);
   const byClient = [...groupBy(unsourcedUpcoming, (r) => r.client ?? "No client")]
@@ -317,6 +336,10 @@ function sourcingReport(rows, today) {
     totals: {
       active: count(rows.filter((r) => r.line_status === "active")),
       upcoming: count(rows.filter((r) => r.line_status === "upcoming")),
+      self_performed: {
+        active: selfRows.filter((r) => r.line_status === "active").length,
+        upcoming: selfRows.filter((r) => r.line_status === "upcoming").length,
+      },
     },
     service_lines: serviceLines,
     unsourced_by_client: byClient,
@@ -465,15 +488,22 @@ function financeReport({ statuses, open }) {
  *   finance   finance pipeline right now
  */
 function typeScorecard({ inRangeWos, history, opsNow, finance, types, from, to }) {
+  return woScorecard({ keyOf: (w) => w.type, names: types, inRangeWos, history, opsNow, finance, from, to }).sort(
+    (a, b) => b.revenue - a.revenue || b.open_now - a.open_now || a.type.localeCompare(b.type),
+  );
+}
+
+/** Scorecard rows grouped by any key (type, pillar). Each row's key is in `type`. */
+function woScorecard({ keyOf, names: known, inRangeWos, history, opsNow, finance, from, to, extraNames = true }) {
   const months = monthsBetween(from, to);
-  const range = groupBy(inRangeWos, (w) => w.type);
+  const range = groupBy(inRangeWos, keyOf);
   const open = groupBy(
     opsNow.filter((w) => w.state === "open"),
-    (w) => w.type,
+    keyOf,
   );
-  const fin = groupBy(finance.open, (w) => w.type);
+  const fin = groupBy(finance.open, keyOf);
 
-  const names = [...new Set([...types, ...range.keys(), ...open.keys(), ...fin.keys()])];
+  const names = extraNames ? [...new Set([...known, ...range.keys(), ...open.keys(), ...fin.keys()])] : known;
   return names
     .map((type) => {
       const list = range.get(type) ?? [];
@@ -504,8 +534,84 @@ function typeScorecard({ inRangeWos, history, opsNow, finance, types, from, to }
         finance_revenue: Math.round(finList.reduce((t, w) => t + w.revenue, 0) * 100) / 100,
         finance_avg_days: finDays.length ? round1(finDays.reduce((a, b) => a + b, 0) / finDays.length) : null,
       };
-    })
-    .sort((a, b) => b.revenue - a.revenue || b.open_now - a.open_now || a.type.localeCompare(b.type));
+    });
+}
+
+/* ── Pillars ────────────────────────────────────────────────────────── */
+
+/**
+ * The three pillars side by side. Always built from everything (the pillar
+ * filter only highlights one).
+ *   planned_maintenance  contract lines by PM service line, subcontracted vs
+ *                        self-performed (its work orders run in UtilizeCore)
+ *   on_demand, projects  work order scorecards, with On Demand's types
+ */
+function pillarScorecard({ inRangeWos, history, opsNow, finance, sourcingRows, typeRows, today, from, to }) {
+  const soon = addDays(today, 30);
+  const pmRows = sourcingRows.filter((r) => isPmServiceLine(r.service_line));
+
+  const delivery = (rows, self) => {
+    const rs = rows.filter((r) => Boolean(r.self_perform) === self);
+    const active = rs.filter((r) => r.line_status === "active");
+    const upcoming = rs.filter((r) => r.line_status === "upcoming");
+    const out = {
+      lines: rs.length,
+      active: active.length,
+      upcoming: upcoming.length,
+      sites: new Set(rs.map((r) => r.site_id)).size,
+      clients: new Set(rs.map((r) => r.client_id).filter(Boolean)).size,
+    };
+    if (self) return out;
+    const priced = rs.filter((r) => num(r.client_price_total) > 0 && num(r.vendor_price_total) > 0);
+    const rev = priced.reduce((t, r) => t + num(r.client_price_total), 0);
+    const cost = priced.reduce((t, r) => t + num(r.vendor_price_total), 0);
+    const sourced = rs.filter((r) => r.is_sourced).length;
+    return {
+      ...out,
+      sourced,
+      sourced_pct: pct(sourced, rs.length),
+      upcoming_sourced_pct: pct(upcoming.filter((r) => r.is_sourced).length, upcoming.length),
+      no_vendor: rs.filter((r) => !r.assignment_id).length,
+      needs_resourcing: rs.filter((r) => r.needs_resourcing).length,
+      starting_soon_unsourced: upcoming.filter((r) => !r.is_sourced && r.starts_on && dayOf(r.starts_on) <= soon).length,
+      vendors: new Set(rs.map((r) => r.vendor_id).filter(Boolean)).size,
+      priced_lines: priced.length,
+      margin_pct: marginPct(rev, cost),
+    };
+  };
+
+  const byLine = groupBy(pmRows, (r) => r.service_line);
+  const pmLines = [...byLine]
+    .map(([service_line, rs]) => ({
+      service_line,
+      subcontracted: delivery(rs, false),
+      self_performed: delivery(rs, true),
+    }))
+    .sort((a, b) => a.service_line.localeCompare(b.service_line));
+
+  const woRows = woScorecard({
+    keyOf: (w) => w.pillar,
+    names: ["on_demand", "projects"],
+    extraNames: false,
+    inRangeWos,
+    history,
+    opsNow,
+    finance,
+    from,
+    to,
+  });
+  const byKey = new Map(woRows.map((r) => [r.type, r]));
+  const typesFor = (key) => typeRows.filter((t) => woPillar(t.type) === key);
+
+  return {
+    planned_maintenance: {
+      service_lines: pmLines,
+      subcontracted: delivery(pmRows, false),
+      self_performed: delivery(pmRows, true),
+    },
+    on_demand: { ...byKey.get("on_demand"), types: typesFor("on_demand") },
+    projects: { ...byKey.get("projects"), types: typesFor("projects") },
+  };
 }
 
 /** Every work order type in use, for the type filter. */
@@ -521,10 +627,17 @@ async function workOrderTypes(prisma) {
 /* ── Summary: everything that follows the date range ────────────────── */
 
 /**
- * type (optional): one work order type. Every work order figure
- * is limited to it; sourcing isn't (contract lines have no work order type).
+ * pillar (optional): planned_maintenance | pm_subcontracted | pm_self |
+ *   on_demand | projects.
+ *   - On Demand / Projects limit every work order figure to that pillar.
+ *     Sourcing isn't limited (contract lines are Planned Maintenance).
+ *   - The Planned Maintenance ones limit sourcing to snow and landscaping
+ *     (and to subcontracted or self-performed lines). There are no work
+ *     orders to show: those run in UtilizeCore (`work_orders_elsewhere`).
+ * type (optional): one work order type, within the pillar.
+ * The pillar and type scorecards always cover everything.
  */
-export async function buildSummary(prisma, { from, to, type }) {
+export async function buildSummary(prisma, { from, to, type, pillar }) {
   const today = todayIso();
   const [allInRange, sourcingRows, financeAll, opsNow, types] = await Promise.all([
     loadWorkOrders(prisma, inRange(from, to), today),
@@ -538,21 +651,42 @@ export async function buildSummary(prisma, { from, to, type }) {
     allInRange.map((w) => w.id),
   );
 
-  const only = (list) => (type ? list.filter((w) => w.type === type) : list);
+  const pm = isPmFilter(pillar);
+  const only = (list) =>
+    pm
+      ? [] // Planned Maintenance work orders live in UtilizeCore
+      : list.filter((w) => woMatchesFilter(w.pillar, pillar) && (!type || w.type === type));
   const wos = only(allInRange);
   const finance = { ...financeAll, open: only(financeAll.open) };
+  const lines = pm ? sourcingRows.filter((r) => lineMatchesFilter(r, pillar)) : sourcingRows;
+  const scoped = Boolean(pillar || type);
+
+  const typeRows = typeScorecard({ inRangeWos: allInRange, history, opsNow, finance: financeAll, types, from, to });
 
   return {
     from,
     to,
     today,
     type: type ?? null,
+    pillar: pillar ?? null,
+    work_orders_elsewhere: pm,
     types,
-    type_scorecard: typeScorecard({ inRangeWos: allInRange, history, opsNow, finance: financeAll, types, from, to }),
-    margin: margin(wos, from, to, sourcingRows),
+    pillars: pillarScorecard({
+      inRangeWos: allInRange,
+      history,
+      opsNow,
+      finance: financeAll,
+      sourcingRows,
+      typeRows,
+      today,
+      from,
+      to,
+    }),
+    type_scorecard: typeRows,
+    margin: margin(wos, from, to, lines),
     fulfillment: fulfillment(wos, history),
-    sourcing: sourcingReport(sourcingRows, today),
-    vendors: await vendorReport(prisma, wos, from, to, { notices: !type }),
+    sourcing: sourcingReport(lines, today),
+    vendors: await vendorReport(prisma, wos, from, to, { notices: !scoped }),
     finance: financeReport(finance),
   };
 }
@@ -564,7 +698,7 @@ export async function buildSummary(prisma, { from, to, type }) {
  * them. Tasks aren't tied to a work order type, so a person's task counts are all
  * of their tasks.
  */
-export async function buildWorkload(prisma, { roleId, type } = {}) {
+export async function buildWorkload(prisma, { roleId, type, pillar } = {}) {
   const today = todayIso();
   const [opsStatuses, wos, roles, openTasks] = await Promise.all([
     prisma.workOrderStatuses.findMany({ where: { phase: "ops" }, select: { name: true }, orderBy: { id: "asc" } }),
@@ -576,7 +710,9 @@ export async function buildWorkload(prisma, { roleId, type } = {}) {
     }),
   ]);
 
-  const open = wos.filter((w) => w.state === "open" && (!type || w.type === type));
+  const open = isPmFilter(pillar)
+    ? [] // Planned Maintenance work orders live in UtilizeCore
+    : wos.filter((w) => w.state === "open" && woMatchesFilter(w.pillar, pillar) && (!type || w.type === type));
   const columns = opsStatuses
     .map((s) => s.name)
     .filter((n) => n !== DONE_STATUS && n !== CANCELLED_STATUS)
@@ -645,6 +781,8 @@ export async function buildWorkload(prisma, { roleId, type } = {}) {
   return {
     today,
     type: type ?? null,
+    pillar: pillar ?? null,
+    work_orders_elsewhere: isPmFilter(pillar),
     role_id: roleId ?? null,
     roles,
     columns,
@@ -652,7 +790,7 @@ export async function buildWorkload(prisma, { roleId, type } = {}) {
     people: [...people.values()]
       .filter((p) => !p.terminated || p.open_work_orders || p.open_tasks)
       // For one type, list the people working on it (their task counts still show).
-      .filter((p) => !type || p.open_work_orders > 0)
+      .filter((p) => !(type || pillar) || p.open_work_orders > 0)
       .map(({ wo_ids, ...p }) => p)
       .sort((a, b) => b.open_work_orders - a.open_work_orders || b.open_tasks - a.open_tasks || a.name.localeCompare(b.name)),
     unassigned: unassignedRow,

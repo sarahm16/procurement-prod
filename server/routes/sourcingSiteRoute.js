@@ -169,6 +169,7 @@ const emptySummary = () => ({
   assigned: 0,
   sourced: 0,
   with_backup: 0,
+  self_performed: 0,
   client_price_total: 0,
   vendor_price_total: 0,
 });
@@ -184,6 +185,7 @@ function summarize(rows) {
       assigned: acc.assigned + (r.vendor_id ? 1 : 0),
       sourced: acc.sourced + (r.is_sourced ? 1 : 0),
       with_backup: acc.with_backup + (r.backups.length ? 1 : 0),
+      self_performed: acc.self_performed + (r.self_perform ? 1 : 0),
       client_price_total: acc.client_price_total + (r.client_price_total ?? 0),
       vendor_price_total: acc.vendor_price_total + (r.vendor_price_total ?? 0),
     }),

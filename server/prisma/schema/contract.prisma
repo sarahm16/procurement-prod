@@ -97,6 +97,12 @@ model ContractSites {
   created_at           DateTime               @default(now())
   start_date           DateTime               @default(now()) @db.Date
   end_date             DateTime?              @db.Date
+
+  self_perform        Boolean   @default(false)
+  self_perform_set_at DateTime?
+  self_perform_set_by Int?      // employee id, no relation (same as resource_flagged_by)
+
+  @@index([self_perform])
   
   // Set when the primary vendor is terminated; the line needs a new one now.
   resource_needed_at   DateTime?

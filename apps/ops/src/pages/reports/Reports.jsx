@@ -1,12 +1,15 @@
 // pages/Reports/Reports.jsx
 //
-// Company-wide numbers for management: a scorecard by work order type,
-// margin, work order fulfillment, sourcing by service line, vendor
-// performance, ops workload and the finance pipeline. The personal view is
-// the Dashboard.
+// Company-wide numbers for management, by pillar: Planned Maintenance (snow
+// and landscaping lines, subcontracted or self-performed), On Demand and
+// Projects. Plus margin, work order fulfillment, sourcing by service line,
+// vendor performance, ops workload and the finance pipeline. The personal
+// view is the Dashboard.
 //
-// The type filter limits every work order figure to one work order type.
-// Sourcing isn't by type (contract lines have no work order type).
+// The pillar filter limits the report to one pillar. Planned Maintenance
+// work orders run in UtilizeCore, so for it the work order tabs say so and
+// the report is sourcing and pricing. The type filter narrows On Demand or
+// Projects to one work order type.
 //
 // The date range applies to work orders (by due date) and notices (by date
 // sent). Sourcing, workload and the finance pipeline are always "now".
@@ -18,6 +21,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import GeneralPageLayout from "../../components/GeneralPageLayout";
 import { FONT } from "./reportUi";
 import {
+  ElsewhereNote,
   FinanceSection,
   FulfillmentSection,
   MarginSection,
@@ -26,11 +30,11 @@ import {
   VendorsSection,
   WorkloadSection,
 } from "./ReportSections";
-import { TypesSection } from "./TypeSections";
+import { PILLAR_OPTIONS, PillarsSection, isPmPillar, pillarLabel, pillarOfType } from "./PillarSections";
 
 const TABS = [
   { key: "overview", label: "Overview" },
-  { key: "types", label: "By type" },
+  { key: "pillars", label: "Pillars" },
   { key: "sourcing", label: "Sourcing" },
   { key: "fulfillment", label: "Fulfillment" },
   { key: "margin", label: "Margin" },
@@ -40,6 +44,8 @@ const TABS = [
 ];
 // Tabs the date range doesn't affect.
 const NOW_TABS = ["sourcing", "workload", "finance"];
+// Work order tabs: nothing to show for Planned Maintenance (UtilizeCore).
+const WO_TABS = { fulfillment: "fulfillment data", vendors: "vendor work order data", finance: "finance pipeline" };
 
 const p2 = (n) => String(n).padStart(2, "0");
 const iso = (d) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
@@ -88,10 +94,17 @@ const recall = (k, fallback) => {
 
 export default function Reports() {
   const theme = useTheme();
-  const [tab, setTab] = useState(() => recall("reports.tab", "overview"));
+  const [tab, setTab] = useState(() => {
+    const t = recall("reports.tab", "overview");
+    return TABS.some((x) => x.key === t) ? t : t === "types" ? "pillars" : "overview";
+  });
   const [preset, setPreset] = useState(() => recall("reports.range", "ytd"));
   const [custom, setCustom] = useState(() => presetRange("ytd"));
   const range = useMemo(() => (preset === "custom" ? custom : presetRange(preset)), [preset, custom]);
+  const [pillar, setPillar] = useState(() => {
+    const p = recall("reports.pillar", "");
+    return PILLAR_OPTIONS.some((o) => o.value === p) ? p : "";
+  });
   const [woType, setWoType] = useState(() => recall("reports.type", ""));
 
   const [data, setData] = useState(null);
@@ -103,7 +116,7 @@ export default function Reports() {
     setLoading(true);
     try {
       const { data: d } = await axios.get("/api/reports/summary", {
-        params: { ...range, ...(woType && { type: woType }) },
+        params: { ...range, ...(pillar && { pillar }), ...(woType && !isPmPillar(pillar) && { type: woType }) },
       });
       setData(d);
       setError("");
@@ -113,7 +126,7 @@ export default function Reports() {
     } finally {
       setLoading(false);
     }
-  }, [range, woType]);
+  }, [range, pillar, woType]);
 
   useEffect(() => {
     load();
@@ -128,24 +141,49 @@ export default function Reports() {
     setWoType(type);
     remember("reports.type", type);
   };
-  // From the scorecard: filter to that type and show its overview.
+  const choosePillar = (p) => {
+    setPillar(p);
+    remember("reports.pillar", p);
+    // A type from another pillar no longer fits.
+    if (woType && (isPmPillar(p) || (p && data && pillarOfType(data, woType) !== p))) chooseType("");
+  };
+  // From the pillar cards: filter to that pillar (or back to all) and show its overview.
+  const selectPillar = (p) => {
+    choosePillar(p === pillar ? "" : p);
+    openTab("overview");
+  };
+  // From a type scorecard: filter to that type (and its pillar).
   const selectType = (type) => {
-    chooseType(type === woType ? "" : type);
+    if (type === woType) {
+      chooseType("");
+    } else {
+      chooseType(type);
+      const p = pillarOfType(data, type);
+      setPillar(p);
+      remember("reports.pillar", p);
+    }
     openTab("overview");
   };
 
-  const types = data?.types ?? (woType ? [woType] : []);
-  const typeApplies = tab !== "sourcing";
+  const pm = isPmPillar(pillar);
+  // Types to offer: the selected pillar's, or all of them.
+  const types = useMemo(() => {
+    if (!data) return woType ? [woType] : [];
+    if (pillar === "on_demand" || pillar === "projects") return data.pillars[pillar].types.map((t) => t.type);
+    return data.types;
+  }, [data, pillar, woType]);
+  const typeApplies = tab !== "sourcing" && !pm;
 
   const rangeText = `${new Date(`${range.from}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} – ${new Date(`${range.to}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
-  const rangeApplies = !NOW_TABS.includes(tab);
+  const rangeApplies = !NOW_TABS.includes(tab) && !(pm && tab !== "pillars");
 
   const section = () => {
-    if (tab === "workload") return <WorkloadSection type={woType || null} />;
+    if (tab === "workload") return <WorkloadSection pillar={pillar || null} type={(!pm && woType) || null} />;
     if (!data) return null;
+    if (data.work_orders_elsewhere && WO_TABS[tab]) return <ElsewhereNote what={WO_TABS[tab]} />;
     switch (tab) {
-      case "types":
-        return <TypesSection data={data} onSelect={selectType} />;
+      case "pillars":
+        return <PillarsSection data={data} onSelectPillar={selectPillar} onSelectType={selectType} />;
       case "sourcing":
         return <SourcingSection data={data} />;
       case "fulfillment":
@@ -158,7 +196,7 @@ export default function Reports() {
         return <FinanceSection data={data} />;
       default:
         return (
-          <OverviewSection data={data} onOpen={openTab} onSelectType={selectType} />
+          <OverviewSection data={data} onOpen={openTab} onSelectPillar={selectPillar} />
         );
     }
   };
@@ -173,20 +211,56 @@ export default function Reports() {
               Reports
             </Typography>
             <Typography sx={{ fontFamily: FONT, fontSize: "0.82rem", color: "text.secondary" }}>
-              {rangeApplies ? `Work orders due ${rangeText}` : "As of today. The date range doesn't apply to this tab."}
-              {tab === "sourcing" && woType ? " Sourcing covers every work order type." : ""}
+              {pm && tab !== "pillars"
+                ? "Planned Maintenance lines as of today."
+                : rangeApplies
+                  ? `Work orders due ${rangeText}`
+                  : "As of today. The date range doesn't apply to this tab."}
             </Typography>
-            {woType && typeApplies && (
-              <Chip
-                label={`${woType} work orders only`}
-                onDelete={() => chooseType("")}
-                color="secondary"
-                variant="outlined"
-                size="small"
-                sx={{ mt: 0.75, fontFamily: FONT, fontWeight: 600 }}
-              />
+            {(pillar || (woType && typeApplies)) && (
+              <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", mt: 0.75 }}>
+                {pillar && (
+                  <Chip
+                    label={`${pillarLabel(pillar)} only`}
+                    onDelete={() => choosePillar("")}
+                    color="secondary"
+                    variant="outlined"
+                    size="small"
+                    sx={{ fontFamily: FONT, fontWeight: 600 }}
+                  />
+                )}
+                {woType && typeApplies && (
+                  <Chip
+                    label={`${woType} work orders only`}
+                    onDelete={() => chooseType("")}
+                    color="secondary"
+                    variant="outlined"
+                    size="small"
+                    sx={{ fontFamily: FONT, fontWeight: 600 }}
+                  />
+                )}
+              </Box>
             )}
           </Box>
+          <TextField
+            select
+            size="small"
+            label="Pillar"
+            value={pillar}
+            onChange={(e) => choosePillar(e.target.value)}
+            SelectProps={{ displayEmpty: true, renderValue: (v) => {
+                const o = PILLAR_OPTIONS.find((x) => x.value === v);
+                return !o ? "All pillars" : o.indent ? `PM · ${o.label}` : o.label;
+              } }}
+            InputLabelProps={{ shrink: true }}
+            sx={{ width: 210 }}
+          >
+            {PILLAR_OPTIONS.map((o) => (
+              <MenuItem key={o.value} value={o.value} sx={o.indent ? { pl: 4, fontSize: "0.88rem" } : undefined}>
+                {o.label}
+              </MenuItem>
+            ))}
+          </TextField>
           <TextField
             select
             size="small"
@@ -196,7 +270,7 @@ export default function Reports() {
             disabled={!typeApplies}
             SelectProps={{ displayEmpty: true }}
             InputLabelProps={{ shrink: true }}
-            sx={{ width: 190 }}
+            sx={{ width: 180 }}
           >
             <MenuItem value="">All types</MenuItem>
             {types.map((t) => (
