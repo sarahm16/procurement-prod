@@ -1,6 +1,13 @@
 import { Router } from "express";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
-import { logActivity } from "../utils/logActivity.js";
+import {
+  changesFor,
+  dateText,
+  describeUpdate,
+  loadActivity,
+  logActivities,
+  logActivity,
+} from "../utils/logActivity.js";
 import serializeActivityLogEntry from "../serializer/activityLogSerializer.js";
 import serializeNote from "../serializer/noteSerializer.js";
 import { sendWorkOrderMsa } from "../services/pandadoc/send/sendWorkOrderMsa.js";
@@ -36,6 +43,7 @@ const upload = multer({
 const segmentOf = (wo) => wo?.Site?.Client?.Segment?.name ?? null;
 
 const entity_type_id = 4;
+const VENDOR_ENTITY_TYPE_ID = 1;
 
 const WORKORDER_ATTACHMENTS_CONTAINER = "workorder-attachments";
 const VALID_CATEGORIES = [
@@ -329,11 +337,8 @@ export default function workordersRouter(prisma) {
               await logActivity(tx, {
                 entityTypeId: entity_type_id,
                 entityId: parent.id,
-                fieldChanged: "vendor_id",
-                previousValue: String(parent.vendor_id),
-                newValue: null,
-                changedBy: user_id ?? null,
-                action: "UPDATE",
+                userId: user_id,
+                action: "Removed the vendor: the work now runs on child work orders",
               });
             }
 
@@ -376,17 +381,22 @@ export default function workordersRouter(prisma) {
               });
             }
 
-            await logActivity(tx, {
-              entityTypeId: entity_type_id,
-              entityId: workorder.id,
-              fieldChanged: "work_order",
-              previousValue: null,
-              newValue: parent
-                ? `Created work order ${workorder.work_order_number} as a child of ${parent.work_order_number}`
-                : `Created work order ${workorder.work_order_number}`,
-              changedBy: user_id ?? null,
-              action: "CREATE",
-            });
+            await logActivities(tx, [
+              {
+                entityTypeId: entity_type_id,
+                entityId: workorder.id,
+                userId: user_id,
+                action: parent
+                  ? `Created work order ${workorder.work_order_number} under ${parent.work_order_number}`
+                  : `Created work order ${workorder.work_order_number}`,
+              },
+              parent && {
+                entityTypeId: entity_type_id,
+                entityId: parent.id,
+                userId: user_id,
+                action: `Added child work order ${workorder.work_order_number}`,
+              },
+            ]);
 
             return workorder;
           });
@@ -481,15 +491,20 @@ export default function workordersRouter(prisma) {
           where: { id: wo.id },
           data: { parent_work_order_id: null },
         });
-        await logActivity(tx, {
-          entityTypeId: entity_type_id,
-          entityId: wo.id,
-          fieldChanged: "parent_work_order_id",
-          previousValue: String(wo.parent_work_order_id),
-          newValue: null,
-          changedBy: user_id ?? null,
-          action: "UPDATE",
-        });
+        await logActivities(tx, [
+          {
+            entityTypeId: entity_type_id,
+            entityId: wo.id,
+            userId: user_id,
+            action: "Split off from its parent job",
+          },
+          {
+            entityTypeId: entity_type_id,
+            entityId: wo.parent_work_order_id,
+            userId: user_id,
+            action: `Removed child work order ${wo.work_order_number}`,
+          },
+        ]);
       });
 
       res.json({ id: wo.id, parent_work_order_id: null });
@@ -687,10 +702,7 @@ export default function workordersRouter(prisma) {
             NoteTaggedUsers: { include: { TaggedUser: true } },
           },
         }),
-        prisma.activityLog.findMany({
-          where: { entity_type_id: entity_type_id, entity_id: Number(id) },
-          include: { Employee: true },
-        }),
+        loadActivity(prisma, entity_type_id, id),
       ]);
 
       res.json(serializeWorkorderById(workorder, notes, activityLog));
@@ -781,15 +793,34 @@ export default function workordersRouter(prisma) {
           },
         });
 
-        await logActivity(tx, {
-          entityTypeId: entity_type_id,
-          entityId: Number(id),
-          fieldChanged: Object.keys(data).join(", "),
-          previousValue: null,
-          newValue: JSON.stringify(data),
-          changedBy: user_id ?? null,
-          action: "UPDATE",
-        });
+        const action = describeUpdate(
+          changesFor(Object.entries(data), {
+            external_id: "external ID",
+            status_id: { label: "status", show: () => workorder.Status?.name },
+            vendor_id: { label: "vendor", show: () => workorder.Vendor?.company },
+            software_id: { label: "platform", show: () => workorder.Software?.name },
+            start_date: { label: "start date", show: dateText },
+            due_date: { label: "due date", show: dateText },
+            scope_of_work: { label: "scope of work", long: true },
+          }),
+        );
+        if (action) {
+          await logActivity(tx, {
+            entityTypeId: entity_type_id,
+            entityId: Number(id),
+            userId: user_id,
+            action,
+          });
+        }
+        // A vendor change shows on the vendor too.
+        if (data.vendor_id) {
+          await logActivity(tx, {
+            entityTypeId: VENDOR_ENTITY_TYPE_ID,
+            entityId: data.vendor_id,
+            userId: user_id,
+            action: `Assigned to work order ${workorder.work_order_number}`,
+          });
+        }
 
         return workorder;
       });
@@ -964,16 +995,18 @@ export default function workordersRouter(prisma) {
         created.push(record);
       }
 
-      // log once for the batch
-      await logActivity(prisma, {
-        entityTypeId: entity_type_id,
-        entityId: Number(id),
-        fieldChanged: "attachment",
-        previousValue: null,
-        newValue: `Uploaded ${created.length} ${category} file(s)`,
-        changedBy: user_id ? Number(user_id) : null,
-        action: "CREATE",
-      });
+      // Once for the batch. Vendor uploads have no employee behind them.
+      if (Number(user_id)) {
+        await logActivity(prisma, {
+          entityTypeId: entity_type_id,
+          entityId: Number(id),
+          userId: user_id,
+          action:
+            created.length === 1
+              ? `Uploaded ${created[0].file_name} (${category})`
+              : `Uploaded ${created.length} ${category} files`,
+        });
+      }
 
       res.status(201).json(created);
     } catch (error) {

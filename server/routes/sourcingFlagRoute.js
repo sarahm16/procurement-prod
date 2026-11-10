@@ -21,6 +21,9 @@ export function registerResourcingFlagRoute(router, prisma, serializeGridRow) {
     if (!Number.isInteger(csId)) {
       return res.status(400).json({ error: "Invalid contract site id" });
     }
+    if (!Number(user_id)) {
+      return res.status(400).json({ error: "user_id is required" });
+    }
     try {
       const cs = await prisma.contractSites.findUnique({
         where: { id: csId },
@@ -39,11 +42,8 @@ export function registerResourcingFlagRoute(router, prisma, serializeGridRow) {
           await logActivity(tx, {
             entityTypeId: SITE_ENTITY_TYPE_ID,
             entityId: cs.site_id,
-            fieldChanged: "resourcing_flag",
-            previousValue: cs.resource_reason ?? "Needs resourcing",
-            newValue: `Cleared the "Resource now" flag on ${cs.Contract?.ServiceLine?.name ?? "service line"}`,
-            changedBy: user_id ?? null,
-            action: "UPDATE",
+            userId: user_id,
+            action: `Cleared the "Resource now" flag on ${cs.Contract?.ServiceLine?.name ?? "service line"}`,
           });
         });
       }

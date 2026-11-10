@@ -33,7 +33,7 @@
  *                                  old app put them.
  */
 import multer from "multer";
-import { logActivity } from "../utils/logActivity.js";
+import { listText, logActivity, plural } from "../utils/logActivity.js";
 import { uploadToBlob } from "../services/blob/uploadToBlob.js";
 import { terminationRecipient } from "../services/pandadoc/send/sendTerminationNotice.js";
 import { MAX_IMAGES, sendWarningNotice } from "../services/pandadoc/send/sendWarningNotice.js";
@@ -245,26 +245,18 @@ export function registerWarningRoutes(router, prisma) {
           await logActivity(tx, {
             entityTypeId: VENDOR_ENTITY_TYPE_ID,
             entityId: id,
-            fieldChanged: "warning_notice",
-            previousValue: null,
-            newValue: `Sent warning notice: ${lineCount} service line${lineCount === 1 ? "" : "s"} at ${
-              sites.length
-            } site${sites.length === 1 ? "" : "s"}. Deadline: ${deadline}`.slice(0, 255),
-            changedBy: userId,
-            action: "CREATE",
+            userId,
+            action: `Sent warning notice for ${plural(lineCount, "service line")} at ${plural(
+              sites.length,
+              "site",
+            )}, deadline ${deadline}`,
           });
           for (const s of sites) {
-            const text = `Warning sent to ${vendor.company} about ${s.lines
-              .map((l) => l.service_line)
-              .join(", ")}: ${complaint}`;
             await logActivity(tx, {
               entityTypeId: SITE_ENTITY_TYPE_ID,
               entityId: s.site_id,
-              fieldChanged: "vendor_warning",
-              previousValue: null,
-              newValue: text.length > 255 ? `${text.slice(0, 252)}…` : text,
-              changedBy: userId,
-              action: "CREATE",
+              userId,
+              action: `Sent ${vendor.company} a warning about ${listText(s.lines.map((l) => l.service_line))}: ${complaint}`,
             });
           }
           return warning;

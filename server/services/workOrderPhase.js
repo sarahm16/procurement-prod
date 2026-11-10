@@ -123,11 +123,9 @@ export async function moveToFinance(prisma, { id, userId }) {
     await logActivity(tx, {
       entityTypeId: WORK_ORDER_ENTITY_TYPE_ID,
       entityId: wo.id,
-      fieldChanged: "phase",
-      previousValue: "ops",
-      newValue: `finance (status ${OPS_DONE} → ${FINANCE_START})`,
-      changedBy: userId ?? null,
-      action: "UPDATE",
+      userId,
+      action: `Moved to finance (status ${FINANCE_START})`,
+      event: "phase_finance",
     });
 
     if (wo.Children.length) {
@@ -139,11 +137,9 @@ export async function moveToFinance(prisma, { id, userId }) {
         await logActivity(tx, {
           entityTypeId: WORK_ORDER_ENTITY_TYPE_ID,
           entityId: c.id,
-          fieldChanged: "phase",
-          previousValue: "ops",
-          newValue: `finance (with parent ${wo.work_order_number})`,
-          changedBy: userId ?? null,
-          action: "UPDATE",
+          userId,
+          action: `Moved to finance with parent ${wo.work_order_number}`,
+          event: "phase_finance",
         });
       }
     }
@@ -185,11 +181,9 @@ export async function moveBackToOps(prisma, { id, userId, reason }) {
     await logActivity(tx, {
       entityTypeId: WORK_ORDER_ENTITY_TYPE_ID,
       entityId: wo.id,
-      fieldChanged: "phase",
-      previousValue: `finance (${wo.Status?.name ?? "no status"})`,
-      newValue: `ops (${OPS_REOPENED}). Reason: ${why}`,
-      changedBy: userId ?? null,
-      action: "UPDATE",
+      userId,
+      action: `Sent back to ops (status ${OPS_REOPENED}): ${why}`,
+      event: "phase_ops",
     });
 
     if (wo.Children.length) {
@@ -201,11 +195,9 @@ export async function moveBackToOps(prisma, { id, userId, reason }) {
         await logActivity(tx, {
           entityTypeId: WORK_ORDER_ENTITY_TYPE_ID,
           entityId: c.id,
-          fieldChanged: "phase",
-          previousValue: "finance",
-          newValue: `ops (with parent ${wo.work_order_number}). Reason: ${why}`,
-          changedBy: userId ?? null,
-          action: "UPDATE",
+          userId,
+          action: `Sent back to ops with parent ${wo.work_order_number}: ${why}`,
+          event: "phase_ops",
         });
       }
     }

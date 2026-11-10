@@ -1,311 +1,148 @@
+// components/DetailPageLayout/ActivityLog.jsx
+//
+// A record's Activity tab: who did what, and when, newest first, grouped by
+// day. Each entry is { id, action, date, changed_by_name } from the detail
+// endpoint's `activity_log` (serializer/activityLogSerializer.js).
+//
+// Older props (fieldLabels, …) are accepted and ignored, so existing pages
+// don't need to change.
 import { useMemo, useState } from "react";
-import dayjs from "dayjs";
+import { Avatar, Box, InputAdornment, Stack, TextField, Typography } from "@mui/material";
+import { alpha } from "@mui/material/styles";
+import SearchIcon from "@mui/icons-material/Search";
+import HistoryIcon from "@mui/icons-material/History";
 
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import Avatar from "@mui/material/Avatar";
-import TextField from "@mui/material/TextField";
-import InputAdornment from "@mui/material/InputAdornment";
-import IconButton from "@mui/material/IconButton";
-import Timeline from "@mui/icons-material/Timeline";
-import History from "@mui/icons-material/History";
-import Search from "@mui/icons-material/Search";
-import Clear from "@mui/icons-material/Clear";
-
-import CardComponent from "../CardComponent";
-
-/* ---------- helpers ---------- */
-
-const getInitials = (name) => {
-  if (!name) return "?";
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-};
-
-const getActionColor = (action) => {
-  switch (action?.toUpperCase()) {
-    case "CREATE":
-      return "success.main";
-    case "UPDATE":
-      return "info.main";
-    case "DELETE":
-      return "error.main";
-    case "ASSIGN":
-      return "primary.main";
-    case "REMOVE":
-      return "error.main";
-    case "SEND":
-      return "secondary.main";
-    default:
-      return "grey.500";
-  }
-};
-
-// Turn "status_id" -> "Status", "contact_phone2" -> "Contact Phone 2"
-const prettifyFieldName = (field) => {
-  if (!field) return "";
-  return field
-    .replace(/_id$/i, "")
-    .split("_")
+const initials = (name = "") =>
+  name
+    .split(/\s+/)
     .filter(Boolean)
-    .map((w) => w[0].toUpperCase() + w.slice(1))
-    .join(" ");
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join("") || "?";
+
+const dayKey = (d) => {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`;
 };
 
-/**
- * Build the human-readable sentence for a single entry.
- * Kept as a pure function so search can match against the same string the user sees.
- */
-const composeMessage = (entry, fieldLabels, valueFormatters) => {
-  const action = entry.action?.toUpperCase();
-  const label =
-    fieldLabels[entry.field_changed] ?? prettifyFieldName(entry.field_changed);
-  const formatter = valueFormatters[entry.field_changed];
-  const previousValue = formatter
-    ? formatter(entry.previous_value)
-    : entry.previous_value;
-  const value = formatter ? formatter(entry.new_value) : entry.new_value;
-  const singularize = (label) => {
-    return label?.endsWith("s") ? label.slice(0, -1) : label;
-  };
-
-  switch (action) {
-    case "UPDATE":
-      return label
-        ? `Changed ${label} from ${previousValue ?? "—"} to ${value ?? "—"}`
-        : `Updated to ${value ?? "—"}`;
-    case "CREATE":
-      return previousValue || value
-        ? `Added ${singularize(label)} ${value}` // "Added contact Joe Smith"
-        : `Created this record`;
-    case "DELETE":
-      return previousValue
-        ? `Removed ${singularize(label)} ${previousValue}`
-        : `Removed ${label}`;
-    default:
-      // Fall back gracefully for action types we haven't enumerated
-      return label
-        ? `${action ?? "Changed"} ${label}${value ? ` → ${value}` : ""}`
-        : (action ?? "Activity");
-  }
-};
-
-/* ---------- subcomponents ---------- */
-
-const ActivityItem = ({ entry, message, isLast }) => (
-  <Box sx={{ display: "flex", gap: 2 }}>
-    {/* Timeline rail */}
-    <Box
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-      }}
-    >
-      <Avatar
-        sx={{
-          width: 36,
-          height: 36,
-          fontSize: "0.75rem",
-          fontWeight: 600,
-          bgcolor: getActionColor(entry.action),
-        }}
-      >
-        {getInitials(entry.changed_by_name)}
-      </Avatar>
-      {!isLast && (
-        <Box
-          sx={{
-            width: 2,
-            flexGrow: 1,
-            bgcolor: "divider",
-            my: 1,
-            borderRadius: 1,
-          }}
-        />
-      )}
-    </Box>
-
-    {/* Content */}
-    <Box sx={{ flex: 1, pb: isLast ? 0 : 3 }}>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          mb: 0.5,
-          gap: 1,
-        }}
-      >
-        <Typography
-          variant="body2"
-          sx={{ fontWeight: 600, color: "text.primary" }}
-        >
-          {entry.changed_by_name || "System"}
-        </Typography>
-        <Typography
-          variant="caption"
-          sx={{ color: "text.secondary", whiteSpace: "nowrap" }}
-        >
-          {dayjs(entry.date).format("MMM D, YYYY · h:mm A")}
-        </Typography>
-      </Box>
-      <Typography
-        variant="body2"
-        sx={{ color: "text.secondary", lineHeight: 1.5 }}
-      >
-        {message}
-      </Typography>
-    </Box>
-  </Box>
-);
-
-/* ---------- main component ---------- */
-
-/**
- * ActivityLog — reusable activity feed.
- *
- * Props:
- *  - entries:          array of activity records (see shape below)
- *  - fieldLabels:      optional map of db field -> friendly label, e.g.
- *                      { status_id: "Status", contact_phone: "Phone" }
- *  - valueFormatters:  optional map of db field -> (value) => displayString,
- *                      handy for foreign keys: { status_id: (id) => statuses[id]?.name }
- *  - title:            card title (defaults to "Activity Log")
- *  - emptyMessage:     shown when there are no entries at all
- *  - maxHeight:        scroll container max height (px)
- *
- * Expected entry shape:
- *  { id, action, date, changed_by_name, new_value, field_changed }
- */
-function ActivityLog({
-  entries = [],
-  fieldLabels = {},
-  valueFormatters = {},
-  title = "Activity Log",
-  emptyMessage = "Activity will appear here as changes are made",
-  maxHeight = 600,
-}) {
-  const [search, setSearch] = useState("");
-
-  console.log("ActivityLog entries:", entries);
-
-  // Compose messages once per entries/labels change, then sort newest -> oldest.
-  // Doing this in a single memo keeps the search filter cheap on each keystroke.
-  const prepared = useMemo(() => {
-    return entries
-      .map((e) => ({
-        entry: e,
-        message: composeMessage(e, fieldLabels, valueFormatters),
-      }))
-      .sort(
-        (a, b) =>
-          new Date(b.entry.date).getTime() - new Date(a.entry.date).getTime(),
-      );
-  }, [entries, fieldLabels, valueFormatters]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return prepared;
-    return prepared.filter(({ entry, message }) => {
-      return (
-        message.toLowerCase().includes(q) ||
-        entry.changed_by_name?.toLowerCase().includes(q) ||
-        entry.action?.toLowerCase().includes(q)
-      );
-    });
-  }, [prepared, search]);
-
-  const hasAnyEntries = prepared.length > 0;
-  const hasResults = filtered.length > 0;
-
-  return (
-    <CardComponent title={title} icon={<Timeline />}>
-      {/* Search — only show when there's something to search */}
-      {hasAnyEntries && (
-        <TextField
-          fullWidth
-          size="small"
-          placeholder="Search activity…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          sx={{ mb: 2 }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Search fontSize="small" sx={{ color: "text.secondary" }} />
-              </InputAdornment>
-            ),
-            endAdornment: search ? (
-              <InputAdornment position="end">
-                <IconButton
-                  size="small"
-                  onClick={() => setSearch("")}
-                  aria-label="Clear search"
-                >
-                  <Clear fontSize="small" />
-                </IconButton>
-              </InputAdornment>
-            ) : null,
-          }}
-        />
-      )}
-
-      {/* Empty state — no entries at all */}
-      {!hasAnyEntries && (
-        <Box sx={{ textAlign: "center", py: 6, color: "text.secondary" }}>
-          <History sx={{ fontSize: 56, color: "grey.300", mb: 2 }} />
-          <Typography variant="body1" sx={{ fontWeight: 500, mb: 0.5 }}>
-            No activity yet
-          </Typography>
-          <Typography variant="body2">{emptyMessage}</Typography>
-        </Box>
-      )}
-
-      {/* Empty state — search returned nothing */}
-      {hasAnyEntries && !hasResults && (
-        <Box sx={{ textAlign: "center", py: 4, color: "text.secondary" }}>
-          <Typography variant="body2">
-            No activity matches “{search}”
-          </Typography>
-        </Box>
-      )}
-
-      {/* Timeline */}
-      {hasResults && (
-        <Box
-          sx={{
-            maxHeight,
-            overflowY: "auto",
-            pr: 1,
-            "&::-webkit-scrollbar": { width: 6 },
-            "&::-webkit-scrollbar-track": {
-              bgcolor: "grey.100",
-              borderRadius: 3,
-            },
-            "&::-webkit-scrollbar-thumb": {
-              bgcolor: "grey.300",
-              borderRadius: 3,
-              "&:hover": { bgcolor: "grey.400" },
-            },
-          }}
-        >
-          {filtered.map(({ entry, message }, index) => (
-            <ActivityItem
-              key={entry.id}
-              entry={entry}
-              message={message}
-              isLast={index === filtered.length - 1}
-            />
-          ))}
-        </Box>
-      )}
-    </CardComponent>
-  );
+function dayLabel(d) {
+  const x = new Date(d);
+  const today = new Date();
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  if (dayKey(x) === dayKey(today)) return "Today";
+  if (dayKey(x) === dayKey(yesterday)) return "Yesterday";
+  return x.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    ...(x.getFullYear() !== today.getFullYear() && { year: "numeric" }),
+  });
 }
 
-export default ActivityLog;
+const timeText = (d) => new Date(d).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+export default function ActivityLog({ entries = [] }) {
+  const [q, setQ] = useState("");
+
+  const groups = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    const list = [...entries]
+      .filter((e) => !term || `${e.action} ${e.changed_by_name}`.toLowerCase().includes(term))
+      .sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
+    const out = [];
+    for (const e of list) {
+      const key = dayKey(e.date);
+      if (out[out.length - 1]?.key !== key) out.push({ key, label: dayLabel(e.date), items: [] });
+      out[out.length - 1].items.push(e);
+    }
+    return out;
+  }, [entries, q]);
+
+  if (!entries.length) {
+    return (
+      <Box sx={{ py: 6, textAlign: "center", color: "text.secondary" }}>
+        <HistoryIcon sx={{ fontSize: 32, opacity: 0.5 }} />
+        <Typography variant="body2" sx={{ mt: 1 }}>
+          Nothing has happened here yet.
+        </Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Box>
+      {entries.length > 8 && (
+        <TextField
+          size="small"
+          placeholder="Search activity"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          sx={{ mb: 2, width: { xs: "100%", sm: 280 } }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            },
+          }}
+        />
+      )}
+
+      {groups.length === 0 && (
+        <Typography variant="body2" sx={{ color: "text.secondary", py: 2 }}>
+          No activity matches “{q}”.
+        </Typography>
+      )}
+
+      <Stack spacing={2.5}>
+        {groups.map((g) => (
+          <Box key={g.key}>
+            <Typography
+              variant="caption"
+              sx={{ fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "text.secondary" }}
+            >
+              {g.label}
+            </Typography>
+            <Stack spacing={0} sx={{ mt: 0.75 }}>
+              {g.items.map((e, i) => (
+                <Box
+                  key={e.id}
+                  sx={{
+                    display: "flex",
+                    gap: 1.5,
+                    py: 1.1,
+                    borderTop: i ? 1 : 0,
+                    borderColor: "divider",
+                  }}
+                >
+                  <Avatar
+                    sx={{
+                      width: 30,
+                      height: 30,
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      bgcolor: (t) => alpha(t.palette.primary.main, 0.12),
+                      color: "primary.main",
+                    }}
+                  >
+                    {initials(e.changed_by_name)}
+                  </Avatar>
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
+                      {e.action}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                      {e.changed_by_name} · {timeText(e.date)}
+                    </Typography>
+                  </Box>
+                </Box>
+              ))}
+            </Stack>
+          </Box>
+        ))}
+      </Stack>
+    </Box>
+  );
+}

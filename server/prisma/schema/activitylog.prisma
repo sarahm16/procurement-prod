@@ -1,15 +1,20 @@
+/// Who did what, when, on which record. One plain sentence per entry
+/// ("Sent MSA", "Updated status to Active"). Written by utils/logActivity.js.
 model ActivityLog {
   id             Int         @id(map: "PK__Activity__3213E83F261F0A47") @default(autoincrement())
+  /// The record it happened to: vendors 1, sites 2, clients 3, work orders 4, contracts 5
   entity_type_id Int
   entity_id      Int
-  field_changed  String?     @db.VarChar(100)
-  previous_value String?     @db.NVarChar(500)
-  new_value      String?     @db.NVarChar(500)
+  /// What happened, written for a person
+  action         String      @db.NVarChar(500)
+  /// Optional fixed key for code that looks entries up later (the reports use
+  /// "phase_finance" and "phase_ops"). Never shown.
+  event          String?     @db.VarChar(50)
   changed_by     Int
-  changed_at     DateTime?   @default(now(), map: "DF__ActivityL__chang__6FB49575") @db.DateTime
-  action         String      @db.VarChar(50)
+  changed_at     DateTime    @default(now(), map: "DF__ActivityL__chang__6FB49575") @db.DateTime
   Employee       Employees   @relation(fields: [changed_by], references: [id], onUpdate: NoAction)
   EntityType     EntityTypes @relation(fields: [entity_type_id], references: [id], onUpdate: NoAction, map: "FK__ActivityL__entit__70A8B9AE")
 
-  @@index([entity_type_id, entity_id], map: "IX_ActivityLog_Entity")
+  @@index([entity_type_id, entity_id, changed_at], map: "IX_ActivityLog_Entity")
+  @@index([event, entity_type_id], map: "IX_ActivityLog_Event")
 }

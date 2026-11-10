@@ -12,7 +12,7 @@
  */
 
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
-import { logActivity } from "../utils/logActivity.js";
+import { logActivity, moneyText } from "../utils/logActivity.js";
 // Mirror of services/pandadoc/send/sendWorkOrderMsa.js — see the note below.
 import { sendMobilizationFeeContract } from "../services/pandadoc/send/sendMobilizationFeeContract.js";
 
@@ -277,11 +277,8 @@ export function registerMobilizationFeeRoutes(router, prisma) {
         await logActivity(tx, {
           entityTypeId: entity_type_id,
           entityId: workOrderId,
-          fieldChanged: "mobilization_fee",
-          previousValue: null,
-          newValue: `Mobilization fee drafted — $${value.toFixed(2)}`,
-          changedBy: Number(user_id),
-          action: "CREATE",
+          userId: user_id,
+          action: `Drafted a ${moneyText(value)} mobilization fee`,
         });
 
         return created;
@@ -346,17 +343,11 @@ export function registerMobilizationFeeRoutes(router, prisma) {
         await logActivity(tx, {
           entityTypeId: entity_type_id,
           entityId: fee.work_order_id,
-          fieldChanged: "mobilization_fee",
-          previousValue:
+          userId: user_id,
+          action:
             data.amount !== undefined
-              ? `$${Number(fee.amount).toFixed(2)}`
-              : null,
-          newValue:
-            data.amount !== undefined
-              ? `Mobilization fee amount changed to $${data.amount.toFixed(2)}`
-              : "Mobilization fee notes updated",
-          changedBy: user_id ?? null,
-          action: "UPDATE",
+              ? `Changed the mobilization fee from ${moneyText(fee.amount)} to ${moneyText(data.amount)}`
+              : "Updated the mobilization fee notes",
         });
 
         return row;
@@ -420,11 +411,8 @@ export function registerMobilizationFeeRoutes(router, prisma) {
         await logActivity(tx, {
           entityTypeId: entity_type_id,
           entityId: fee.work_order_id,
-          fieldChanged: "mobilization_fee",
-          previousValue: fee.status,
-          newValue: `Mobilization fee contract sent to ${fee.Vendor?.company ?? "vendor"} — $${Number(fee.amount).toFixed(2)}`,
-          changedBy: user_id ?? null,
-          action: "UPDATE",
+          userId: user_id,
+          action: `Sent the ${moneyText(fee.amount)} mobilization fee contract to ${fee.Vendor?.company ?? "the vendor"}`,
         });
 
         return row;
@@ -483,13 +471,10 @@ export function registerMobilizationFeeRoutes(router, prisma) {
         await logActivity(tx, {
           entityTypeId: entity_type_id,
           entityId: fee.work_order_id,
-          fieldChanged: "mobilization_fee",
-          previousValue: fee.status,
-          newValue: `Mobilization fee paid — $${Number(fee.amount).toFixed(2)}${
-            quickbooks_bill_id ? ` (QB ${quickbooks_bill_id})` : ""
+          userId: user_id,
+          action: `Marked the ${moneyText(fee.amount)} mobilization fee paid${
+            quickbooks_bill_id ? ` (QuickBooks bill ${quickbooks_bill_id})` : ""
           }`,
-          changedBy: user_id ?? null,
-          action: "UPDATE",
         });
 
         return row;
@@ -539,11 +524,8 @@ export function registerMobilizationFeeRoutes(router, prisma) {
         await logActivity(tx, {
           entityTypeId: entity_type_id,
           entityId: fee.work_order_id,
-          fieldChanged: "mobilization_fee",
-          previousValue: fee.status,
-          newValue: `Mobilization fee voided${reason ? ` — ${reason}` : ""}`,
-          changedBy: user_id ?? null,
-          action: "UPDATE",
+          userId: user_id,
+          action: `Voided the ${moneyText(fee.amount)} mobilization fee${reason ? `: ${reason}` : ""}`,
         });
 
         return row;

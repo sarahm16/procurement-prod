@@ -37,11 +37,8 @@ export async function sendNewCopy({
       await logActivity(tx, {
         entityTypeId: VENDOR_ENTITY_TYPE_ID,
         entityId: vendor.id,
-        fieldChanged: "compliance_document",
-        previousValue: oldRecord.status,
-        newValue: `Voided ${oldRecord.document_type}`,
-        changedBy: user_id ?? null,
-        action: "UPDATE",
+        userId: user_id,
+        action: `Voided the unsigned ${oldRecord.document_type === "W9" ? "W-9" : oldRecord.document_type} to send a new copy`,
       });
     });
   }

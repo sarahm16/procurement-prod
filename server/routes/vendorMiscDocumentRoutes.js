@@ -262,11 +262,8 @@ export function registerMiscDocumentRoutes(router, prisma) {
         await logActivity(tx, {
           entityTypeId: VENDOR_ENTITY_TYPE_ID,
           entityId: id,
-          fieldChanged: "document",
-          previousValue: null,
-          newValue: `Uploaded ${uploaded.length === 1 ? "document" : `${uploaded.length} documents`}: ${list}`.slice(0, 255),
-          changedBy: userId,
-          action: "CREATE",
+          userId,
+          action: `Uploaded ${uploaded.length === 1 ? "document" : `${uploaded.length} documents`}: ${list}`,
         });
         return rows;
       });
@@ -308,12 +305,8 @@ export function registerMiscDocumentRoutes(router, prisma) {
         await logActivity(tx, {
           entityTypeId: VENDOR_ENTITY_TYPE_ID,
           entityId: id,
-          fieldChanged: "document",
-          previousValue: doc.name.slice(0, 255),
-          newValue:
-            doc.name === name ? `Edited the note on ${name}`.slice(0, 255) : `Renamed to ${name}`.slice(0, 255),
-          changedBy: userId,
-          action: "UPDATE",
+          userId,
+          action: doc.name === name ? `Edited the note on ${name}` : `Renamed document ${doc.name} to ${name}`,
         });
         return row;
       });
@@ -343,11 +336,8 @@ export function registerMiscDocumentRoutes(router, prisma) {
         await logActivity(tx, {
           entityTypeId: VENDOR_ENTITY_TYPE_ID,
           entityId: id,
-          fieldChanged: "document",
-          previousValue: doc.name.slice(0, 255),
-          newValue: `Deleted document: ${doc.name}`.slice(0, 255),
-          changedBy: userId,
-          action: "DELETE",
+          userId,
+          action: `Deleted document ${doc.name}`,
         });
       });
       res.json({ id: docId, deleted: true });

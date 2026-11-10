@@ -76,11 +76,8 @@ export default function roleAssignmentsRouter(prisma) {
           // log against the ASSIGNED entity (the client/contract/site), not a role entity
           entityTypeId: created.entity_type_id,
           entityId: created.entity_id,
-          fieldChanged: "role_assignment",
-          previousValue: null,
-          newValue: `Assigned ${created.Employee?.name ?? "employee"} as ${created.Role?.name ?? "role"}`,
-          changedBy: user_id ?? null,
-          action: "ASSIGN",
+          userId: user_id,
+          action: `Assigned ${created.Employee?.name ?? "an employee"} as ${created.Role?.name ?? "a role"}`,
         });
 
         return created;
@@ -127,11 +124,8 @@ export default function roleAssignmentsRouter(prisma) {
         await logActivity(tx, {
           entityTypeId: existing.entity_type_id,
           entityId: existing.entity_id,
-          fieldChanged: "role_assignment",
-          previousValue: `Removed ${existing.Employee?.name ?? "employee"} as ${existing.Role?.name ?? "role"}`,
-          newValue: null,
-          changedBy: user_id ?? null,
-          action: "REMOVE",
+          userId: user_id,
+          action: `Removed ${existing.Employee?.name ?? "an employee"} as ${existing.Role?.name ?? "a role"}`,
         });
       });
 

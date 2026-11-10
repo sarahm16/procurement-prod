@@ -67,11 +67,8 @@ export default function makeContractHandoffRoutes(prisma, { loadContract }) {
         await logActivity(tx, {
           entityTypeId: CONTRACT_ENTITY_TYPE_ID,
           entityId: id,
-          fieldChanged: "handoff",
-          previousValue: null,
-          newValue: `Handoff submitted ${ymd(today)}`,
-          changedBy: user_id ?? null,
-          action: "UPDATE",
+          userId: user_id,
+          action: "Submitted the handoff",
         });
       });
 
@@ -218,11 +215,8 @@ export default function makeContractHandoffRoutes(prisma, { loadContract }) {
           await logActivity(tx, {
             entityTypeId: CONTRACT_ENTITY_TYPE_ID,
             entityId: id,
-            fieldChanged: "checklist",
-            previousValue: before ? `${item.label}: done` : null,
-            newValue: done ? `${item.label}: done` : `${item.label}: not done`,
-            changedBy: user_id ?? null,
-            action: "UPDATE",
+            userId: user_id,
+            action: done ? `Checked off ${item.label}` : `Unchecked ${item.label}`,
           });
         }
       });

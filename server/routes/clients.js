@@ -2,7 +2,15 @@ import { Router } from "express";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import serializeNote from "../serializer/noteSerializer.js";
 import serializeActivityLogEntry from "../serializer/activityLogSerializer.js";
-import { logActivity } from "../utils/logActivity.js";
+import {
+  ADDRESS_FIELDS,
+  changesFor,
+  dateText,
+  describeUpdate,
+  loadActivity,
+  logActivity,
+  moneyText,
+} from "../utils/logActivity.js";
 import serializeContact from "../serializer/serializeContact.js";
 import makeContactRoutes from "./makeContactRoutes.js";
 import serializeRoleAssignment from "../serializer/roleAssignmentSerializer.js";
@@ -355,15 +363,7 @@ function clientsRouter(prisma) {
               },
             },
           }),
-          prisma.activityLog.findMany({
-            where: {
-              entity_type_id: entity_type_id, // Client entity type
-              entity_id: Number(id),
-            },
-            include: {
-              Employee: true,
-            },
-          }),
+          loadActivity(prisma, entity_type_id, id),
           loadClientServiceLines(prisma, Number(id)),
         ]);
       // Without this, a bad id threw on client.ClientServiceLines.
@@ -638,7 +638,6 @@ function clientsRouter(prisma) {
           data,
         });
 
-        const fieldNames = changedFields.map(([k]) => k);
         // Log the segment by name, not its id.
         const segmentName =
           "segment_id" in data && data.segment_id != null
@@ -659,26 +658,27 @@ function clientsRouter(prisma) {
                 })
               )?.name
             : null;
-        const summary = changedFields
-          .map(([k, v]) =>
-            k === "segment_id"
-              ? `segment: ${segmentName ?? "cleared"}`
-              : k === "software_id"
-                ? `platform: ${platformName ?? "cleared"}`
-                : `${k}: ${v}`,
-          )
-          .join(", ");
-
-        await logActivity(tx, {
-          entityTypeId: entity_type_id,
-          entityId: Number(id),
-          fieldChanged: fieldNames.join(", "), // e.g. "mailing_city, mailing_state, lat, lng"
-          previousValue: null, // see note below
-          newValue:
-            summary.length > 255 ? summary.slice(0, 252) + "…" : summary,
-          changedBy: user_id ?? null,
-          action: "UPDATE",
-        });
+        const action = describeUpdate(
+          changesFor(changedFields, {
+            ...ADDRESS_FIELDS,
+            client: "name",
+            legal_name: "legal name",
+            brand: "brand",
+            tax_treatment: { label: "tax treatment", show: (v) => String(v).replace(/_/g, " ") },
+            invoice_portal: "invoice portal",
+            segment_id: { label: "segment", show: () => segmentName },
+            software_id: { label: "platform", show: () => platformName },
+            quickbooks_id: { label: "QuickBooks link", long: true },
+          }),
+        );
+        if (action) {
+          await logActivity(tx, {
+            entityTypeId: entity_type_id,
+            entityId: Number(id),
+            userId: user_id,
+            action,
+          });
+        }
 
         return updated;
       });
@@ -750,19 +750,22 @@ function clientsRouter(prisma) {
           data,
         });
 
-        const fieldNames = changedFields.map(([k]) => k);
-        const summary = changedFields.map(([k, v]) => `${k}: ${v}`).join(", ");
-
-        await logActivity(tx, {
-          entityTypeId: entity_type_id,
-          entityId: Number(id), // ← Should update on the client since we don't have a tab for contracts yet
-          fieldChanged: fieldNames.join(", "),
-          previousValue: null,
-          newValue:
-            summary.length > 255 ? summary.slice(0, 252) + "…" : summary,
-          changedBy: user_id ?? null,
-          action: "UPDATE",
-        });
+        const what = describeUpdate(
+          changesFor(changedFields, {
+            project_name: "name",
+            start_date: { label: "start date", show: dateText },
+            end_date: { label: "end date", show: dateText },
+            value: { label: "value", show: moneyText },
+          }),
+        );
+        if (what) {
+          await logActivity(tx, {
+            entityTypeId: CONTRACT_ENTITY_TYPE_ID,
+            entityId: updated.id,
+            userId: user_id,
+            action: what,
+          });
+        }
 
         return updated; // no more sales_person/operations_person flattening
       });
@@ -827,13 +830,8 @@ function clientsRouter(prisma) {
         await logActivity(tx, {
           entityTypeId: entity_type_id,
           entityId: clientId,
-          fieldChanged: "paused",
-          previousValue: current.paused_at
-            ? `Paused: ${current.paused_reason ?? ""}`
-            : null,
-          newValue: `Paused: ${reason}`,
-          changedBy: user_id ?? null,
-          action: "UPDATE",
+          userId: user_id,
+          action: current.paused_at ? `Changed the pause reason: ${reason}` : `Paused the client: ${reason}`,
         });
       });
 
@@ -867,11 +865,8 @@ function clientsRouter(prisma) {
         await logActivity(tx, {
           entityTypeId: entity_type_id,
           entityId: clientId,
-          fieldChanged: "paused",
-          previousValue: `Paused since ${ymd(current.paused_at)}: ${current.paused_reason ?? ""}`,
-          newValue: "Unpaused",
-          changedBy: user_id ?? null,
-          action: "UPDATE",
+          userId: user_id,
+          action: `Unpaused the client (paused since ${dateText(current.paused_at)})`,
         });
       });
 
@@ -923,11 +918,8 @@ function clientsRouter(prisma) {
           await logActivity(tx, {
             entityTypeId: entity_type_id,
             entityId: clientId,
-            fieldChanged: "service_line",
-            previousValue: null,
-            newValue: `Added ${line.name}`,
-            changedBy: user_id ?? null,
-            action: "UPDATE",
+            userId: user_id,
+            action: `Added service line ${line.name}`,
           });
         });
       }
@@ -988,11 +980,8 @@ function clientsRouter(prisma) {
         await logActivity(tx, {
           entityTypeId: entity_type_id,
           entityId: clientId,
-          fieldChanged: "service_line",
-          previousValue: existing.ServiceLine?.name ?? null,
-          newValue: `Removed ${existing.ServiceLine?.name ?? ""}`.trim(),
-          changedBy: user_id ?? null,
-          action: "UPDATE",
+          userId: user_id,
+          action: `Removed service line ${existing.ServiceLine?.name ?? ""}`.trim(),
         });
       });
 

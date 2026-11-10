@@ -36,7 +36,7 @@
  *                               for message emails)
  */
 
-import { logActivity } from "../utils/logActivity.js";
+import { logActivity, plural } from "../utils/logActivity.js";
 import { sendMail } from "../services/mail.js";
 import { closeAssignments } from "../services/sourcing/closeAssignments.js";
 import {
@@ -209,15 +209,13 @@ export function registerTerminationRoutes(router, prisma) {
           await logActivity(tx, {
             entityTypeId: VENDOR_ENTITY_TYPE_ID,
             entityId: id,
-            fieldChanged: "termination_notice",
-            previousValue: null,
-            newValue: `Sent termination notice: ${lineCount} service line${lineCount === 1 ? "" : "s"} at ${
-              sites.length
-            } site${sites.length === 1 ? "" : "s"}, effective ${effective}${
-              not_flagged ? `. ${not_flagged} not re-sourcing yet` : ""
-            }${remaining === 0 && terminatedStatus ? ". Vendor terminated" : ""}`.slice(0, 255),
-            changedBy: userId,
-            action: "CREATE",
+            userId,
+            action: `Sent termination notice for ${plural(lineCount, "service line")} at ${plural(
+              sites.length,
+              "site",
+            )}, effective ${effective}${
+              remaining === 0 && terminatedStatus ? `. Status set to ${terminatedStatus.name}` : ""
+            }`,
           });
           const assignmentById = new Map(assignments.map((a) => [a.id, a]));
           for (const s of sites) {
@@ -231,15 +229,11 @@ export function registerTerminationRoutes(router, prisma) {
                   : `${l.service_line} (not re-sourcing yet)`;
               })
               .join(", ");
-            const text = `${vendor.company} terminated from ${lineText}; notice sent, effective ${effective}`;
             await logActivity(tx, {
               entityTypeId: SITE_ENTITY_TYPE_ID,
               entityId: s.site_id,
-              fieldChanged: "vendor_assignment",
-              previousValue: vendor.company,
-              newValue: text.length > 255 ? `${text.slice(0, 252)}…` : text,
-              changedBy: userId,
-              action: "UPDATE",
+              userId,
+              action: `Terminated ${vendor.company} from ${lineText}, effective ${effective}`,
             });
           }
 

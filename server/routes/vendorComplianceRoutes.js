@@ -27,7 +27,7 @@
  *                              accounting@nationalfacilitycontractors.com)
  *   PANDADOC_COMPLIANCE_TEMPLATE_ID   optional
  */
-import { logActivity } from "../utils/logActivity.js";
+import { listText, logActivity, plural } from "../utils/logActivity.js";
 import { sendMail } from "../services/mail.js";
 import { terminationRecipient } from "../services/pandadoc/send/sendTerminationNotice.js";
 import {
@@ -192,28 +192,20 @@ export function registerComplianceRoutes(router, prisma) {
           await logActivity(tx, {
             entityTypeId: VENDOR_ENTITY_TYPE_ID,
             entityId: id,
-            fieldChanged: "compliance_notice",
-            previousValue: null,
-            newValue: `Sent compliance notice: ${lineCount} service line${lineCount === 1 ? "" : "s"} at ${
-              sites.length
-            } site${sites.length === 1 ? "" : "s"}${
-              penalty ? `, penalty ${formatCurrency(penalty.amount)}` : ""
-            }`.slice(0, 255),
-            changedBy: userId,
-            action: "CREATE",
+            userId,
+            action: `Sent compliance notice for ${plural(lineCount, "service line")} at ${plural(
+              sites.length,
+              "site",
+            )}${penalty ? `, penalty ${formatCurrency(penalty.amount)}` : ""}`,
           });
           for (const s of sites) {
-            const text = `Compliance notice sent to ${vendor.company} about ${s.lines
-              .map((l) => l.service_line)
-              .join(", ")}: ${natureOfDefault}`;
             await logActivity(tx, {
               entityTypeId: SITE_ENTITY_TYPE_ID,
               entityId: s.site_id,
-              fieldChanged: "vendor_compliance_notice",
-              previousValue: null,
-              newValue: text.length > 255 ? `${text.slice(0, 252)}…` : text,
-              changedBy: userId,
-              action: "CREATE",
+              userId,
+              action: `Sent ${vendor.company} a compliance notice about ${listText(
+                s.lines.map((l) => l.service_line),
+              )}: ${natureOfDefault}`,
             });
           }
           return row;

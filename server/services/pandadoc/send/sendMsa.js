@@ -79,13 +79,10 @@ export async function sendMsa(vendor, { user_id } = {}) {
     });
     // log against the vendor's activity feed
     await logActivity(tx, {
-      entityTypeId: entity_type_id, // confirm your vendor entity type id
+      entityTypeId: entity_type_id,
       entityId: vendor.id,
-      fieldChanged: "compliance_document",
-      previousValue: null,
-      newValue: `Sent MSA to ${vendor.company}`, // "Sent W9..." in sendW9
-      changedBy: user_id ?? null,
-      action: "CREATE",
+      userId: user_id,
+      action: "Sent MSA",
     });
     return doc;
   });

@@ -18,7 +18,7 @@
  */
 
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
-import { logActivity } from "../utils/logActivity.js";
+import { logActivity, plural } from "../utils/logActivity.js";
 
 const SITE_ENTITY_TYPE_ID = 2;
 
@@ -139,6 +139,9 @@ export function registerPricingRoutes(router, prisma, serializeGridRow) {
         .status(400)
         .json({ error: "prices must be a non-empty array" });
     }
+    if (!Number(user_id)) {
+      return res.status(400).json({ error: "user_id is required" });
+    }
 
     try {
       const assignment = await prisma.vendorContractSites.findUnique({
@@ -216,11 +219,10 @@ export function registerPricingRoutes(router, prisma, serializeGridRow) {
         await logActivity(tx, {
           entityTypeId: SITE_ENTITY_TYPE_ID,
           entityId: assignment.ContractSite.site_id,
-          fieldChanged: "vendor_pricing",
-          previousValue: null,
-          newValue: `${assignment.Vendor?.company ?? "Vendor"} — ${assignment.ContractSite.Contract?.ServiceLine?.name ?? "service line"}: ${prices.length} rate(s) updated`,
-          changedBy: user_id ?? null,
-          action: "UPDATE",
+          userId: user_id,
+          action: `Updated ${assignment.Vendor?.company ?? "vendor"}'s ${
+            assignment.ContractSite.Contract?.ServiceLine?.name ?? "service line"
+          } rates (${plural(prices.length, "service")})`,
         });
       });
 

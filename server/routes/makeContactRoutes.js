@@ -1,6 +1,6 @@
 import { Router } from "express";
 import prisma from "../db.js";
-import { logActivity } from "../utils/logActivity.js";
+import { changesFor, describeUpdate, logActivity } from "../utils/logActivity.js";
 
 // Fields that can be updated in a contact
 const CONTACT_ALLOWED_FIELDS = new Set([
@@ -44,11 +44,8 @@ function makeContactRoutes({ delegate, foreignKey, entityTypeId }) {
         await logActivity(tx, {
           entityTypeId,
           entityId: Number(id),
-          fieldChanged: "contacts",
-          previousValue: null,
-          newValue: `Added contact: ${created.name}`,
-          changedBy: user_id ?? null,
-          action: "CREATE",
+          userId: user_id,
+          action: `Added contact ${created.name}${created.ContactRole?.name ? ` (${created.ContactRole.name})` : ""}`,
         });
         return created;
       });
@@ -111,19 +108,19 @@ function makeContactRoutes({ delegate, foreignKey, entityTypeId }) {
           include: { ContactRole: true }, // so the response carries the role name
         });
 
-        const fieldNames = changedFields.map(([k]) => k);
-        const summary = changedFields.map(([k, v]) => `${k}: ${v}`).join(", ");
-
-        await logActivity(tx, {
-          entityTypeId,
-          entityId: Number(id),
-          fieldChanged: fieldNames.join(", "), // e.g. "name, email, phone"
-          previousValue: null, // see note below
-          newValue:
-            summary.length > 255 ? summary.slice(0, 252) + "…" : summary,
-          changedBy: user_id ?? null,
-          action: "UPDATE",
-        });
+        const what = describeUpdate(
+          changesFor(changedFields, {
+            contact_role_id: { label: "role", show: () => updated.ContactRole?.name },
+          }),
+        );
+        if (what) {
+          await logActivity(tx, {
+            entityTypeId,
+            entityId: Number(id),
+            userId: user_id,
+            action: `${what} for contact ${updated.name}`,
+          });
+        }
 
         return { ...updated, contact_role: updated.ContactRole?.name ?? null }; // flatten the role for the frontend
       });
@@ -148,11 +145,8 @@ function makeContactRoutes({ delegate, foreignKey, entityTypeId }) {
         await logActivity(tx, {
           entityTypeId,
           entityId: Number(id),
-          fieldChanged: "contacts",
-          previousValue: `${deleted.name}`,
-          newValue: null,
-          changedBy: user_id ?? null,
-          action: "DELETE",
+          userId: user_id,
+          action: `Removed contact ${deleted.name}`,
         });
         return deleted;
       });

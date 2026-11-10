@@ -112,14 +112,15 @@ export const inRange = (from, to) => ({
 async function phaseHistory(prisma, ids) {
   const out = new Map();
   if (!ids.length) return out;
+  // Phase moves are tagged in the activity log (services/workOrderPhase.js).
   const logs = await prisma.activityLog.findMany({
-    where: { entity_type_id: WORK_ORDER_TYPE_ID, field_changed: "phase", entity_id: { in: ids } },
-    select: { entity_id: true, new_value: true, changed_at: true },
+    where: { entity_type_id: WORK_ORDER_TYPE_ID, event: { in: ["phase_finance", "phase_ops"] }, entity_id: { in: ids } },
+    select: { entity_id: true, event: true, changed_at: true },
   });
   for (const l of logs) {
     const h = out.get(l.entity_id) ?? { reopened: 0, finance_since: null };
-    if (l.new_value?.startsWith("ops")) h.reopened += 1;
-    if (l.new_value?.startsWith("finance") && (!h.finance_since || l.changed_at > h.finance_since)) {
+    if (l.event === "phase_ops") h.reopened += 1;
+    if (l.event === "phase_finance" && (!h.finance_since || l.changed_at > h.finance_since)) {
       h.finance_since = l.changed_at;
     }
     out.set(l.entity_id, h);

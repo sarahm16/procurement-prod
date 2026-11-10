@@ -19,10 +19,11 @@
  */
 
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
-import { logActivity } from "../utils/logActivity.js";
+import { logActivities } from "../utils/logActivity.js";
 import { clearResourcingFlag } from "../services/sourcing/closeAssignments.js";
 
 const SITE_ENTITY_TYPE_ID = 2;
+const VENDOR_ENTITY_TYPE_ID = 1;
 
 /** Statuses are looked up by category so ids can differ between environments. */
 async function statusByCategory(tx, category) {
@@ -48,6 +49,9 @@ export function registerReplaceRoute(router, prisma, serializeGridRow) {
     if (!vendor_id) {
       return res.status(400).json({ error: "vendor_id is required" });
     }
+    if (!Number(user_id)) {
+      return res.status(400).json({ error: "user_id is required" });
+    }
 
     const vendorId = Number(vendor_id);
 
@@ -61,6 +65,7 @@ export function registerReplaceRoute(router, prisma, serializeGridRow) {
             select: {
               id: true,
               site_id: true,
+              Site: { select: { store: true } },
               Contract: { select: { ServiceLine: { select: { name: true } } } },
             },
           },
@@ -151,15 +156,29 @@ export function registerReplaceRoute(router, prisma, serializeGridRow) {
         const line =
           outgoing.ContractSite.Contract?.ServiceLine?.name ?? "service line";
         const role = becomesPrimary ? "primary" : "backup";
-        await logActivity(tx, {
-          entityTypeId: SITE_ENTITY_TYPE_ID,
-          entityId: outgoing.ContractSite.site_id,
-          fieldChanged: "vendor_assignment",
-          previousValue: `${outgoing.Vendor?.company ?? "Vendor"} — ${line}`,
-          newValue: `${created.Vendor?.company ?? "Vendor"} — ${line} (replaced, ${role})`,
-          changedBy: user_id ?? null,
-          action: "UPDATE",
-        });
+        const oldCompany = outgoing.Vendor?.company ?? "the previous vendor";
+        const newCompany = created.Vendor?.company ?? "Vendor";
+        const store = outgoing.ContractSite.Site?.store ?? "this site";
+        await logActivities(tx, [
+          {
+            entityTypeId: SITE_ENTITY_TYPE_ID,
+            entityId: outgoing.ContractSite.site_id,
+            userId: user_id,
+            action: `Replaced ${oldCompany} with ${newCompany} as ${role} on ${line}`,
+          },
+          {
+            entityTypeId: VENDOR_ENTITY_TYPE_ID,
+            entityId: vendorId,
+            userId: user_id,
+            action: `Assigned as ${role} on ${line} at ${store}, replacing ${oldCompany}`,
+          },
+          outgoing.vendor_id && {
+            entityTypeId: VENDOR_ENTITY_TYPE_ID,
+            entityId: outgoing.vendor_id,
+            userId: user_id,
+            action: `Replaced on ${line} at ${store} by ${newCompany}`,
+          },
+        ]);
 
         return created;
       });

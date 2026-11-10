@@ -2,7 +2,7 @@ import { Router } from "express";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import serializeNote from "../serializer/noteSerializer.js";
 import serializeActivityLogEntry from "../serializer/activityLogSerializer.js";
-import { logActivity } from "../utils/logActivity.js";
+import { changesFor, dateText, describeUpdate, loadActivity, logActivity, moneyText } from "../utils/logActivity.js";
 import {
   addBusinessDays,
   BILLING_TRIGGERS,
@@ -175,6 +175,38 @@ const show = (key, v) => {
 };
 
 const round2 = (n) => Math.round(n * 100) / 100;
+
+// How a contract save reads in the activity log ("Updated contract value to
+// $50,000.00"). Long text fields say only that they changed.
+const pctText = (v) => `${Number(v)}%`;
+const CONTRACT_ACTIVITY_FIELDS = {
+  project_name: "name",
+  start_date: { label: "start date", show: dateText },
+  end_date: { label: "end date", show: dateText },
+  approved_on: { label: "approval date", show: dateText },
+  complete_by_on: { label: "complete-by date", show: dateText },
+  auto_renew: "auto renew",
+  annual_increase_percent: { label: "annual increase", show: pctText },
+  value: { label: "contract value", show: moneyText },
+  sub_budget_percent: { label: "subcontractor budget", show: pctText },
+  target_margin_percent: { label: "required margin", show: pctText },
+  deposit_percent: { label: "deposit", show: pctText },
+  billing_trigger: { label: "when we invoice", show: (v) => String(v).replace(/_/g, " ") },
+  sub_award_business_days: { label: "sourcing window", show: (v) => `${v} business days` },
+  lead_time_days: { label: "lead time", show: (v) => `${v} days` },
+  warranty_months: { label: "warranty", show: (v) => `${v} months` },
+  client_sla: "client SLA",
+  permits_required: "permits expected",
+  traffic_control_required: "traffic control expected",
+  inspections_required: "inspections expected",
+  executive_summary: { label: "executive summary", long: true },
+  scope_of_work: { label: "scope of work", long: true },
+  communication_plan: { label: "communication plan", long: true },
+  invoicing_notes: { label: "invoicing instructions", long: true },
+  safety_notes: { label: "safety notes", long: true },
+  warranty_terms: { label: "warranty terms", long: true },
+  lead_time_override_reason: { label: "why the client's dates win", long: true },
+};
 
 /**
  * Site counts per contract from vw_ServiceLineStatus rows
@@ -405,10 +437,7 @@ export default function contractsRouter(prisma) {
             NoteTaggedUsers: { include: { TaggedUser: true } },
           },
         }),
-        prisma.activityLog.findMany({
-          where: { entity_type_id: CONTRACT_ENTITY_TYPE_ID, entity_id: id },
-          include: { Employee: true },
-        }),
+        loadActivity(prisma, CONTRACT_ENTITY_TYPE_ID, id),
       ]);
       if (!contract)
         return res.status(404).json({ error: "Contract not found" });
@@ -474,16 +503,22 @@ export default function contractsRouter(prisma) {
             where: { id },
             data: Object.fromEntries(changed),
           });
-          // One log row per field, so the Activity tab reads old → new.
-          for (const [k, v] of changed) {
+          const serviceType =
+            data.service_type_id != null
+              ? (await tx.serviceTypes.findUnique({ where: { id: data.service_type_id }, select: { name: true } }))?.name
+              : null;
+          const action = describeUpdate(
+            changesFor(changed, {
+              ...CONTRACT_ACTIVITY_FIELDS,
+              service_type_id: { label: "service type", show: () => serviceType },
+            }),
+          );
+          if (action) {
             await logActivity(tx, {
               entityTypeId: CONTRACT_ENTITY_TYPE_ID,
               entityId: id,
-              fieldChanged: k,
-              previousValue: show(k, existing[k]) || null,
-              newValue: show(k, v) || null,
-              changedBy: user_id ?? null,
-              action: "UPDATE",
+              userId: user_id,
+              action,
             });
           }
         });

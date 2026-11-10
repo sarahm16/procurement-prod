@@ -266,13 +266,10 @@ export default function quickbooksRouter(prisma) {
         await logActivity(tx, {
           entityTypeId: kind.entityTypeId,
           entityId: id,
-          fieldChanged: "quickbooks_id",
-          previousValue: previous,
-          newValue: qbId
-            ? `${qbId} (${qbRecord.full_name ?? qbRecord.name})`
-            : null,
-          changedBy: user_id ?? null,
-          action: "UPDATE",
+          userId: user_id,
+          action: qbId
+            ? `Linked to QuickBooks ${kind.qbEntity.toLowerCase()} ${qbRecord.full_name ?? qbRecord.name}`
+            : "Unlinked from QuickBooks",
         });
       });
 
@@ -398,11 +395,8 @@ export default function quickbooksRouter(prisma) {
         await logActivity(tx, {
           entityTypeId: KINDS.vendors.entityTypeId,
           entityId: id,
-          fieldChanged: "quickbooks_id",
-          previousValue: null,
-          newValue: `${created.id} (${created.name}), created in QuickBooks`,
-          changedBy: user_id ?? null,
-          action: "UPDATE",
+          userId: user_id,
+          action: `Created QuickBooks vendor ${created.name} and linked it`,
         });
       });
 

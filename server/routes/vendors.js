@@ -6,7 +6,14 @@ import { uploadToBlob } from "../services/blob/uploadToBlob.js";
 
 // Helper functions
 import serializeActivityLogEntry from "../serializer/activityLogSerializer.js";
-import { logActivity } from "../utils/logActivity.js";
+import {
+  ADDRESS_FIELDS,
+  changesFor,
+  dateText,
+  describeUpdate,
+  loadActivity,
+  logActivity,
+} from "../utils/logActivity.js";
 import serializeContact from "../serializer/serializeContact.js";
 import serializeRoleAssignment from "../serializer/roleAssignmentSerializer.js";
 import makeContactRoutes from "./makeContactRoutes.js";
@@ -205,15 +212,7 @@ export default function vendorsRouter(prisma) {
             },
           },
         }),
-        prisma.activityLog.findMany({
-          where: {
-            entity_type_id: 1,
-            entity_id: Number(id),
-          },
-          include: {
-            Employee: true,
-          },
-        }),
+        loadActivity(prisma, entity_type_id, id),
       ]);
       res.json(serializeVendor(vendor, notes, activityLog));
     } catch (error) {
@@ -252,16 +251,14 @@ export default function vendorsRouter(prisma) {
       });
       console.log("Vendor-Trades associations created:", createdTrades.count);
 
-      const createdActivity = await logActivity(prisma, {
-        entityTypeId: 1,
-        entityId: createdVendor.id,
-        action: "CREATE",
-        newValue: vendorData?.company,
-        changedBy: user_id || null,
-      });
-      console.log("Activity log created:", createdActivity);
-
-      // Need to save item to activity log as well
+      if (Number(user_id)) {
+        await logActivity(prisma, {
+          entityTypeId: entity_type_id,
+          entityId: createdVendor.id,
+          userId: user_id,
+          action: "Created the vendor",
+        });
+      }
 
       res.status(201).json(createdVendor);
     } catch (error) {
@@ -361,34 +358,27 @@ export default function vendorsRouter(prisma) {
           },
         });
 
-        // For FK fields, show the human label from the included relation
-        // instead of the raw id. Falls back to the raw value for scalar fields.
-        const displayValue = (key, rawValue) => {
-          switch (key) {
-            case "status_id":
-              return updated.VendorStatus?.name ?? rawValue;
-            // add more as needed:
-            // case "service_line_id": return updated.ServiceLine?.name ?? rawValue;
-            default:
-              return rawValue;
-          }
-        };
-
-        const fieldNames = changedFields.map(([k]) => k);
-        const summary = changedFields
-          .map(([k, v]) => `${k}: ${displayValue(k, v)}`)
-          .join(", ");
-
-        await logActivity(tx, {
-          entityTypeId: entity_type_id,
-          entityId: Number(id),
-          fieldChanged: fieldNames.join(", "), // e.g. "mailing_city, mailing_state, lat, lng"
-          previousValue: null, // see note below
-          newValue:
-            summary.length > 255 ? summary.slice(0, 252) + "…" : summary,
-          changedBy: user_id ?? null,
-          action: "UPDATE",
-        });
+        // "Updated status to Active". Ids show as names from the include.
+        const action = describeUpdate(
+          changesFor(changedFields, {
+            ...ADDRESS_FIELDS,
+            company: "company name",
+            status_id: { label: "status", show: () => updated.VendorStatus?.name },
+            contact_name: "contact name",
+            contact_email: "contact email",
+            contact_phone: "contact phone",
+            contact_phone2: "second contact phone",
+            quickbooks_id: { label: "QuickBooks link", long: true },
+          }),
+        );
+        if (action) {
+          await logActivity(tx, {
+            entityTypeId: entity_type_id,
+            entityId: Number(id),
+            userId: user_id,
+            action,
+          });
+        }
 
         return updated;
       });
@@ -422,11 +412,8 @@ export default function vendorsRouter(prisma) {
         await logActivity(tx, {
           entityTypeId: entity_type_id,
           entityId: Number(id),
-          fieldChanged: "trades", // e.g. "mailing_city, mailing_state, lat, lng"
-          previousValue: null, // see note below
-          newValue: `${association.Trade.name}`,
-          changedBy: user_id ?? null,
-          action: "ASSIGN",
+          userId: user_id,
+          action: `Added trade ${association.Trade.name}`,
         });
 
         return association;
@@ -471,11 +458,8 @@ export default function vendorsRouter(prisma) {
         await logActivity(tx, {
           entityTypeId: entity_type_id,
           entityId: Number(id),
-          fieldChanged: "trades", // e.g. "mailing_city, mailing_state, lat, lng"
-          previousValue: null, // see note below
-          newValue: `${association.Trade.name}`,
-          changedBy: user_id ?? null,
-          action: "REMOVE",
+          userId: user_id,
+          action: `Removed trade ${association.Trade.name}`,
         });
 
         return association;
@@ -763,11 +747,8 @@ export default function vendorsRouter(prisma) {
         await logActivity(tx, {
           entityTypeId: entity_type_id,
           entityId: Number(id),
-          fieldChanged: "coi",
-          previousValue: null,
-          newValue: `Uploaded COI (exp ${new Date(expiration_date).toLocaleDateString()})`,
-          changedBy: Number(user_id) || null,
-          action: "CREATE",
+          userId: user_id,
+          action: `Uploaded COI (expires ${dateText(expiration_date)})`,
         });
 
         return coi;

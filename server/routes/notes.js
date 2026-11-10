@@ -26,7 +26,7 @@
 import { Router } from "express";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import serializeLegacyNote from "../serializer/noteSerializer.js";
-import { logActivity } from "../utils/logActivity.js";
+import { dateText, logActivity } from "../utils/logActivity.js";
 import {
   ENTITY_SEGMENTS,
   NOTE_INCLUDE,
@@ -84,15 +84,12 @@ export default function notesRouter(prisma) {
   const entityFor = async (note) =>
     (await entityLabels(prisma, [note])).get(`${note.entity_type_id}:${note.entity_id}`);
 
-  const logTask = (note, userId, newValue, previousValue = null) =>
+  const logTask = (note, userId, action) =>
     logActivity(prisma, {
       entityTypeId: note.entity_type_id,
       entityId: note.entity_id,
-      fieldChanged: "task",
-      previousValue: previousValue ? String(previousValue).slice(0, 255) : null,
-      newValue: String(newValue).slice(0, 255),
-      changedBy: userId,
-      action: "UPDATE",
+      userId,
+      action,
     }).catch((e) => console.error("Task activity log failed:", e));
 
   const snippet = (body) => (body.length > 80 ? `${body.slice(0, 77)}…` : body);
@@ -234,6 +231,16 @@ export default function notesRouter(prisma) {
       const note = serializeNote(created);
       res.status(201).json(note);
 
+      if (assigneeId) {
+        logTask(
+          created,
+          authorId,
+          `Assigned a task to ${byId.get(assigneeId)?.name ?? "someone"}${
+            dueDate ? `, due ${dateText(dueDate)}` : ""
+          }: ${snippet(body)}`,
+        );
+      }
+
       // After answering, so a slow or failed email never holds up the save.
       const entity = await entityFor(created);
       notifyNoteCreated({
@@ -349,10 +356,16 @@ export default function notesRouter(prisma) {
       res.json(out);
 
       if (changingDue && dueDate !== oldDue) {
-        logTask(note, userId, `Task due date: ${dueDate ?? "none"} (${snippet(note.body)})`, oldDue ?? "none");
+        logTask(
+          note,
+          userId,
+          dueDate
+            ? `Changed the due date to ${dateText(dueDate)} on task: ${snippet(note.body)}`
+            : `Removed the due date on task: ${snippet(note.body)}`,
+        );
       }
       if (reassigning) {
-        logTask(note, userId, `Task reassigned to ${newAssignee.name} (${snippet(note.body)})`, note.Assignee.name);
+        logTask(note, userId, `Reassigned task to ${newAssignee.name}: ${snippet(note.body)}`);
         const entity = await entityFor(note);
         notifyReassigned({
           note: { ...out, _assigneeEmail: newAssignee.email },

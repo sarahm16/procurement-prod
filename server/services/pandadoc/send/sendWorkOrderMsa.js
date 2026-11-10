@@ -3,11 +3,12 @@ import axios from "axios";
 import { getValidUserToken } from "../tokens/getValidUserToken.js";
 import { pollUntilDraft } from "../pollUntilDraft.js";
 import prisma from "../../../db.js";
-import { logActivity } from "../../../utils/logActivity.js";
+import { logActivities } from "../../../utils/logActivity.js";
 
 const PANDADOC_BASE = "https://api.pandadoc.com/public/v1";
 
 const WORK_ORDER_ENTITY_TYPE_ID = 4;
+const VENDOR_ENTITY_TYPE_ID = 1;
 
 const createToken = (name, value) => ({ name, value });
 
@@ -125,15 +126,20 @@ export async function sendWorkOrderMsa(
       },
     });
 
-    await logActivity(tx, {
-      entityTypeId: WORK_ORDER_ENTITY_TYPE_ID,
-      entityId: workorder.id,
-      fieldChanged: "work_order_msa",
-      previousValue: null,
-      newValue: `Sent Work Order MSA to ${vendor.company}`,
-      changedBy: user_id ?? null,
-      action: "CREATE",
-    });
+    await logActivities(tx, [
+      {
+        entityTypeId: WORK_ORDER_ENTITY_TYPE_ID,
+        entityId: workorder.id,
+        userId: user_id,
+        action: `Sent work order MSA to ${vendor.company}`,
+      },
+      {
+        entityTypeId: VENDOR_ENTITY_TYPE_ID,
+        entityId: vendor.id,
+        userId: user_id,
+        action: `Sent work order MSA for ${workorder.work_order_number ?? "a work order"}`,
+      },
+    ]);
 
     return doc;
   });

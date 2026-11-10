@@ -2,7 +2,7 @@ import { Router } from "express";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import serializeNote from "../serializer/noteSerializer.js";
 import serializeActivityLogEntry from "../serializer/activityLogSerializer.js";
-import { logActivity } from "../utils/logActivity.js";
+import { loadActivity, logActivity } from "../utils/logActivity.js";
 import makeContactRoutes from "./makeContactRoutes.js";
 import serializeContact from "../serializer/serializeContact.js";
 
@@ -407,13 +407,7 @@ export default function sitesRouter(prisma) {
             NoteTaggedUsers: { include: { TaggedUser: true } },
           },
         }),
-        prisma.activityLog.findMany({
-          where: {
-            entity_type_id: entity_type_id, // Site entity type
-            entity_id: siteId,
-          },
-          include: { Employee: true },
-        }),
+        loadActivity(prisma, entity_type_id, siteId),
       ]);
 
       // Without this, a bad id spread `null` and then threw on site.Contacts.
@@ -495,15 +489,17 @@ export default function sitesRouter(prisma) {
         created.push(record);
       }
 
-      await logActivity(prisma, {
-        entityTypeId: entity_type_id,
-        entityId: Number(id),
-        fieldChanged: "attachment",
-        previousValue: null,
-        newValue: `Uploaded ${created.length} file(s)`,
-        changedBy: user_id ? Number(user_id) : null,
-        action: "CREATE",
-      });
+      if (Number(user_id)) {
+        await logActivity(prisma, {
+          entityTypeId: entity_type_id,
+          entityId: Number(id),
+          userId: user_id,
+          action:
+            created.length === 1
+              ? `Uploaded ${created[0].file_name}`
+              : `Uploaded ${created.length} files: ${created.map((f) => f.file_name).join(", ")}`,
+        });
+      }
 
       res.status(201).json(created.map(serializeAttachment));
     } catch (error) {
@@ -614,17 +610,13 @@ export default function sitesRouter(prisma) {
       const after = "end_date" in data ? ymd(data.end_date) : before;
 
       // Plain-English activity entry: what someone scanning the feed wants.
-      let previousValue = null;
-      let newValue;
+      let action;
       if (before !== after && after) {
-        previousValue = before ? `Ending ${fmtDay(before)}` : "On contract";
-        newValue = `${line}: removed from contract — last day ${fmtDay(after)}`;
+        action = `Removed ${line} from the contract, last day ${fmtDay(after)}`;
       } else if (before !== after && !after) {
-        previousValue = `Ending ${fmtDay(before)}`;
-        newValue = `${line}: back on contract`;
+        action = `Put ${line} back on the contract`;
       } else {
-        previousValue = ymd(current.start_date);
-        newValue = `${line}: start date ${fmtDay(ymd(data.start_date))}`;
+        action = `Changed the ${line} start date to ${fmtDay(ymd(data.start_date))}`;
       }
 
       await prisma.$transaction(async (tx) => {
@@ -635,11 +627,8 @@ export default function sitesRouter(prisma) {
         await logActivity(tx, {
           entityTypeId: entity_type_id, // 2 = Site
           entityId: siteId,
-          fieldChanged: "service_line_dates",
-          previousValue,
-          newValue,
-          changedBy: user_id ?? null,
-          action: "UPDATE",
+          userId: user_id,
+          action,
         });
       });
 

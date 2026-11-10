@@ -58,11 +58,10 @@ export function registerSelfPerformRoute(router, prisma, serializeGridRow) {
           await logActivity(tx, {
             entityTypeId: SITE_ENTITY_TYPE_ID,
             entityId: cs.site_id,
-            fieldChanged: "self_perform",
-            previousValue: cs.self_perform ? "Self-performed" : "Subcontracted",
-            newValue: `${line}: ${self_perform ? "Self-performed" : "Subcontracted"}`,
-            changedBy: userId,
-            action: "UPDATE",
+            userId,
+            action: self_perform
+              ? `Marked ${line} as self-performed`
+              : `Marked ${line} as subcontracted`,
           });
         });
       }

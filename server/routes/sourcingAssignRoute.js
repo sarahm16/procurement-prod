@@ -15,10 +15,11 @@
  */
 
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
-import { logActivity } from "../utils/logActivity.js";
+import { listText, logActivities, logActivity, plural } from "../utils/logActivity.js";
 import { clearResourcingFlag } from "../services/sourcing/closeAssignments.js";
 
 const SITE_ENTITY_TYPE_ID = 2;
+const VENDOR_ENTITY_TYPE_ID = 1;
 const MODES = ["skip", "add", "replace"];
 
 const num = (v) => (v == null ? null : Number(v));
@@ -122,6 +123,9 @@ export function registerAssignRoute(router, prisma, serializeGridRow) {
         .status(400)
         .json({ error: "vendor_id and contract_site_ids are required" });
     }
+    if (!Number(user_id)) {
+      return res.status(400).json({ error: "user_id is required" });
+    }
     if (!MODES.includes(mode)) {
       return res
         .status(400)
@@ -153,6 +157,7 @@ export function registerAssignRoute(router, prisma, serializeGridRow) {
 
           const out = { assigned: [], added: [], replaced: [], skipped: [] };
           const perSite = new Map(); // site_id -> [description]
+          const siteNames = new Map(); // site_id -> store
 
           for (const csId of ids) {
             const contractSite = await tx.contractSites.findUnique({
@@ -160,12 +165,14 @@ export function registerAssignRoute(router, prisma, serializeGridRow) {
               select: {
                 id: true,
                 site_id: true,
+                Site: { select: { store: true } },
                 Contract: {
                   select: { ServiceLine: { select: { name: true } } },
                 },
               },
             });
             if (!contractSite) continue;
+            siteNames.set(contractSite.site_id, contractSite.Site?.store ?? `site ${contractSite.site_id}`);
 
             const line =
               contractSite.Contract?.ServiceLine?.name ?? "service line";
@@ -241,20 +248,20 @@ export function registerAssignRoute(router, prisma, serializeGridRow) {
               assignment_id: saved.id,
               is_primary: becomesPrimary,
             };
-            const was = current?.Vendor?.company ?? "vendor";
+            const was = current?.Vendor?.company ?? "the previous vendor";
             let text;
             if (!current) {
               out.assigned.push(entry);
               text = line;
             } else if (mode === "replace") {
               out.replaced.push(entry);
-              text = `${line} (replaced ${was})`;
+              text = `${line}, replacing ${was}`;
             } else if (becomesPrimary) {
               out.added.push(entry);
-              text = `${line} (primary; ${was} moved to backup)`;
+              text = `${line} as primary (${was} is now backup)`;
             } else {
               out.added.push(entry);
-              text = `${line} (backup)`;
+              text = `${line} as backup`;
             }
 
             const bucket = perSite.get(contractSite.site_id) ?? [];
@@ -262,18 +269,27 @@ export function registerAssignRoute(router, prisma, serializeGridRow) {
             perSite.set(contractSite.site_id, bucket);
           }
 
-          // One activity entry per site rather than per row, so a 40-row bulk
-          // assign doesn't bury the feed.
-          for (const [siteId, lines] of perSite) {
-            const text = `${vendor.company} → ${lines.join(", ")}`;
-            await logActivity(tx, {
+          // One entry per site rather than per row, so a 40-row bulk assign
+          // doesn't bury the feed. The vendor gets one entry for the batch.
+          await logActivities(
+            tx,
+            [...perSite].map(([siteId, lines]) => ({
               entityTypeId: SITE_ENTITY_TYPE_ID,
               entityId: siteId,
-              fieldChanged: "vendor_assignment",
-              previousValue: null,
-              newValue: text.length > 255 ? text.slice(0, 252) + "…" : text,
-              changedBy: user_id ?? null,
-              action: "CREATE",
+              userId: user_id,
+              action: `Assigned ${vendor.company} to ${listText(lines)}`,
+            })),
+          );
+          if (perSite.size) {
+            const names = [...perSite.keys()].map((id) => siteNames.get(id));
+            await logActivity(tx, {
+              entityTypeId: VENDOR_ENTITY_TYPE_ID,
+              entityId: vendor.id,
+              userId: user_id,
+              action:
+                names.length <= 3
+                  ? `Assigned to ${[...perSite].map(([id, lines]) => `${siteNames.get(id)}: ${listText(lines)}`).join("; ")}`
+                  : `Assigned to ${plural(names.length, "site")}: ${listText(names)}`,
             });
           }
 
@@ -302,6 +318,9 @@ export function registerAssignRoute(router, prisma, serializeGridRow) {
     if (!Number.isInteger(assignmentId)) {
       return res.status(400).json({ error: "Invalid assignment id" });
     }
+    if (!Number(user_id)) {
+      return res.status(400).json({ error: "user_id is required" });
+    }
 
     try {
       const assignment = await prisma.vendorContractSites.findUnique({
@@ -312,6 +331,7 @@ export function registerAssignRoute(router, prisma, serializeGridRow) {
           ContractSite: {
             select: {
               site_id: true,
+              Site: { select: { store: true } },
               Contract: { select: { ServiceLine: { select: { name: true } } } },
             },
           },
@@ -345,15 +365,24 @@ export function registerAssignRoute(router, prisma, serializeGridRow) {
           const line =
             assignment.ContractSite.Contract?.ServiceLine?.name ??
             "service line";
-          await logActivity(tx, {
-            entityTypeId: SITE_ENTITY_TYPE_ID,
-            entityId: assignment.ContractSite.site_id,
-            fieldChanged: "primary_vendor",
-            previousValue: previous?.Vendor?.company ?? null,
-            newValue: `${assignment.Vendor?.company ?? "Vendor"} — ${line}`,
-            changedBy: user_id ?? null,
-            action: "UPDATE",
-          });
+          const company = assignment.Vendor?.company ?? "Vendor";
+          const store = assignment.ContractSite.Site?.store ?? "this site";
+          await logActivities(tx, [
+            {
+              entityTypeId: SITE_ENTITY_TYPE_ID,
+              entityId: assignment.ContractSite.site_id,
+              userId: user_id,
+              action: `Made ${company} the primary vendor on ${line}${
+                previous?.Vendor?.company ? ` (${previous.Vendor.company} is now backup)` : ""
+              }`,
+            },
+            {
+              entityTypeId: VENDOR_ENTITY_TYPE_ID,
+              entityId: assignment.vendor_id,
+              userId: user_id,
+              action: `Made primary vendor on ${line} at ${store}`,
+            },
+          ]);
         });
       }
 
